@@ -683,6 +683,7 @@ export default {
       await triggerConsoleActive({
         active,
         nextTick: () => this.$nextTick(),
+        isStillActive: () => this.active,
         activate: () => this.activate(),
         deactivate: () => this.deactivate(),
       });

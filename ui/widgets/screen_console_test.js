@@ -13,6 +13,7 @@ describe("screen console", function () {
       nextTick: async () => {
         calls.push("nextTick");
       },
+      isStillActive: () => true,
       activate: () => {
         calls.push("activate");
       },
@@ -22,5 +23,67 @@ describe("screen console", function () {
     });
 
     expect(calls).toEqual(["nextTick", "activate"]);
+  });
+
+  test("deactivates immediately without waiting for a DOM update", async function () {
+    const calls = [];
+
+    await triggerConsoleActive({
+      active: false,
+      nextTick: async () => {
+        calls.push("nextTick");
+      },
+      isStillActive: () => false,
+      activate: () => {
+        calls.push("activate");
+      },
+      deactivate: () => {
+        calls.push("deactivate");
+      },
+    });
+
+    expect(calls).toEqual(["deactivate"]);
+  });
+
+  test("skips stale activation after a rapid tab switch away", async function () {
+    const calls = [];
+    let resolveNextTick;
+    let active = true;
+
+    const staleActivation = triggerConsoleActive({
+      active: true,
+      nextTick: async () => {
+        calls.push("nextTick");
+        await new Promise((resolve) => {
+          resolveNextTick = resolve;
+        });
+      },
+      isStillActive: () => active,
+      activate: () => {
+        calls.push("activate");
+      },
+      deactivate: () => {
+        calls.push("deactivate");
+      },
+    });
+    active = false;
+    await triggerConsoleActive({
+      active: false,
+      nextTick: async () => {
+        calls.push("unexpectedNextTick");
+      },
+      isStillActive: () => active,
+      activate: () => {
+        calls.push("unexpectedActivate");
+      },
+      deactivate: () => {
+        calls.push("deactivate");
+      },
+    });
+
+    resolveNextTick();
+    await staleActivation;
+
+    expect(calls).toEqual(["nextTick", "deactivate"]);
   });
 });
