@@ -96,6 +96,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { markRaw } from "vue";
 import { isNumber } from "../commands/common.js";
 import { consoleScreenKeys } from "./screen_console_keys.js";
+import { triggerConsoleActive } from "./screen_console_activation.js";
 import { specialKeyHTML } from "./formatters.js";
 
 import "./screen_console.css";
@@ -678,8 +679,13 @@ export default {
      * @param {boolean} active - True to activate (focus + fit), false to deactivate (blur).
      * @returns {void}
      */
-    triggerActive(active) {
-      active ? this.activate() : this.deactivate();
+    async triggerActive(active) {
+      await triggerConsoleActive({
+        active,
+        nextTick: () => this.$nextTick(),
+        activate: () => this.activate(),
+        deactivate: () => this.deactivate(),
+      });
     },
     /**
      * Full component initialisation: opens the terminal, triggers active state,
