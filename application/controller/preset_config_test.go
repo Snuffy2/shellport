@@ -557,6 +557,127 @@ func TestPresetConfigPutAcceptsCompactFingerprintSaveWithLargeMeta(t *testing.T)
 	}
 }
 
+func TestPresetConfigPutCompactFingerprintSavePreservesPrivateKeyFileReference(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "shellport.conf.json")
+	keyPath := filepath.Join(tempDir, "id_ed25519")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "file://" + keyPath,
+			},
+		},
+	})
+	controller := newAuthenticatedTestPresetConfig(t, configPath)
+	body := []byte(`{"presets":[{"id":"preset-atlantis","meta":{"Fingerprint":"SHA256:abc"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizePresetConfigRequest(controller, request)
+	request.Header.Set(preserveHiddenPresetPasswordsHeader, "yes")
+	request.Header.Set(presetFingerprintIDHeader, "preset-atlantis")
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Put(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Put returned error: %v", err)
+	}
+
+	var raw struct {
+		Presets []struct {
+			Meta map[string]configuration.String
+		}
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile returned error: %v", err)
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if raw.Presets[0].Meta["Private Key"] != configuration.String("file://"+keyPath) {
+		t.Fatalf(
+			"raw private key = %q, want file URI",
+			raw.Presets[0].Meta["Private Key"],
+		)
+	}
+	if raw.Presets[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatal("raw fingerprint was not updated")
+	}
+}
+
+func TestPresetConfigPutFullUpdatePreservesRotatedPrivateKeyFileReference(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "shellport.conf.json")
+	keyPath := filepath.Join(tempDir, "id_ed25519")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "file://" + keyPath,
+			},
+		},
+	})
+	controller := newAdminTestPresetConfig(t, configPath)
+	if err := os.WriteFile(keyPath, []byte("UPDATED PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile rotated key returned error: %v", err)
+	}
+	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home:22","meta":{"User":"pi","Authentication":"Private Key","Private Key":"UPDATED PRIVATE KEY DATA","Fingerprint":"SHA256:abc"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizeAdminRequest(controller, request)
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Put(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Put returned error: %v", err)
+	}
+
+	var raw struct {
+		Presets []struct {
+			Meta map[string]configuration.String
+		}
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile returned error: %v", err)
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if raw.Presets[0].Meta["Private Key"] != configuration.String("file://"+keyPath) {
+		t.Fatalf(
+			"raw private key = %q, want file URI",
+			raw.Presets[0].Meta["Private Key"],
+		)
+	}
+	if raw.Presets[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatal("raw fingerprint was not updated")
+	}
+}
+
 func TestPresetConfigPutAcceptsCompactFingerprintSaveForLargePresetList(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	rawPresets := make([]map[string]any, maxPresetConfigPresets+1)

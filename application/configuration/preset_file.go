@@ -214,6 +214,11 @@ func preserveRawString(raw string, current string, next string) string {
 func mergePresetMeta(raw Meta, current map[string]string, next map[string]string) Meta {
 	merged := Meta{}
 	for key, value := range next {
+		if rawValue, rawOK := raw[key]; rawOK &&
+			shouldPreserveRawMetaReference(key, rawValue, value, current[key]) {
+			merged[key] = rawValue
+			continue
+		}
 		if currentValue, ok := current[key]; ok && value == currentValue {
 			if rawValue, rawOK := raw[key]; rawOK {
 				merged[key] = rawValue
@@ -236,6 +241,28 @@ func mergePresetMeta(raw Meta, current map[string]string, next map[string]string
 		delete(merged, PresetMetaPassword)
 	}
 	return merged
+}
+
+func shouldPreserveRawMetaReference(
+	key string,
+	rawValue String,
+	nextValue string,
+	currentValue string,
+) bool {
+	if key != "Private Key" {
+		return false
+	}
+	if !strings.Contains(string(rawValue), "://") {
+		return false
+	}
+	if strings.Contains(nextValue, "://") {
+		return false
+	}
+	if nextValue == currentValue {
+		return true
+	}
+	resolvedValue, err := rawValue.Parse()
+	return err == nil && nextValue == resolvedValue
 }
 
 func isPresetPasswordMeta(key string) bool {

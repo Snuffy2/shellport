@@ -322,6 +322,9 @@ func TestReplaceFilePresetsPreservesUnknownTopLevelFields(t *testing.T) {
 func TestReplaceFilePresetsWithRuntimeDoesNotResolveRawMeta(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
 	writePresetConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -375,6 +378,133 @@ func TestReplaceFilePresetsWithRuntimeDoesNotResolveRawMeta(t *testing.T) {
 	requireRawPresetCount(t, raw.Presets, 1)
 	if raw.Presets[0].Meta["Private Key"] != String("file://"+keyPath) {
 		t.Fatalf("raw private key = %q, want file URI", raw.Presets[0].Meta["Private Key"])
+	}
+}
+
+func TestReplaceFilePresetsWithRuntimePreservesRotatedRawMetaReference(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+	writePresetConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home:22",
+			"Meta": map[string]any{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "file://" + keyPath,
+			},
+		},
+	})
+	runtime := []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "atlantis.home:22",
+			Meta: map[string]string{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "PRIVATE KEY DATA",
+			},
+		},
+	}
+	if err := os.WriteFile(keyPath, []byte("UPDATED PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile rotated key returned error: %v", err)
+	}
+	next := []Preset{
+		{
+			ID:       runtime[0].ID,
+			Title:    runtime[0].Title,
+			Type:     runtime[0].Type,
+			Host:     runtime[0].Host,
+			TabColor: runtime[0].TabColor,
+			Meta: map[string]string{
+				"User":           runtime[0].Meta["User"],
+				"Authentication": runtime[0].Meta["Authentication"],
+				"Private Key":    "UPDATED PRIVATE KEY DATA",
+				"Fingerprint":    "SHA256:abc",
+			},
+		},
+	}
+
+	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime); err != nil {
+		t.Fatalf("ReplaceFilePresetsWithRuntime returned error: %v", err)
+	}
+
+	raw, _, err := readCommonInputFile(configPath)
+	if err != nil {
+		t.Fatalf("readCommonInputFile returned error: %v", err)
+	}
+	requireRawPresetCount(t, raw.Presets, 1)
+	if raw.Presets[0].Meta["Private Key"] != String("file://"+keyPath) {
+		t.Fatalf("raw private key = %q, want file URI", raw.Presets[0].Meta["Private Key"])
+	}
+}
+
+func TestReplaceFilePresetsWithRuntimeAllowsInlinePrivateKeyReplacement(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+	writePresetConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home:22",
+			"Meta": map[string]any{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "file://" + keyPath,
+			},
+		},
+	})
+	runtime := []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "atlantis.home:22",
+			Meta: map[string]string{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "PRIVATE KEY DATA",
+			},
+		},
+	}
+	next := []Preset{
+		{
+			ID:       runtime[0].ID,
+			Title:    runtime[0].Title,
+			Type:     runtime[0].Type,
+			Host:     runtime[0].Host,
+			TabColor: runtime[0].TabColor,
+			Meta: map[string]string{
+				"User":           runtime[0].Meta["User"],
+				"Authentication": runtime[0].Meta["Authentication"],
+				"Private Key":    "INLINE PRIVATE KEY DATA",
+				"Fingerprint":    "SHA256:abc",
+			},
+		},
+	}
+
+	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime); err != nil {
+		t.Fatalf("ReplaceFilePresetsWithRuntime returned error: %v", err)
+	}
+
+	raw, _, err := readCommonInputFile(configPath)
+	if err != nil {
+		t.Fatalf("readCommonInputFile returned error: %v", err)
+	}
+	requireRawPresetCount(t, raw.Presets, 1)
+	if raw.Presets[0].Meta["Private Key"] != String("INLINE PRIVATE KEY DATA") {
+		t.Fatalf("raw private key = %q, want inline data", raw.Presets[0].Meta["Private Key"])
 	}
 }
 
