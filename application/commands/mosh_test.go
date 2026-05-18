@@ -754,6 +754,69 @@ type fakeMoshResize struct {
 	rows uint16
 }
 
+type recordedLogEntry struct {
+	level   string
+	message string
+}
+
+type recordingLogger struct {
+	entries []recordedLogEntry
+}
+
+func (r *recordingLogger) Context(string) log.Logger {
+	return r
+}
+
+func (r *recordingLogger) TitledContext(string, ...any) log.Logger {
+	return r
+}
+
+func (r *recordingLogger) Write(b []byte) (int, error) {
+	return len(b), nil
+}
+
+func (r *recordingLogger) Info(msg string, params ...any) {
+	r.record("info", msg, params...)
+}
+
+func (r *recordingLogger) Debug(msg string, params ...any) {
+	r.record("debug", msg, params...)
+}
+
+func (r *recordingLogger) Warning(msg string, params ...any) {
+	r.record("warning", msg, params...)
+}
+
+func (r *recordingLogger) Error(msg string, params ...any) {
+	r.record("error", msg, params...)
+}
+
+func (r *recordingLogger) record(level string, msg string, params ...any) {
+	r.entries = append(r.entries, recordedLogEntry{
+		level:   level,
+		message: msg,
+	})
+}
+
+func TestMoshLifecycleMonitorErrorsUseWarningLogs(t *testing.T) {
+	logger := &recordingLogger{}
+	err := errors.New("monitor failed")
+
+	logRemoteMoshServerLifecycleUnavailable(logger, err)
+	logRemoteMoshServerMonitorError(logger, err)
+	logRemoteMoshServerCloseError(logger, err)
+
+	if len(logger.entries) != 3 {
+		t.Fatalf("expected 3 lifecycle log entries, got %d", len(logger.entries))
+	}
+
+	for _, entry := range logger.entries {
+		if entry.level != "warning" {
+			t.Fatalf("expected lifecycle error log level warning, got %q for %q", entry.level, entry.message)
+		}
+	}
+}
+
 type fakeMoshSession struct {
 	mu         sync.Mutex
 	sent       [][]byte
