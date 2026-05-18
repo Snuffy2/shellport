@@ -134,8 +134,15 @@ func (d *telnetClient) Bootup(
 			addrErr, TelnetRequestErrorBadRemoteAddress)
 	}
 
+	details := connectionDebugDetails{
+		Protocol: "Telnet",
+		Address:  addr.String(),
+		Network:  "tcp",
+	}
+	debugConnectionAttempt(d.l, details)
+
 	d.closeWait.Add(1)
-	go d.remote(addr.String())
+	go d.remote(addr.String(), details)
 
 	return d.client, command.NoFSMError()
 }
@@ -144,11 +151,12 @@ func (d *telnetClient) Bootup(
 // It executes the before-connecting hooks, dials the remote TCP endpoint, sends
 // TelnetServerDialConnected, and then reads inbound data to forward to the
 // client. On exit it signals HeaderClose and closes the remoteChan.
-func (d *telnetClient) remote(addr string) {
+func (d *telnetClient) remote(addr string, details connectionDebugDetails) {
 	u := d.bufferPool.Get()
 	defer d.bufferPool.Put(u)
 
 	defer func() {
+		debugConnectionDisconnected(d.l, details, "remote goroutine exited", nil)
 		d.w.Signal(command.HeaderClose)
 		close(d.remoteChan)
 		d.baseCtxCancel()
@@ -176,23 +184,28 @@ func (d *telnetClient) remote(addr string) {
 	if err != nil {
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) + d.w.HeaderSize()
 		d.w.SendManual(TelnetServerDialFailed, (*u)[:errLen])
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
 	dialCtx, dialCtxCancel := context.WithTimeout(d.baseCtx, d.cfg.DialTimeout)
 	defer dialCtxCancel()
+	d.l.Debug("Dialing Telnet remote: %s", details.fields())
 	clientConn, err := d.cfg.Dial(dialCtx, "tcp", addr)
 	if err != nil {
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) + d.w.HeaderSize()
 		d.w.SendManual(TelnetServerDialFailed, (*u)[:errLen])
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 	defer clientConn.Close()
 
 	err = d.w.SendManual(TelnetServerDialConnected, (*u)[:d.w.HeaderSize()])
 	if err != nil {
+		debugConnectionDisconnected(d.l, details, "connect-success response failed", err)
 		return
 	}
+	debugConnectionEstablished(d.l, details)
 
 	// Set timeout for writer, otherwise the Timeout writer will never
 	// be triggered
@@ -205,12 +218,14 @@ func (d *telnetClient) remote(addr string) {
 	for {
 		rLen, err := clientConn.Read((*u)[d.w.HeaderSize():])
 		if err != nil {
+			debugConnectionDisconnected(d.l, details, "remote read ended", err)
 			return
 		}
 
 		wErr := d.w.SendManual(
 			TelnetServerRemoteBand, (*u)[:rLen+d.w.HeaderSize()])
 		if wErr != nil {
+			debugConnectionDisconnected(d.l, details, "client send failed", wErr)
 			return
 		}
 	}

@@ -336,8 +336,18 @@ func (d *sshClient) Bootup(
 			authMethodBuilderErr, SSHRequestErrorBadAuthMethod)
 	}
 
+	details := connectionDebugDetails{
+		Protocol:   "SSH",
+		User:       userNameStr,
+		Address:    addrStr,
+		Network:    "tcp",
+		AuthMethod: sshAuthMethodDebugName(rData[0]),
+		PresetID:   presetID,
+	}
+	debugConnectionAttempt(d.l, details)
+
 	d.remoteCloseWait.Add(1)
-	go d.remote(userNameStr, addrStr, authMethodBuilder)
+	go d.remote(userNameStr, addrStr, authMethodBuilder, details)
 
 	return d.local, command.NoFSMError()
 }
@@ -547,11 +557,16 @@ func (d *sshClient) dialRemote(
 // HeaderClose signal, closes the remoteConnReceive channel, and cancels the
 // base context.
 func (d *sshClient) remote(
-	user string, address string, authMethodBuilder sshAuthMethodBuilder) {
+	user string,
+	address string,
+	authMethodBuilder sshAuthMethodBuilder,
+	details connectionDebugDetails,
+) {
 	u := d.bufferPool.Get()
 	defer d.bufferPool.Put(u)
 
 	defer func() {
+		debugConnectionDisconnected(d.l, details, "remote goroutine exited", nil)
 		d.w.Signal(command.HeaderClose)
 		close(d.remoteConnReceive)
 		d.baseCtxCancel()
@@ -579,12 +594,14 @@ func (d *sshClient) remote(
 	if err != nil {
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) + d.w.HeaderSize()
 		d.w.SendManual(SSHServerConnectFailed, (*u)[:errLen])
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
 	errOutWg := sync.WaitGroup{}
 	defer errOutWg.Wait()
 
+	d.l.Debug("Dialing SSH remote: %s", details.fields())
 	conn, clearConnInitialDeadline, err :=
 		d.dialRemote("tcp", address, &ssh.ClientConfig{
 			User: user,
@@ -597,16 +614,17 @@ func (d *sshClient) remote(
 	if err != nil {
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) + d.w.HeaderSize()
 		d.w.SendManual(SSHServerConnectFailed, (*u)[:errLen])
-		d.l.Debug("Unable to connect to remote machine: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 	defer conn.Close()
+	d.l.Debug("SSH handshake completed: %s", details.fields())
 
 	session, err := conn.NewSession()
 	if err != nil {
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) + d.w.HeaderSize()
 		d.w.SendManual(SSHServerConnectFailed, (*u)[:errLen])
-		d.l.Debug("Unable open new session on remote machine: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 	defer session.Close()
@@ -615,7 +633,7 @@ func (d *sshClient) remote(
 	if err != nil {
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) + d.w.HeaderSize()
 		d.w.SendManual(SSHServerConnectFailed, (*u)[:errLen])
-		d.l.Debug("Unable export Stdin pipe: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
@@ -624,7 +642,7 @@ func (d *sshClient) remote(
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) +
 			d.w.HeaderSize()
 		d.w.SendManual(SSHServerConnectFailed, (*u)[:errLen])
-		d.l.Debug("Unable export Stdout pipe: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
@@ -633,7 +651,7 @@ func (d *sshClient) remote(
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) +
 			d.w.HeaderSize()
 		d.w.SendManual(SSHServerConnectFailed, (*u)[:errLen])
-		d.l.Debug("Unable export Stderr pipe: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
@@ -645,7 +663,7 @@ func (d *sshClient) remote(
 	if err != nil {
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) + d.w.HeaderSize()
 		d.w.SendManual(SSHServerConnectFailed, (*u)[:errLen])
-		d.l.Debug("Unable request PTY: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
@@ -653,7 +671,7 @@ func (d *sshClient) remote(
 	if err != nil {
 		errLen := copy((*u)[d.w.HeaderSize():], err.Error()) + d.w.HeaderSize()
 		d.w.SendManual(SSHServerConnectFailed, (*u)[:errLen])
-		d.l.Debug("Unable to start Shell: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 	defer session.Wait()
@@ -673,10 +691,11 @@ func (d *sshClient) remote(
 	wErr := d.w.SendManual(
 		SSHServerConnectSucceed, (*u)[:d.w.HeaderSize()])
 	if wErr != nil {
+		debugConnectionDisconnected(d.l, details, "connect-success response failed", wErr)
 		return
 	}
 
-	d.l.Debug("Serving")
+	debugConnectionEstablished(d.l, details)
 
 	errOutWg.Go(func() {
 		u := d.bufferPool.Get()
@@ -685,12 +704,14 @@ func (d *sshClient) remote(
 		for {
 			rLen, err := errOut.Read((*u)[d.w.HeaderSize():])
 			if err != nil {
+				debugConnectionDisconnected(d.l, details, "stderr stream ended", err)
 				return
 			}
 
 			err = d.w.SendManual(
 				SSHServerRemoteStdErr, (*u)[:d.w.HeaderSize()+rLen])
 			if err != nil {
+				debugConnectionDisconnected(d.l, details, "stderr client send failed", err)
 				return
 			}
 		}
@@ -699,12 +720,14 @@ func (d *sshClient) remote(
 	for {
 		rLen, rErr := out.Read((*u)[d.w.HeaderSize():])
 		if rErr != nil {
+			debugConnectionDisconnected(d.l, details, "stdout stream ended", rErr)
 			return
 		}
 
 		rErr = d.w.SendManual(
 			SSHServerRemoteStdOut, (*u)[:d.w.HeaderSize()+rLen])
 		if rErr != nil {
+			debugConnectionDisconnected(d.l, details, "stdout client send failed", rErr)
 			return
 		}
 	}

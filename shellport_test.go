@@ -28,3 +28,19 @@ func TestShouldPrintVersionRejectsOtherArgs(t *testing.T) {
 		}
 	}
 }
+
+func TestDebugLoggingEnabledFromEnvironmentValue(t *testing.T) {
+	t.Setenv("SHELLPORT_DEBUG", "1")
+
+	if !debugLoggingEnabled() {
+		t.Fatal("expected SHELLPORT_DEBUG to enable debug logging")
+	}
+}
+
+func TestDebugLoggingDisabledWhenEnvironmentEmpty(t *testing.T) {
+	t.Setenv("SHELLPORT_DEBUG", "")
+
+	if debugLoggingEnabled() {
+		t.Fatal("expected empty SHELLPORT_DEBUG to disable debug logging")
+	}
+}

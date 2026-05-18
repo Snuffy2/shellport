@@ -18,6 +18,10 @@ func shouldPrintVersion(args []string) bool {
 	return len(args) == 2 && (args[1] == "-V" || args[1] == "--version")
 }
 
+func debugLoggingEnabled() bool {
+	return len(configuration.GetEnv("SHELLPORT_DEBUG")) > 0
+}
+
 func main() {
 	if shouldPrintVersion(os.Args) {
 		if _, err := os.Stdout.WriteString(application.Banner()); err != nil {
@@ -34,10 +38,10 @@ func main() {
 		configLoaders = append(configLoaders, configuration.Environ())
 	}
 	e := application.
-		New(os.Stderr, log.NewDebugOrNonDebugWriter(
-			len(configuration.GetEnv("SHELLPORT_DEBUG")) > 0,
+		New(os.Stdout, log.NewDebugOrNonDebugWriter(
+			debugLoggingEnabled(),
 			application.Name,
-			os.Stderr,
+			os.Stdout,
 		)).
 		Run(configuration.Redundant(configLoaders...),
 			application.DefaultProccessSignallerBuilder,
