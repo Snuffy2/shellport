@@ -336,6 +336,7 @@ Valid environment variables are:
 SHELLPORT_HOSTNAME
 SHELLPORT_SHAREDKEY
 SHELLPORT_ADMIN_KEY
+SHELLPORT_DEBUG
 SHELLPORT_DIALTIMEOUT
 SHELLPORT_SOCKS5
 SHELLPORT_SOCKS5_USER
@@ -360,6 +361,10 @@ SHELLPORT_PRESET_SECRET_KEY
 ```
 
 These options correspond to their counterparts in the configuration file.
+
+`SHELLPORT_DEBUG` has no JSON counterpart. Set it to any non-empty value to
+enable debug-level logs, including sanitized outbound connection attempts,
+failures, and disconnect reasons. Docker images write these logs to stdout.
 
 `SHELLPORT_PRESETS` must contain valid JSON-encoded preset data. Its format is
 shown in [shellport.conf.example.json](shellport.conf.example.json) and can be loaded with:

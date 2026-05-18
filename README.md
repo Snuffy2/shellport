@@ -24,6 +24,8 @@ services:
       - ./config:/etc/shellport
     environment:
       SHELLPORT_CONFIG: /etc/shellport/shellport.conf.json
+      # Optional: set to "1" to enable debug-level logs on Docker stdout.
+      # SHELLPORT_DEBUG: "1"
       # Optional: base64-encoded 32-byte key for encrypted preset passwords.
       # Generate with: openssl rand -base64 32
       # SHELLPORT_PRESET_SECRET_KEY: "replace-with-generated-key"

@@ -196,11 +196,21 @@ func (d *moshClient) Bootup(
 		return nil, command.ToFSMError(authMethodBuilderErr, MoshRequestErrorBadAuthMethod)
 	}
 
+	details := connectionDebugDetails{
+		Protocol:   "Mosh",
+		User:       userNameStr,
+		Address:    addrStr,
+		Network:    "tcp4/udp4",
+		AuthMethod: sshAuthMethodDebugName(rData[0]),
+		PresetID:   presetID,
+	}
+	debugConnectionAttempt(d.l, details)
+
 	d.remoteCloseWait.Add(1)
 	if d.remoteStarter != nil {
 		go d.remoteStarter(userNameStr, addrStr, authMethodBuilder)
 	} else {
-		go d.remote(userNameStr, addrStr, authMethodBuilder)
+		go d.remote(userNameStr, addrStr, authMethodBuilder, details)
 	}
 
 	return d.local, command.NoFSMError()
@@ -407,7 +417,12 @@ func (d *moshClient) dialRemote(
 	}, nil
 }
 
-func (d *moshClient) remote(user string, address string, authMethodBuilder sshAuthMethodBuilder) {
+func (d *moshClient) remote(
+	user string,
+	address string,
+	authMethodBuilder sshAuthMethodBuilder,
+	details connectionDebugDetails,
+) {
 	u := d.bufferPool.Get()
 	defer d.bufferPool.Put(u)
 
@@ -416,6 +431,7 @@ func (d *moshClient) remote(user string, address string, authMethodBuilder sshAu
 		if session != nil {
 			session.Close()
 		}
+		debugConnectionDisconnected(d.l, details, "remote goroutine exited", nil)
 		d.w.Signal(command.HeaderClose)
 		close(d.sessionReceive)
 		d.baseCtxCancel()
@@ -435,22 +451,26 @@ func (d *moshClient) remote(user string, address string, authMethodBuilder sshAu
 	)
 	if err != nil {
 		d.sendConnectFailed((*u)[:], err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
 	if err := d.validateMoshRemoteAllowed(address); err != nil {
 		d.sendConnectFailed((*u)[:], err)
-		d.l.Debug("Remote machine is not allowed by preset restriction: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
 	bootstrapNetwork, err := moshSSHBootstrapNetwork(address)
 	if err != nil {
 		d.sendConnectFailed((*u)[:], err)
-		d.l.Debug("Unable to prepare Mosh SSH bootstrap network: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
+	bootstrapDetails := details
+	bootstrapDetails.Network = bootstrapNetwork
+	d.l.Debug("Dialing Mosh SSH bootstrap remote: %s", bootstrapDetails.fields())
 	conn, peerAddr, clearConnInitialDeadline, err := d.dialRemote(bootstrapNetwork, address, &ssh.ClientConfig{
 		User: user,
 		Auth: authMethodBuilder((*u)[:]),
@@ -461,30 +481,33 @@ func (d *moshClient) remote(user string, address string, authMethodBuilder sshAu
 	})
 	if err != nil {
 		d.sendConnectFailed((*u)[:], err)
-		d.l.Debug("Unable to connect to remote machine: %s", err)
+		debugConnectionFailed(d.l, bootstrapDetails, err)
 		return
 	}
 	defer conn.Close()
+	d.l.Debug("Mosh SSH bootstrap connected: %s", bootstrapDetails.fields())
 
 	output, err := d.bootstrapRemoteMoshServer(conn)
 	clearConnInitialDeadline()
 	if err != nil {
 		d.sendConnectFailed((*u)[:], fmt.Errorf("failed to bootstrap mosh-server: %w", err))
-		d.l.Debug("Unable to bootstrap remote mosh-server: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
+	d.l.Debug("Mosh server bootstrap output parsed from %s", address)
 
 	connectInfo, err := parseMoshConnectLine(output)
 	if err != nil {
 		d.sendConnectFailed((*u)[:], fmt.Errorf("failed to parse mosh-server bootstrap output: %w", err))
-		d.l.Debug("Unable to parse remote mosh-server bootstrap output: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
+	d.l.Debug("Dialing Mosh UDP session: address=%s port=%d", address, connectInfo.Port)
 	session, err = d.buildRemoteSession(address, peerAddr, connectInfo.Port, connectInfo.Key)
 	if err != nil {
 		d.sendConnectFailed((*u)[:], fmt.Errorf("failed to connect to remote mosh session: %w", err))
-		d.l.Debug("Unable to connect to remote mosh session: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
@@ -498,23 +521,26 @@ func (d *moshClient) remote(user string, address string, authMethodBuilder sshAu
 	initialOutput, err := d.awaitRemoteSessionReady(session)
 	if err != nil {
 		d.sendConnectFailed((*u)[:], fmt.Errorf("failed to verify remote mosh session readiness: %w", err))
-		d.l.Debug("Unable to verify remote mosh session readiness: %s", err)
+		debugConnectionFailed(d.l, details, err)
 		return
 	}
 
 	d.sessionReceive <- session
 	if err = d.w.SendManual(MoshServerConnectSucceed, (*u)[:d.w.HeaderSize()]); err != nil {
+		debugConnectionDisconnected(d.l, details, "connect-success response failed", err)
 		return
 	}
+	debugConnectionEstablished(d.l, details)
 
 	if err = d.sendRemoteOutput((*u)[:], initialOutput); err != nil {
+		debugConnectionDisconnected(d.l, details, "initial output client send failed", err)
 		return
 	}
 
 	for {
 		output, recvErr := session.Recv(d.recvTimeout())
 		if recvErr != nil {
-			d.l.Debug("Failed to receive mosh output: %s", recvErr)
+			debugConnectionDisconnected(d.l, details, "remote receive failed", recvErr)
 			return
 		}
 
@@ -525,6 +551,7 @@ func (d *moshClient) remote(user string, address string, authMethodBuilder sshAu
 		}
 
 		if err = d.sendRemoteOutput((*u)[:], output); err != nil {
+			debugConnectionDisconnected(d.l, details, "client send failed", err)
 			return
 		}
 	}
