@@ -15,26 +15,30 @@ import (
 // context path, and writes it to the underlying io.Writer. All four severity
 // levels are active, including Debug.
 type Writer struct {
-	// c is the accumulated printable context path, e.g. "Server > Request".
+	// c is the accumulated context path, e.g. "ShellPort" or "Server > Request".
 	c string
+	// root tracks whether c is the root context label.
+	root bool
 	// w is the output destination.
 	w io.Writer
 }
 
-// NewWriter creates a Writer that writes to w. The initial context label names
-// the root logger and is intentionally omitted from emitted log lines.
+// NewWriter creates a Writer that writes to w with the given initial context
+// label.
 func NewWriter(context string, w io.Writer) Writer {
 	return Writer{
-		c: "",
-		w: w,
+		c:    context,
+		root: true,
+		w:    w,
 	}
 }
 
 // Context returns a child Writer with name appended to the context path.
 func (w Writer) Context(name string) Logger {
 	return Writer{
-		c: appendContext(w.c, name),
-		w: w.w,
+		c:    appendContext(w.c, name, w.root),
+		root: false,
+		w:    w.w,
 	}
 }
 
@@ -42,8 +46,9 @@ func (w Writer) Context(name string) Logger {
 // context path.
 func (w Writer) TitledContext(name string, params ...any) Logger {
 	return Writer{
-		c: appendContext(w.c, fmt.Sprintf(name, params...)),
-		w: w.w,
+		c:    appendContext(w.c, fmt.Sprintf(name, params...), w.root),
+		root: false,
+		w:    w.w,
 	}
 }
 
@@ -71,8 +76,8 @@ func (w Writer) write(
 	return fmt.Fprintf(w.w, logPrefix+msg+"\r\n", params...)
 }
 
-func appendContext(current string, name string) string {
-	if current == "" {
+func appendContext(current string, name string, currentIsRoot bool) string {
+	if current == "" || currentIsRoot {
 		return name
 	}
 	return current + " > " + name

@@ -23,7 +23,7 @@ func TestWriterUsesLocalTimestampBeforeLogLevel(t *testing.T) {
 	logger.Info("listening on %s", "127.0.0.1")
 
 	matches, err := regexp.MatchString(
-		`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[INF\] listening on 127\.0\.0\.1\r\n$`,
+		`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[INF\] ShellPort: listening on 127\.0\.0\.1\r\n$`,
 		output.String(),
 	)
 	if err != nil {

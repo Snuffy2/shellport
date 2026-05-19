@@ -41,8 +41,9 @@ func NewDebugOrNonDebugWriter(
 func (w NonDebugWriter) Context(name string) Logger {
 	return NonDebugWriter{
 		Writer: Writer{
-			c: appendContext(w.c, name),
-			w: w.w,
+			c:    appendContext(w.c, name, w.root),
+			root: false,
+			w:    w.w,
 		},
 	}
 }
@@ -55,8 +56,9 @@ func (w NonDebugWriter) TitledContext(
 ) Logger {
 	return NonDebugWriter{
 		Writer: Writer{
-			c: appendContext(w.c, fmt.Sprintf(name, params...)),
-			w: w.w,
+			c:    appendContext(w.c, fmt.Sprintf(name, params...), w.root),
+			root: false,
+			w:    w.w,
 		},
 	}
 }
