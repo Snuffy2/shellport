@@ -803,7 +803,7 @@ func TestMoshLifecycleMonitorErrorsUseWarningLogs(t *testing.T) {
 	err := errors.New("monitor failed")
 
 	logRemoteMoshServerLifecycleUnavailable(logger, err)
-	logRemoteMoshServerMonitorError(logger, err)
+	logRemoteMoshServerMonitorError(context.Background(), logger, err)
 	logRemoteMoshServerCloseError(logger, err)
 
 	if len(logger.entries) != 3 {
@@ -814,6 +814,18 @@ func TestMoshLifecycleMonitorErrorsUseWarningLogs(t *testing.T) {
 		if entry.level != "warning" {
 			t.Fatalf("expected lifecycle error log level warning, got %q for %q", entry.level, entry.message)
 		}
+	}
+}
+
+func TestMoshLifecycleMonitorErrorAfterCancellationDoesNotWarn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	logger := &recordingLogger{}
+
+	logRemoteMoshServerMonitorError(ctx, logger, errors.New("monitor failed"))
+
+	if len(logger.entries) != 0 {
+		t.Fatalf("expected canceled monitor error to be suppressed, got %#v", logger.entries)
 	}
 }
 

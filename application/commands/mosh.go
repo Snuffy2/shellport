@@ -484,7 +484,10 @@ func (d *moshClient) remote(
 		debugConnectionFailed(d.l, bootstrapDetails, err)
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		d.baseCtxCancel()
+		conn.Close()
+	}()
 	d.l.Debug("Mosh SSH bootstrap connected: %s", bootstrapDetails.fields())
 
 	output, err := d.bootstrapRemoteMoshServer(conn)
@@ -599,7 +602,7 @@ func (d *moshClient) monitorRemoteMoshServer(conn *ssh.Client, output string) (<
 		commandText := renderMoshServerMonitorCommand(pid)
 		output, err := session.CombinedOutput(commandText)
 		if err != nil {
-			logRemoteMoshServerMonitorError(d.l, err)
+			logRemoteMoshServerMonitorError(d.baseCtx, d.l, err)
 			done <- false
 			return
 		}
@@ -635,7 +638,12 @@ func logRemoteMoshServerLifecycleUnavailable(l log.Logger, err error) {
 	l.Warning("Unable to monitor remote mosh-server lifecycle: %s", err)
 }
 
-func logRemoteMoshServerMonitorError(l log.Logger, err error) {
+func logRemoteMoshServerMonitorError(ctx context.Context, l log.Logger, err error) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
 	l.Warning("Remote mosh-server monitor exited with an error: %s", err)
 }
 
