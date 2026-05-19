@@ -5,6 +5,8 @@ package commands
 
 import (
 	"bytes"
+	"io"
+	"net"
 	"strings"
 	"testing"
 
@@ -88,6 +90,7 @@ func TestDebugConnectionFailedLogsSanitizedConnectionDetails(t *testing.T) {
 
 	got := output.String()
 	for _, want := range []string{
+		"[WRN]",
 		"Mosh connection failed",
 		`user="alice"`,
 		`address="example.com:22"`,
@@ -171,6 +174,63 @@ func TestDebugConnectionDisconnectedLogsCleanExit(t *testing.T) {
 	}
 }
 
+func TestDebugConnectionDisconnectedLogsExpectedReadShutdownAtDebug(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "EOF",
+			err:  io.EOF,
+		},
+		{
+			name: "closed pipe",
+			err:  io.ErrClosedPipe,
+		},
+		{
+			name: "closed network connection",
+			err:  net.ErrClosed,
+		},
+		{
+			name: "closed mosh session",
+			err:  ErrMoshSessionClosed,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			logger := log.NewWriter("Test", &output)
+
+			debugConnectionDisconnected(
+				logger,
+				connectionDebugDetails{
+					Protocol: "SSH",
+					Address:  "example.com:22",
+					Network:  "tcp",
+				},
+				"stdout stream ended",
+				test.err,
+			)
+
+			got := output.String()
+			for _, want := range []string{
+				"[DBG]",
+				"SSH connection disconnected",
+				`address="example.com:22"`,
+				`network="tcp"`,
+				"reason=stdout stream ended",
+				"error=" + test.err.Error(),
+			} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("expected log output %q to contain %q", got, want)
+				}
+			}
+			if strings.Contains(got, "[WRN]") {
+				t.Fatalf("expected log output %q not to warn for expected shutdown", got)
+			}
+		})
+	}
+}
+
 func TestDebugConnectionDisconnectedLogsErrorExit(t *testing.T) {
 	var output bytes.Buffer
 	logger := log.NewWriter("Test", &output)
@@ -191,6 +251,7 @@ func TestDebugConnectionDisconnectedLogsErrorExit(t *testing.T) {
 
 	got := output.String()
 	for _, want := range []string{
+		"[WRN]",
 		"SSH connection disconnected",
 		`user="alice"`,
 		`address="example.com:22"`,

@@ -4,7 +4,10 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"strconv"
 	"strings"
 
@@ -64,7 +67,7 @@ func debugConnectionAttempt(l log.Logger, details connectionDebugDetails) {
 }
 
 func debugConnectionFailed(l log.Logger, details connectionDebugDetails, err error) {
-	l.Debug("%s connection failed: %s error=%s", details.Protocol, details.fields(), err)
+	l.Warning("%s connection failed: %s error=%s", details.Protocol, details.fields(), err)
 }
 
 func debugConnectionEstablished(l log.Logger, details connectionDebugDetails) {
@@ -76,5 +79,16 @@ func debugConnectionDisconnected(l log.Logger, details connectionDebugDetails, r
 		l.Debug("%s connection disconnected: %s reason=%s", details.Protocol, details.fields(), reason)
 		return
 	}
-	l.Debug("%s connection disconnected: %s reason=%s error=%s", details.Protocol, details.fields(), reason, err)
+	if expectedDisconnectError(err) {
+		l.Debug("%s connection disconnected: %s reason=%s error=%s", details.Protocol, details.fields(), reason, err)
+		return
+	}
+	l.Warning("%s connection disconnected: %s reason=%s error=%s", details.Protocol, details.fields(), reason, err)
+}
+
+func expectedDisconnectError(err error) bool {
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrClosedPipe) ||
+		errors.Is(err, ErrMoshSessionClosed) ||
+		errors.Is(err, net.ErrClosed)
 }
