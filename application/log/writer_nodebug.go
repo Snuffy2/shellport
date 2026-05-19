@@ -39,7 +39,13 @@ func NewDebugOrNonDebugWriter(
 // Context returns a child NonDebugWriter with name appended to the context
 // path, preserving debug suppression in the child.
 func (w NonDebugWriter) Context(name string) Logger {
-	return NewNonDebugWriter(w.c+" > "+name, w.w)
+	return NonDebugWriter{
+		Writer: Writer{
+			c:    appendContext(w.c, name, w.root),
+			root: false,
+			w:    w.w,
+		},
+	}
 }
 
 // TitledContext returns a child NonDebugWriter with a formatted name appended
@@ -48,7 +54,13 @@ func (w NonDebugWriter) TitledContext(
 	name string,
 	params ...any,
 ) Logger {
-	return NewNonDebugWriter(w.c+" > "+fmt.Sprintf(name, params...), w.w)
+	return NonDebugWriter{
+		Writer: Writer{
+			c:    appendContext(w.c, fmt.Sprintf(name, params...), w.root),
+			root: false,
+			w:    w.w,
+		},
+	}
 }
 
 // Debug is a no-op in NonDebugWriter; debug messages are silently discarded.

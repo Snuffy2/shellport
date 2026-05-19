@@ -11,12 +11,14 @@ import (
 )
 
 // Writer is a Logger implementation that formats each message with a prefix
-// containing the sortable timestamp, log level, and the hierarchical context
-// path, and writes it to the underlying io.Writer. All four severity levels are
-// active, including Debug.
+// containing the local sortable timestamp, log level, and the hierarchical
+// context path, and writes it to the underlying io.Writer. All four severity
+// levels are active, including Debug.
 type Writer struct {
-	// c is the accumulated context path, e.g. "Root > Server > Request".
+	// c is the accumulated context path, e.g. "ShellPort" or "Server > Request".
 	c string
+	// root tracks whether c is the root context label.
+	root bool
 	// w is the output destination.
 	w io.Writer
 }
@@ -25,20 +27,29 @@ type Writer struct {
 // label.
 func NewWriter(context string, w io.Writer) Writer {
 	return Writer{
-		c: context,
-		w: w,
+		c:    context,
+		root: true,
+		w:    w,
 	}
 }
 
 // Context returns a child Writer with name appended to the context path.
 func (w Writer) Context(name string) Logger {
-	return NewWriter(w.c+" > "+name, w.w)
+	return Writer{
+		c:    appendContext(w.c, name, w.root),
+		root: false,
+		w:    w.w,
+	}
 }
 
 // TitledContext returns a child Writer with a formatted name appended to the
 // context path.
 func (w Writer) TitledContext(name string, params ...any) Logger {
-	return NewWriter(w.c+" > "+fmt.Sprintf(name, params...), w.w)
+	return Writer{
+		c:    appendContext(w.c, fmt.Sprintf(name, params...), w.root),
+		root: false,
+		w:    w.w,
+	}
 }
 
 // Write satisfies io.Writer by logging b at the "DEF" severity level.
@@ -52,13 +63,24 @@ func (w Writer) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-// write formats and emits a single log line with the current sortable
+// write formats and emits a single log line with the current local sortable
 // timestamp, the given prefix tag (e.g. "INF", "DBG"), the context path, and
 // the message. It returns the number of bytes written and any write error.
 func (w Writer) write(
 	prefix string, msg string, params ...any) (int, error) {
-	return fmt.Fprintf(w.w, time.Now().Format("2006-01-02 15:04:05")+
-		" ["+prefix+"] "+w.c+": "+msg+"\r\n", params...)
+	logPrefix := time.Now().Local().Format("2006-01-02 15:04:05") +
+		" [" + prefix + "] "
+	if w.c != "" {
+		logPrefix += w.c + ": "
+	}
+	return fmt.Fprintf(w.w, logPrefix+msg+"\r\n", params...)
+}
+
+func appendContext(current string, name string, currentIsRoot bool) string {
+	if current == "" || currentIsRoot {
+		return name
+	}
+	return current + " > " + name
 }
 
 // Info write an info message

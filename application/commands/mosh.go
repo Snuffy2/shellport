@@ -484,7 +484,10 @@ func (d *moshClient) remote(
 		debugConnectionFailed(d.l, bootstrapDetails, err)
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		d.baseCtxCancel()
+		conn.Close()
+	}()
 	d.l.Debug("Mosh SSH bootstrap connected: %s", bootstrapDetails.fields())
 
 	output, err := d.bootstrapRemoteMoshServer(conn)
@@ -513,7 +516,7 @@ func (d *moshClient) remote(
 
 	d.cacheSession(session)
 	if monitorDone, monitorErr := d.monitorRemoteMoshServer(conn, output); monitorErr != nil {
-		d.l.Debug("Unable to monitor remote mosh-server lifecycle: %s", monitorErr)
+		logRemoteMoshServerLifecycleUnavailable(d.l, monitorErr)
 	} else if monitorDone != nil {
 		go d.closeSessionWhenRemoteMoshServerExits(monitorDone)
 	}
@@ -599,7 +602,7 @@ func (d *moshClient) monitorRemoteMoshServer(conn *ssh.Client, output string) (<
 		commandText := renderMoshServerMonitorCommand(pid)
 		output, err := session.CombinedOutput(commandText)
 		if err != nil {
-			d.l.Debug("Remote mosh-server monitor exited with an error: %s", err)
+			logRemoteMoshServerMonitorError(d.baseCtx, d.l, err)
 			done <- false
 			return
 		}
@@ -625,10 +628,27 @@ func (d *moshClient) closeSessionWhenRemoteMoshServerExits(monitorDone <-chan bo
 		}
 		d.baseCtxCancel()
 		if err := d.closeSession(); err != nil {
-			d.l.Debug("Failed to close ended remote mosh session: %s", err)
+			logRemoteMoshServerCloseError(d.l, err)
 		}
 	case <-d.baseCtx.Done():
 	}
+}
+
+func logRemoteMoshServerLifecycleUnavailable(l log.Logger, err error) {
+	l.Warning("Unable to monitor remote mosh-server lifecycle: %s", err)
+}
+
+func logRemoteMoshServerMonitorError(ctx context.Context, l log.Logger, err error) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+	l.Warning("Remote mosh-server monitor exited with an error: %s", err)
+}
+
+func logRemoteMoshServerCloseError(l log.Logger, err error) {
+	l.Warning("Failed to close ended remote mosh session: %s", err)
 }
 
 func moshSSHBootstrapNetwork(address string) (string, error) {

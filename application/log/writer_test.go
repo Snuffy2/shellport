@@ -7,10 +7,15 @@ import (
 	"bytes"
 	"regexp"
 	"testing"
+	"time"
 )
 
-func TestWriterPlacesSortableTimestampBeforeLogLevel(t *testing.T) {
-	t.Parallel()
+func TestWriterUsesLocalTimestampBeforeLogLevel(t *testing.T) {
+	originalLocal := time.Local
+	time.Local = time.FixedZone("LOCAL", -4*60*60)
+	t.Cleanup(func() {
+		time.Local = originalLocal
+	})
 
 	var output bytes.Buffer
 	logger := NewWriter("ShellPort", &output)
@@ -26,5 +31,19 @@ func TestWriterPlacesSortableTimestampBeforeLogLevel(t *testing.T) {
 	}
 	if !matches {
 		t.Fatalf("unexpected log line format: %q", output.String())
+	}
+}
+
+func TestWriterOmitsRootContextFromChildLogs(t *testing.T) {
+	var output bytes.Buffer
+	logger := NewWriter("ShellPort", &output).Context("Server")
+
+	logger.Info("Serving")
+
+	if regexp.MustCompile(`ShellPort\s*>`).MatchString(output.String()) {
+		t.Fatalf("expected log output to omit root context: %q", output.String())
+	}
+	if !regexp.MustCompile(`\[INF\] Server: Serving\r\n$`).MatchString(output.String()) {
+		t.Fatalf("unexpected child context log output: %q", output.String())
 	}
 }
