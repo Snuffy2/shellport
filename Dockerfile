@@ -62,6 +62,7 @@ RUN set -ex && \
         "The corresponding source for this image is available at:" \
         "$SHELLPORT_SOURCE_URL" \
         > /SOURCE.md && \
+    apk add --no-cache tzdata && \
     adduser -D shellport && \
     chmod +x /shellport && \
     chmod +x /shellport.sh
