@@ -11,9 +11,9 @@ import (
 )
 
 // Writer is a Logger implementation that formats each message with a prefix
-// containing the sortable timestamp, log level, and the hierarchical context
-// path, and writes it to the underlying io.Writer. All four severity levels are
-// active, including Debug.
+// containing the local sortable timestamp, log level, and the hierarchical
+// context path, and writes it to the underlying io.Writer. All four severity
+// levels are active, including Debug.
 type Writer struct {
 	// c is the accumulated context path, e.g. "Root > Server > Request".
 	c string
@@ -52,12 +52,12 @@ func (w Writer) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-// write formats and emits a single log line with the current sortable
+// write formats and emits a single log line with the current local sortable
 // timestamp, the given prefix tag (e.g. "INF", "DBG"), the context path, and
 // the message. It returns the number of bytes written and any write error.
 func (w Writer) write(
 	prefix string, msg string, params ...any) (int, error) {
-	return fmt.Fprintf(w.w, time.Now().Format("2006-01-02 15:04:05")+
+	return fmt.Fprintf(w.w, time.Now().Local().Format("2006-01-02 15:04:05")+
 		" ["+prefix+"] "+w.c+": "+msg+"\r\n", params...)
 }
 

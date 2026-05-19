@@ -7,10 +7,15 @@ import (
 	"bytes"
 	"regexp"
 	"testing"
+	"time"
 )
 
-func TestWriterPlacesSortableTimestampBeforeLogLevel(t *testing.T) {
-	t.Parallel()
+func TestWriterUsesLocalTimestampBeforeLogLevel(t *testing.T) {
+	originalLocal := time.Local
+	time.Local = time.FixedZone("LOCAL", -4*60*60)
+	t.Cleanup(func() {
+		time.Local = originalLocal
+	})
 
 	var output bytes.Buffer
 	logger := NewWriter("ShellPort", &output)
