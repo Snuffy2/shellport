@@ -915,6 +915,33 @@ export class Preset {
 }
 
 /**
+ * Compares merged presets for display in the preset list.
+ *
+ * @param {Preset} a First merged preset.
+ * @param {Preset} b Second merged preset.
+ * @returns {number} Sort comparator result.
+ */
+function compareMergedPresets(a, b) {
+  const titleCompare = a.preset
+    .title()
+    .localeCompare(b.preset.title(), undefined, { sensitivity: "base" });
+  if (titleCompare !== 0) {
+    return titleCompare;
+  }
+
+  const typeCompare = a.command
+    .name()
+    .localeCompare(b.command.name(), undefined, { sensitivity: "base" });
+  if (typeCompare !== 0) {
+    return typeCompare;
+  }
+
+  return a.preset.host().localeCompare(b.preset.host(), undefined, {
+    sensitivity: "base",
+  });
+}
+
+/**
  * Registry of all available command types.
  *
  * Wraps each raw command definition in a {@link Builder} and exposes helper
@@ -979,6 +1006,6 @@ export class Commands {
       }
     }
 
-    return pp;
+    return pp.sort(compareMergedPresets);
   }
 }
