@@ -72,6 +72,20 @@
         "Encoding": "utf-8",
         "Mosh Server": "mosh-server"
       }
+    },
+    {
+      "ID": "preset-example-et",
+      "Title": "Example ET",
+      "Type": "ET",
+      "Host": "ssh.example.com:22",
+      "Meta": {
+        "User": "guest",
+        "Authentication": "Private Key",
+        "Encoding": "utf-8",
+        "ET Server Port": "2022",
+        "ET Command": "et",
+        "Private Key": "-----BEGIN RSA !!!Will be sent to client in plain-text!!! -END RSA PRIVATE KEY-----"
+      }
     }
   ],
   "OnlyAllowPresetRemotes": false

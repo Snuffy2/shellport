@@ -65,7 +65,11 @@ export function buildPresetExecution(preset) {
     };
   }
 
-  if (commandName !== "SSH" && commandName !== "Mosh") {
+  if (
+    commandName !== "SSH" &&
+    commandName !== "Mosh" &&
+    commandName !== "ET"
+  ) {
     return null;
   }
 
@@ -90,6 +94,15 @@ export function buildPresetExecution(preset) {
 
   if (commandName === "Mosh") {
     config.moshServer = presetData.metaDefault("Mosh Server", "mosh-server");
+  }
+
+  if (commandName === "ET") {
+    if (authentication !== "Private Key") {
+      return null;
+    }
+
+    config.etServerPort = presetData.metaDefault("ET Server Port", "2022");
+    config.etCommand = presetData.metaDefault("ET Command", "et");
   }
 
   return {

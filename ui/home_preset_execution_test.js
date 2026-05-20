@@ -149,6 +149,55 @@ describe("preset execution helpers", () => {
     assert.deepStrictEqual(execution.keptSessions, ["credential"]);
   });
 
+  it("builds direct ET execution with ET metadata and private-key credential", () => {
+    const execution = buildPresetExecution(
+      mergedPreset("ET", {
+        title: "Example ET",
+        type: "ET",
+        host: "example.com:22",
+        meta: {
+          User: "alice",
+          Authentication: "Private Key",
+          "Private Key": "PRIVATE KEY DATA",
+          Fingerprint: "SHA256:abc",
+          "ET Server Port": "22022",
+          "ET Command": "/usr/local/bin/et",
+        },
+      }),
+    );
+
+    assert.deepStrictEqual(execution.config, {
+      user: "alice",
+      authentication: "Private Key",
+      host: "example.com:22",
+      charset: "utf-8",
+      tabColor: "",
+      fingerprint: "SHA256:abc",
+      presetID: "",
+      etServerPort: "22022",
+      etCommand: "/usr/local/bin/et",
+    });
+    assert.strictEqual(execution.session.credential, "PRIVATE KEY DATA");
+    assert.deepStrictEqual(execution.keptSessions, ["credential"]);
+  });
+
+  it("does not direct-launch ET password presets", () => {
+    const execution = buildPresetExecution(
+      mergedPreset("ET", {
+        title: "Example ET Password",
+        type: "ET",
+        host: "example.com:22",
+        meta: {
+          User: "alice",
+          Authentication: "Password",
+          Password: "secret",
+        },
+      }),
+    );
+
+    assert.strictEqual(execution, null);
+  });
+
   it("builds direct Telnet execution for host presets", () => {
     const execution = buildPresetExecution(
       mergedPreset("Telnet", {
