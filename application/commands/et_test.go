@@ -495,6 +495,7 @@ func TestETRemoteUsesCachedPrivateKeyAndMaterialInProcessStarter(t *testing.T) {
 	fingerprintRequest := make(chan struct{}, 1)
 	credentialRequest := make(chan struct{}, 1)
 	credentialReady := make(chan struct{}, 1)
+	asyncErrors := make(chan error, 2)
 
 	etHost := "example.com:22022"
 	processStarted := make(chan string, 1)
@@ -609,7 +610,9 @@ func TestETRemoteUsesCachedPrivateKeyAndMaterialInProcessStarter(t *testing.T) {
 		header := command.StreamHeader{}
 		header.Set(ETClientRespondFingerprint, 1)
 		if err := client.local(nil, newLimitedReader([]byte{0}), header, make([]byte, 16)); err != nil {
-			t.Fatalf("local fingerprint response failed: %v", err)
+			asyncErrors <- err
+		} else {
+			asyncErrors <- nil
 		}
 	}()
 	go func() {
@@ -617,7 +620,9 @@ func TestETRemoteUsesCachedPrivateKeyAndMaterialInProcessStarter(t *testing.T) {
 		header := command.StreamHeader{}
 		header.Set(ETClientRespondCredential, uint16(len(privateKey)))
 		if err := client.local(nil, newLimitedReader(privateKey), header, make([]byte, 16)); err != nil {
-			t.Fatalf("local credential response failed: %v", err)
+			asyncErrors <- err
+		} else {
+			asyncErrors <- nil
 		}
 		client.cachePrivateKey(privateKey)
 		credentialReady <- struct{}{}
@@ -652,6 +657,16 @@ func TestETRemoteUsesCachedPrivateKeyAndMaterialInProcessStarter(t *testing.T) {
 	case <-remoteDone:
 	case <-time.After(2 * time.Second):
 		t.Fatal("remote goroutine did not exit")
+	}
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-asyncErrors:
+			if err != nil {
+				t.Fatalf("local handler failed: %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for local handlers")
+		}
 	}
 
 	if materialDir == "" {

@@ -100,11 +100,12 @@ describe("ET Command", () => {
     );
     const fields = wizard.stepInitialPrompt().data().inputs;
     const port = fields.find((field) => field.name === "ET Server Port");
-    const commandField = fields.find(
-      (field) => field.name === "ET Command",
-    );
+    const commandField = fields.find((field) => field.name === "ET Command");
 
-    assert.strictEqual(port.verify("2022"), "Will connect to etserver port 2022");
+    assert.strictEqual(
+      port.verify("2022"),
+      "Will connect to etserver port 2022",
+    );
     assert.throws(() => port.verify("0"), /between 1 and 65535/);
     assert.throws(() => port.verify("abc"), /numeric/);
     assert.strictEqual(commandField.verify("et"), "Will run et");

@@ -65,11 +65,7 @@ export function buildPresetExecution(preset) {
     };
   }
 
-  if (
-    commandName !== "SSH" &&
-    commandName !== "Mosh" &&
-    commandName !== "ET"
-  ) {
+  if (commandName !== "SSH" && commandName !== "Mosh" && commandName !== "ET") {
     return null;
   }
 

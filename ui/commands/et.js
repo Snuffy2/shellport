@@ -11,8 +11,8 @@ import Exception from "./exception.js";
 import * as presets from "./presets.js";
 import * as strings from "./string.js";
 
-const AUTHMETHOD_NONE = 0x00;
-const AUTHMETHOD_PASSPHRASE = 0x01;
+const _AUTHMETHOD_NONE = 0x00;
+const _AUTHMETHOD_PASSPHRASE = 0x01;
 const AUTHMETHOD_PRIVATE_KEY = 0x02;
 
 const COMMAND_ID = 0x03;
@@ -118,10 +118,7 @@ export class ET {
     data.set(userBuf, 0);
     data.set(addrBuf, userBuf.length);
     data.set(authMethod, userBuf.length + addrBuf.length);
-    data.set(
-      etServerPortBuf,
-      userBuf.length + addrBuf.length + 1,
-    );
+    data.set(etServerPortBuf, userBuf.length + addrBuf.length + 1);
     data.set(
       etCommandBuf,
       userBuf.length + addrBuf.length + 1 + etServerPortBuf.length,
@@ -286,7 +283,9 @@ const initialFieldDef = {
       }
 
       if (addr.addr.length > address.MAX_ADDR_LEN) {
-        throw new Error("Can no longer than " + address.MAX_ADDR_LEN + " bytes");
+        throw new Error(
+          "Can no longer than " + address.MAX_ADDR_LEN + " bytes",
+        );
       }
 
       if (addr.port <= 0) {
@@ -317,7 +316,7 @@ const initialFieldDef = {
         );
       }
 
-      return 'We\'ll login as user "' + d + '"';
+      return "We'll login as user \"" + d + '"';
     },
   },
   Encoding: {
@@ -377,7 +376,9 @@ const initialFieldDef = {
       }
 
       if (/\s/.test(d)) {
-        throw new Error("ET Command must be an executable path without arguments");
+        throw new Error(
+          "ET Command must be an executable path without arguments",
+        );
       }
 
       return "Will run " + d;
@@ -744,12 +745,18 @@ class Wizard {
         self.step.resolve(self.stepWaitForEstablishWait(configInput.host));
       },
       async "connect.failed"(rd) {
-        let d = new TextDecoder("utf-8").decode(await reader.readCompletely(rd));
+        let d = new TextDecoder("utf-8").decode(
+          await reader.readCompletely(rd),
+        );
         self.step.resolve(self.stepErrorDone("Connection failed", d));
       },
       async "hook.before_connected"(rd) {
-        const d = new TextDecoder("utf-8").decode(await reader.readCompletely(rd));
-        self.step.resolve(self.stepHookOutputPrompt("Waiting for server hook", d));
+        const d = new TextDecoder("utf-8").decode(
+          await reader.readCompletely(rd),
+        );
+        self.step.resolve(
+          self.stepHookOutputPrompt("Waiting for server hook", d),
+        );
       },
       "connect.succeed"(rd, commandHandler) {
         void rd;
@@ -981,7 +988,9 @@ class Wizard {
         break;
 
       default:
-        throw new Exception('Auth method "' + config.auth + '" was unsupported');
+        throw new Exception(
+          'Auth method "' + config.auth + '" was unsupported',
+        );
     }
 
     let presetCredentialUsed = false;
@@ -1180,9 +1189,7 @@ export class Command {
       auth = d[1],
       charset = d.length >= 3 ? d[2] : "utf-8",
       etCommand =
-        d.length >= 4
-          ? decodeLauncherETCommand(d[3])
-          : DEFAULT_ET_COMMAND;
+        d.length >= 4 ? decodeLauncherETCommand(d[3]) : DEFAULT_ET_COMMAND;
 
     try {
       initialFieldDef["User"].verify(user);
