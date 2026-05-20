@@ -4,7 +4,9 @@
 package commands
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -93,5 +95,26 @@ func TestCleanupETTempDirRemovesDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("stat dir error = %v, want not exist", err)
+	}
+}
+
+func TestStartETPTYStartsProcessWithPTYSession(t *testing.T) {
+	command, err := exec.LookPath("true")
+	if err != nil {
+		t.Skip("true command is unavailable")
+	}
+
+	process, err := startETPTY(
+		context.Background(),
+		etMetadata{Command: command, ServerPort: 2022},
+		"alice",
+		"example.com:22",
+		filepath.Join(t.TempDir(), "ssh_config"),
+	)
+	if err != nil {
+		t.Fatalf("startETPTY() error = %v", err)
+	}
+	if err := process.Close(); err != nil {
+		t.Fatalf("process.Close() error = %v", err)
 	}
 }

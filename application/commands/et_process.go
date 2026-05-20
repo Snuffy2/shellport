@@ -119,7 +119,6 @@ func cleanupETTempDir(dir string) error {
 func startETPTY(ctx context.Context, metadata etMetadata, user string, sshAddress string, sshConfigPath string) (etProcess, error) {
 	args := buildETClientArgs(metadata, user, sshAddress, sshConfigPath)
 	cmd := exec.CommandContext(ctx, metadata.Command, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	file, err := pty.Start(cmd)
 	if err != nil {
