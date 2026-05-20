@@ -91,7 +91,6 @@ import FontFaceObserver from "fontfaceobserver";
 import { Terminal } from "@xterm/xterm";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
-import { WebglAddon } from "@xterm/addon-webgl";
 import { FitAddon } from "@xterm/addon-fit";
 import { markRaw } from "vue";
 import { isNumber } from "../commands/common.js";
@@ -147,37 +146,6 @@ const termMinFontSize = 8;
 const termMaxFontSize = 36;
 
 /**
- * Detects whether the current browser environment supports WebGL and WebGL2.
- *
- * Checks for the global `WebGLRenderingContext` and `WebGL2RenderingContext`
- * constructors and then attempts to obtain contexts from a temporary canvas.
- * Returns false defensively on any exception (e.g. headless environments).
- *
- * @private
- * @returns {boolean|CanvasRenderingContext2D} Truthy when WebGL is available, false otherwise.
- */
-function webglSupported() {
-  try {
-    if (typeof window !== "object") {
-      return false;
-    }
-    if (typeof window.WebGLRenderingContext !== "function") {
-      return false;
-    }
-    if (typeof window.WebGL2RenderingContext !== "function") {
-      return false;
-    }
-    return (
-      document.createElement("canvas").getContext("webgl") &&
-      document.createElement("canvas").getContext("webgl2")
-    );
-  } catch {
-    // ignore: WebGL not available
-  }
-  return false;
-}
-
-/**
  * Thin wrapper around an xterm.js `Terminal` that binds it to the connection
  * `control` interface and adds font-size management, fit/refit, and safe
  * closed-state guards on every operation.
@@ -218,7 +186,6 @@ class Term {
       }),
     );
     this.fit = markRaw(new FitAddon());
-    this.webgl = null;
 
     this.term.onData((data) => {
       if (this.closed) {
@@ -300,9 +267,6 @@ class Term {
    * Mounts the terminal into `root`, loads all addons, and performs an initial
    * refit. No-op when already closed.
    *
-   * Attempts to load the WebglAddon for GPU-accelerated rendering; silently
-   * falls back to the canvas renderer if loading fails.
-   *
    * @param {HTMLElement} root - The container element to render the terminal into.
    * @returns {void}
    */
@@ -314,15 +278,6 @@ class Term {
     this.term.loadAddon(this.fit);
     this.term.loadAddon(markRaw(new WebLinksAddon()));
     this.term.loadAddon(markRaw(new Unicode11Addon()));
-    try {
-      if (webglSupported()) {
-        this.webgl = markRaw(new WebglAddon());
-        this.term.loadAddon(this.webgl);
-      }
-    } catch {
-      this.webgl = null;
-      // ignore: WebGL addon failed to load
-    }
     this.term.unicode.activeVersion = "11";
     this.refit();
   }
@@ -475,9 +430,6 @@ class Term {
       return;
     }
     try {
-      if (typeof this.webgl?.clearTextureAtlas === "function") {
-        this.webgl.clearTextureAtlas();
-      }
       if (typeof this.term.refresh === "function") {
         this.term.refresh(0, this.term.rows - 1);
       }
