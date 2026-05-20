@@ -28,6 +28,7 @@ const fontFiles = [
   "OFL.txt",
   "README.md",
 ];
+const fetchTimeoutMS = 30_000;
 const textFontFiles = new Set(["OFL.txt", "README.md"]);
 const unusedReadmeReference = /^\[SIL-RFN\]:.*$/gm;
 
@@ -39,6 +40,7 @@ const unusedReadmeReference = /^\[SIL-RFN\]:.*$/gm;
  */
 async function fetchText(url) {
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(fetchTimeoutMS),
     headers: {
       Accept: "application/vnd.github+json, text/plain;q=0.9, */*;q=0.8",
       "User-Agent": "ShellPort font updater",
@@ -108,6 +110,7 @@ async function fetchExpectedArchiveSHA256(releaseTag) {
  */
 async function downloadFile(url, targetPath) {
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(fetchTimeoutMS),
     headers: {
       "User-Agent": "ShellPort font updater",
     },
@@ -169,7 +172,9 @@ function validateExtractedFontFile(sourcePath, fontFile) {
     stats = fs.lstatSync(sourcePath);
   } catch (error) {
     if (error.code === "ENOENT") {
-      throw new Error(`expected font file was not extracted: ${fontFile}`);
+      throw new Error(`expected font file was not extracted: ${fontFile}`, {
+        cause: error,
+      });
     }
     throw error;
   }

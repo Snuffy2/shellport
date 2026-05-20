@@ -45,6 +45,10 @@ describe("JetBrainsMono Nerd Font updater", function () {
     );
     expect(updaterSource).toContain("SHA-256.txt");
     expect(updaterSource).toContain("archiveSHA256");
+    expect(updaterSource).toContain("const fetchTimeoutMS = 30_000");
+    expect(
+      updaterSource.match(/AbortSignal\.timeout\(fetchTimeoutMS\)/gu),
+    ).toHaveLength(2);
     expect(updaterSource).toContain("JetBrainsMonoNerdFontMono-Regular.ttf");
     expect(updaterSource).toContain("JetBrainsMonoNerdFontMono-Bold.ttf");
     expect(updaterSource).toContain("SIL-RFN");
@@ -79,6 +83,23 @@ describe("JetBrainsMono Nerd Font updater", function () {
           "JetBrainsMonoNerdFontMono-Bold.ttf",
         );
       }).toThrow("must not be a hard link");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves missing extracted file cause", function () {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "shellport-font-updater-test-"),
+    );
+
+    try {
+      expect(function () {
+        validateExtractedFontFile(
+          path.join(tempDir, "missing.ttf"),
+          "JetBrainsMonoNerdFontMono-Regular.ttf",
+        );
+      }).toThrow(expect.objectContaining({ cause: expect.any(Error) }));
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
