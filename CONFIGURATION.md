@@ -182,7 +182,7 @@ as a starting point for your own configuration.
       // Title of the preset
       "Title": "SDF.org Unix Shell",
 
-      // Preset Types, i.e. Telnet, SSH, and Mosh
+      // Preset Types, i.e. Telnet, SSH, Mosh, and ET
       "Type": "SSH",
 
       // Target address and port
@@ -279,6 +279,22 @@ as a starting point for your own configuration.
         "Mosh Server": "mosh-server",
       },
     },
+    {
+      "Title": "Example ET",
+      "Type": "ET",
+      "Host": "ssh.example.com:22",
+      "Meta": {
+        "User": "guest",
+        "Authentication": "Private Key",
+        // Data for predefined Encoding field. ET currently supports utf-8 only.
+        "Encoding": "utf-8",
+        // Data for predefined ET Server Port field. Defaults to "2022".
+        "ET Server Port": "2022",
+        // Data for predefined ET Command field. Defaults to "et".
+        // Provide an executable path only, without command arguments.
+        "ET Command": "et",
+      },
+    },
   ],
 
   // Allow the Preset Remotes only, and refuse to connect to any other remote
@@ -327,6 +343,20 @@ Key behavior:
   `SharedKey` has admin access.
 - `SharedKey` and `AdminKey` both blank: all visitors have admin access without
   authentication.
+
+### ET Presets
+
+ET presets use the same `Host`, `User`, `Authentication`, `Private Key`,
+`Fingerprint`, and `Encoding` metadata as SSH private-key presets. ET v1
+requires `Authentication` to be `Private Key`.
+
+ET-specific metadata:
+
+- `ET Server Port`: remote `etserver` TCP port. Defaults to `2022`.
+- `ET Command`: local ET client executable path inside the ShellPort runtime.
+  Defaults to `et`. Arguments are not accepted.
+
+ET v1 does not support password authentication or SOCKS5 proxying.
 
 ## Environment Variables
 
