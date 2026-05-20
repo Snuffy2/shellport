@@ -463,6 +463,24 @@ class Term {
   }
 
   /**
+   * Requests a full xterm.js viewport refresh. No-op when closed or unsupported.
+   *
+   * @returns {void}
+   */
+  refresh() {
+    if (this.closed) {
+      return;
+    }
+    try {
+      if (typeof this.term.refresh === "function") {
+        this.term.refresh(0, this.term.rows - 1);
+      }
+    } catch (e) {
+      process.env.NODE_ENV === "development" && console.trace(e);
+    }
+  }
+
+  /**
    * Returns whether the terminal has been destroyed.
    *
    * @returns {boolean} True after `destroy()` has been called.
@@ -685,6 +703,7 @@ export default {
         nextTick: () => this.$nextTick(),
         isStillActive: () => this.active,
         activate: () => this.activate(),
+        refresh: () => this.refresh(),
         deactivate: () => this.deactivate(),
       });
     },
@@ -751,6 +770,14 @@ export default {
     activate() {
       this.term.focus();
       this.fit();
+    },
+    /**
+     * Requests a full terminal redraw.
+     *
+     * @returns {void}
+     */
+    refresh() {
+      this.term.refresh();
     },
     /**
      * Removes focus from the terminal.

@@ -17,12 +17,15 @@ describe("screen console", function () {
       activate: () => {
         calls.push("activate");
       },
+      refresh: () => {
+        calls.push("refresh");
+      },
       deactivate: () => {
         calls.push("deactivate");
       },
     });
 
-    expect(calls).toEqual(["nextTick", "activate"]);
+    expect(calls).toEqual(["nextTick", "activate", "refresh"]);
   });
 
   test("deactivates immediately without waiting for a DOM update", async function () {
