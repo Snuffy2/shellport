@@ -366,17 +366,30 @@ func (d *etClient) remote(
 		return
 	}
 	d.cacheProcess(process)
-	if err = d.emitClientFrame(ETServerConnectSucceed, (*u)[:d.w.HeaderSize()]); err != nil {
-		debugConnectionDisconnected(d.l, details, "connect-success response failed", err)
-		return
-	}
-	debugConnectionEstablished(d.l, details)
 
+	connected := false
 	for {
 		rLen, rErr := process.Read((*u)[d.w.HeaderSize():])
 		if rErr != nil {
+			if !connected {
+				d.sendConnectFailed((*u)[:], rErr)
+				debugConnectionFailed(d.l, details, rErr)
+				return
+			}
 			debugConnectionDisconnected(d.l, details, "process output ended", rErr)
 			return
+		}
+		if rLen == 0 {
+			continue
+		}
+
+		if !connected {
+			if err = d.emitClientFrame(ETServerConnectSucceed, (*u)[:d.w.HeaderSize()]); err != nil {
+				debugConnectionDisconnected(d.l, details, "connect-success response failed", err)
+				return
+			}
+			connected = true
+			debugConnectionEstablished(d.l, details)
 		}
 
 		if err = d.emitClientFrame(

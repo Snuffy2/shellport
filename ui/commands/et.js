@@ -568,6 +568,16 @@ function decodeLauncherETCommand(d) {
   }
 }
 
+function normalizeETCommandPreset(fields) {
+  for (let i in fields) {
+    if (fields[i].name === "ET Command") {
+      fields[i].value = DEFAULT_ET_COMMAND;
+    }
+  }
+
+  return fields;
+}
+
 class Wizard {
   /**
    * constructor
@@ -865,24 +875,26 @@ class Wizard {
         self.step.resolve(self.stepWaitForAcceptWait());
       },
       () => {},
-      command.fieldsWithPreset(
-        initialFieldDef,
-        [
-          {
-            name: "Host",
-            suggestions(_input) {
-              return [];
+      normalizeETCommandPreset(
+        command.fieldsWithPreset(
+          initialFieldDef,
+          [
+            {
+              name: "Host",
+              suggestions(_input) {
+                return [];
+              },
             },
-          },
-          { name: "User" },
-          { name: "Authentication" },
-          { name: "Encoding" },
-          { name: "ET Server Port" },
-          { name: "ET Command" },
-          { name: "Notice" },
-        ],
-        self.preset,
-        () => {},
+            { name: "User" },
+            { name: "Authentication" },
+            { name: "Encoding" },
+            { name: "ET Server Port" },
+            { name: "ET Command" },
+            { name: "Notice" },
+          ],
+          self.preset,
+          () => {},
+        ),
       ),
     );
   }

@@ -116,6 +116,45 @@ describe("ET Command", () => {
     assert.throws(() => commandField.verify("et --flag"), /fixed/);
   });
 
+  it("normalizes preset ET command values in the wizard", () => {
+    const wizard = new et.Command().wizard(
+      null,
+      new presets.Preset({
+        id: "preset-et",
+        title: "Example ET",
+        type: "ET",
+        host: "example.com:22",
+        tab_color: "",
+        meta: {
+          User: "alice",
+          Authentication: "Private Key",
+          Encoding: "utf-8",
+          "ET Server Port": "22022",
+          "ET Command": "/usr/local/bin/et",
+        },
+      }),
+      {},
+      [],
+      null,
+      null,
+      {
+        get(type) {
+          assert.strictEqual(type, "ET");
+
+          return {};
+        },
+      },
+      null,
+    );
+
+    const fields = wizard.stepInitialPrompt().data().inputs;
+    const commandField = fields.find((field) => field.name === "ET Command");
+
+    assert.strictEqual(commandField.value, "et");
+    assert.strictEqual(commandField.readonly, true);
+    assert.strictEqual(commandField.verify(commandField.value), "Will run et");
+  });
+
   it("includes non-default ET server port in launchers", () => {
     assert.strictEqual(
       new et.Command().launcher({
