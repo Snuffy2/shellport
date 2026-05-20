@@ -160,8 +160,8 @@ describe("preset execution helpers", () => {
           Authentication: "Private Key",
           "Private Key": "PRIVATE KEY DATA",
           Fingerprint: "SHA256:abc",
-	      "ET Server Port": "22022",
-	      "ET Command": "/usr/local/bin/et",
+          "ET Server Port": "22022",
+          "ET Command": "/usr/local/bin/et",
         },
       }),
     );

@@ -97,9 +97,9 @@ export function buildPresetExecution(preset) {
       return null;
     }
 
-	    config.etServerPort = presetData.metaDefault("ET Server Port", "2022");
-	    config.etCommand = "et";
-	  }
+    config.etServerPort = presetData.metaDefault("ET Server Port", "2022");
+    config.etCommand = "et";
+  }
 
   return {
     config,
