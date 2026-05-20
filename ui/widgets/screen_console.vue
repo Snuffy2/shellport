@@ -91,7 +91,6 @@ import FontFaceObserver from "fontfaceobserver";
 import { Terminal } from "@xterm/xterm";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
-import { WebglAddon } from "@xterm/addon-webgl";
 import { FitAddon } from "@xterm/addon-fit";
 import { markRaw } from "vue";
 import { isNumber } from "../commands/common.js";
@@ -145,37 +144,6 @@ const termDefaultFontSize = 16;
 const termMinFontSize = 8;
 /** @type {number} Maximum allowed font size in pixels. */
 const termMaxFontSize = 36;
-
-/**
- * Detects whether the current browser environment supports WebGL and WebGL2.
- *
- * Checks for the global `WebGLRenderingContext` and `WebGL2RenderingContext`
- * constructors and then attempts to obtain contexts from a temporary canvas.
- * Returns false defensively on any exception (e.g. headless environments).
- *
- * @private
- * @returns {boolean|CanvasRenderingContext2D} Truthy when WebGL is available, false otherwise.
- */
-function webglSupported() {
-  try {
-    if (typeof window !== "object") {
-      return false;
-    }
-    if (typeof window.WebGLRenderingContext !== "function") {
-      return false;
-    }
-    if (typeof window.WebGL2RenderingContext !== "function") {
-      return false;
-    }
-    return (
-      document.createElement("canvas").getContext("webgl") &&
-      document.createElement("canvas").getContext("webgl2")
-    );
-  } catch {
-    // ignore: WebGL not available
-  }
-  return false;
-}
 
 /**
  * Thin wrapper around an xterm.js `Terminal` that binds it to the connection
@@ -299,9 +267,6 @@ class Term {
    * Mounts the terminal into `root`, loads all addons, and performs an initial
    * refit. No-op when already closed.
    *
-   * Attempts to load the WebglAddon for GPU-accelerated rendering; silently
-   * falls back to the canvas renderer if loading fails.
-   *
    * @param {HTMLElement} root - The container element to render the terminal into.
    * @returns {void}
    */
@@ -313,13 +278,6 @@ class Term {
     this.term.loadAddon(this.fit);
     this.term.loadAddon(markRaw(new WebLinksAddon()));
     this.term.loadAddon(markRaw(new Unicode11Addon()));
-    try {
-      if (webglSupported()) {
-        this.term.loadAddon(markRaw(new WebglAddon()));
-      }
-    } catch {
-      // ignore: WebGL addon failed to load
-    }
     this.term.unicode.activeVersion = "11";
     this.refit();
   }
@@ -457,6 +415,24 @@ class Term {
     }
     try {
       this.fit.fit();
+    } catch (e) {
+      process.env.NODE_ENV === "development" && console.trace(e);
+    }
+  }
+
+  /**
+   * Requests a full xterm.js viewport refresh. No-op when closed or unsupported.
+   *
+   * @returns {void}
+   */
+  refresh() {
+    if (this.closed) {
+      return;
+    }
+    try {
+      if (typeof this.term.refresh === "function") {
+        this.term.refresh(0, this.term.rows - 1);
+      }
     } catch (e) {
       process.env.NODE_ENV === "development" && console.trace(e);
     }
@@ -683,8 +659,15 @@ export default {
       await triggerConsoleActive({
         active,
         nextTick: () => this.$nextTick(),
+        nextFrame: () =>
+          new Promise((resolve) => {
+            requestAnimationFrame(() => {
+              resolve();
+            });
+          }),
         isStillActive: () => this.active,
         activate: () => this.activate(),
+        refresh: () => this.refresh(),
         deactivate: () => this.deactivate(),
       });
     },
@@ -751,6 +734,14 @@ export default {
     activate() {
       this.term.focus();
       this.fit();
+    },
+    /**
+     * Requests a full terminal redraw.
+     *
+     * @returns {void}
+     */
+    refresh() {
+      this.term.refresh();
     },
     /**
      * Removes focus from the terminal.

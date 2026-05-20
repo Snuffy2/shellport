@@ -90,5 +90,6 @@ func expectedDisconnectError(err error) bool {
 	return errors.Is(err, io.EOF) ||
 		errors.Is(err, io.ErrClosedPipe) ||
 		errors.Is(err, ErrMoshSessionClosed) ||
+		errors.Is(err, ErrETRemoteUnavailable) ||
 		errors.Is(err, net.ErrClosed)
 }

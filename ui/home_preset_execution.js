@@ -30,6 +30,15 @@ export function presetCredential(presetData, authentication) {
   }
 }
 
+function validETServerPort(portText) {
+  if (!/^[0-9]+$/.test(portText)) {
+    return false;
+  }
+
+  const port = Number.parseInt(portText, 10);
+  return port >= 1 && port <= 65535;
+}
+
 /**
  * Builds a non-interactive execution payload for presets with complete
  * connection details.
@@ -65,7 +74,7 @@ export function buildPresetExecution(preset) {
     };
   }
 
-  if (commandName !== "SSH" && commandName !== "Mosh") {
+  if (commandName !== "SSH" && commandName !== "Mosh" && commandName !== "ET") {
     return null;
   }
 
@@ -90,6 +99,20 @@ export function buildPresetExecution(preset) {
 
   if (commandName === "Mosh") {
     config.moshServer = presetData.metaDefault("Mosh Server", "mosh-server");
+  }
+
+  if (commandName === "ET") {
+    if (authentication !== "Private Key") {
+      return null;
+    }
+
+    const etServerPort = presetData.metaDefault("ET Server Port", "2022");
+    if (!validETServerPort(etServerPort)) {
+      return null;
+    }
+
+    config.etServerPort = etServerPort;
+    config.etCommand = "et";
   }
 
   return {
