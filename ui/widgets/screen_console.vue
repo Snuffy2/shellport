@@ -125,19 +125,19 @@ import "@xterm/xterm/css/xterm.css";
  * @emits stopped - The receiver loop ended. Payload: `{Error}` the stop reason.
  */
 
-/** @type {string} Preferred monospace font families loaded from a remote CDN. */
-const termTypeFaces = "Hack, PureNerdFont";
-/** @type {string} Local fallback font family used while remote fonts are loading. */
-const termFallbackTypeFace = '"Cascadia Code" , monospace';
-/** @type {number} Milliseconds to wait for each remote font before falling back. */
+/** @type {string} Preferred patched monospace font family bundled with ShellPort. */
+const termTypeFaces = '"JetBrainsMono Nerd Font"';
+/** @type {string} Local fallback font family used while bundled fonts are loading. */
+const termFallbackTypeFace = "monospace";
+/** @type {number} Milliseconds to wait for each bundled font before falling back. */
 const termTypeFaceLoadTimeout = 3000;
 /** @type {string} Warning message emitted when the remote font is unavailable on first attempt. */
 const termTypeFaceLoadError =
-  "Remote font " +
+  "Terminal font " +
   termTypeFaces +
   " is unavailable, using " +
   termFallbackTypeFace +
-  " instead until the remote font is loaded";
+  " instead until the terminal font is loaded";
 /** @type {number} Default terminal font size in pixels. */
 const termDefaultFontSize = 16;
 /** @type {number} Minimum allowed font size in pixels. */
@@ -177,8 +177,8 @@ class Term {
         cursorStyle: "block",
         fontFamily: termTypeFaces + ", " + termFallbackTypeFace,
         fontSize: this.fontSize,
-        letterSpacing: 1,
-        lineHeight: 1.3,
+        letterSpacing: 0,
+        lineHeight: 1.35,
         logLevel: process.env.NODE_ENV === "development" ? "info" : "off",
         theme: {
           background: this.control.color(),

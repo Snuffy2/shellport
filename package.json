@@ -15,7 +15,6 @@
     "Safari >= 14"
   ],
   "devDependencies": {
-    "@azurity/pure-nerd-font": "^3.0.5",
     "@eslint/eslintrc": "^3.3.5",
     "@eslint/js": "^10.0.1",
     "@vitejs/plugin-vue": "^6.0.6",
@@ -34,7 +33,6 @@
     "events": "^3.3.0",
     "fontfaceobserver": "^2.3.0",
     "globals": "^17.6.0",
-    "hack-font": "^3.3.0",
     "iconv-lite": "^0.7.2",
     "node-addon-api": "^8.7.0",
     "node-gyp": "^12.3.0",
@@ -56,6 +54,7 @@
     "build": "npm run generate && cross-env CGO_ENABLED=0 node scripts/build.mjs",
     "lint": "eslint \"ui/**/*.{js,vue}\"",
     "lint:fix": "eslint --fix \"ui/**/*.{js,vue}\"",
+    "update:fonts": "node scripts/update-jetbrains-nerd-font.mjs",
     "testonly": "vitest run && cross-env CGO_ENABLED=1 go test ./... -race -timeout 30s",
     "test": "npm run generate && npm run testonly"
   },

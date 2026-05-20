@@ -4,21 +4,33 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-@import "~hack-font/build/web/hack.css";
-@import "~@azurity/pure-nerd-font/pure-nerd-font.css";
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: normal;
+  font-weight: 400;
+  src: url("../fonts/JetBrainsMonoNerdFont/JetBrainsMonoNerdFontMono-Regular.ttf")
+    format("truetype");
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: normal;
+  font-weight: 700;
+  src: url("../fonts/JetBrainsMonoNerdFont/JetBrainsMonoNerdFontMono-Bold.ttf")
+    format("truetype");
+}
 
 #connector-resource-preload-control-console {
-  font-family: PureNerdFont, Hack;
+  font-family: "JetBrainsMono Nerd Font", monospace;
 }
 #connector-resource-preload-control-console::after {
   content: " ";
-  font-family: PureNerdFont, Hack;
+  font-family: "JetBrainsMono Nerd Font", monospace;
   font-weight: bold;
 }
 #connector-resource-preload-control-console::before {
   content: " ";
-  font-family: PureNerdFont, Hack;
-  font-style: italic;
+  font-family: "JetBrainsMono Nerd Font", monospace;
 }
 
 #home-content > .screen > .screen-screen > .screen-console {
