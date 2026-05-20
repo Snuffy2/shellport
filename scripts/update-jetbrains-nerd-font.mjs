@@ -29,6 +29,7 @@ const fontFiles = [
   "README.md",
 ];
 const textFontFiles = new Set(["OFL.txt", "README.md"]);
+const unusedReadmeReference = /^\[SIL-RFN\]:.*$/gm;
 
 /**
  * Fetches a URL and returns its text body.
@@ -175,7 +176,10 @@ function updateFontDirectory(extractDir, releaseTag, archiveSHA256) {
       const content = fs.readFileSync(targetPath, "utf8");
       fs.writeFileSync(
         targetPath,
-        content.replace(/[ \t]+$/gm, "").replace(/\n*$/u, "\n"),
+        content
+          .replace(unusedReadmeReference, "")
+          .replace(/[ \t]+$/gm, "")
+          .replace(/\n*$/u, "\n"),
       );
     }
     fs.chmodSync(targetPath, 0o644);

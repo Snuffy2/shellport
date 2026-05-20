@@ -37,5 +37,9 @@ describe("JetBrainsMono Nerd Font updater", function () {
     expect(updaterSource).toContain("archiveSHA256");
     expect(updaterSource).toContain("JetBrainsMonoNerdFontMono-Regular.ttf");
     expect(updaterSource).toContain("JetBrainsMonoNerdFontMono-Bold.ttf");
+    expect(updaterSource).toContain("SIL-RFN");
+    expect(
+      readProjectFile("ui/fonts/JetBrainsMonoNerdFont/README.md"),
+    ).not.toContain("[SIL-RFN]:");
   });
 });

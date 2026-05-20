@@ -43,5 +43,3 @@ Once you narrow down your font choice of family (`Droid Sans`, `Inconsolata`, et
  * Patch your own variations with the various options provided by the font patcher (i.e. not include all symbols for smaller font size)
 
 For more information see: [The FAQ](https://github.com/ryanoasis/nerd-fonts/wiki/FAQ-and-Troubleshooting#which-font)
-
-[SIL-RFN]:http://scripts.sil.org/cms/scripts/page.php?item_id=OFL_web_fonts_and_RFNs#14cbfd4a
