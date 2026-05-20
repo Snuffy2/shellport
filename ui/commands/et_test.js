@@ -37,6 +37,10 @@ describe("ET Command", () => {
     assert.strictEqual(new et.Command().id(), 0x03);
   });
 
+  it("uses a distinct ET command color", () => {
+    assert.strictEqual(new et.Command().color(), "#96a");
+  });
+
   it("includes ET metadata in the initial payload", async () => {
     let sent = null;
     const commandHandler = new et.ET(
