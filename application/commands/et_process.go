@@ -55,6 +55,7 @@ func buildETClientArgs(metadata etMetadata, user string, sshAddress string, sshC
 
 	materialDir := filepath.Dir(sshConfigPath)
 	args := []string{
+		"--telemetry=false",
 		"--port",
 		strconv.Itoa(metadata.ServerPort),
 		"--ssh-option",
@@ -72,7 +73,7 @@ func buildETClientArgs(metadata etMetadata, user string, sshAddress string, sshC
 		args = append(args, "--ssh-option", "Port="+sshPort)
 	}
 
-	return append(args, fmt.Sprintf("%s@%s", user, target))
+	return append(args, "--", fmt.Sprintf("%s@%s", user, target))
 }
 
 func writeETSSHMaterial(dir string, privateKey []byte, knownHostsLine string, sshAddress string) (etSSHMaterial, error) {

@@ -15,6 +15,7 @@ import (
 func TestBuildETClientArgsUsesSSHOptionsAndServerPort(t *testing.T) {
 	args := buildETClientArgs(etMetadata{Command: "et", ServerPort: 22022}, "alice", "example.com:22", "/tmp/ssh_config")
 	want := []string{
+		"--telemetry=false",
 		"--port", "22022",
 		"--ssh-option", "IdentitiesOnly=yes",
 		"--ssh-option", "IdentityFile=/tmp/identity",
@@ -22,6 +23,7 @@ func TestBuildETClientArgsUsesSSHOptionsAndServerPort(t *testing.T) {
 		"--ssh-option", "StrictHostKeyChecking=yes",
 		"--ssh-option", "BatchMode=yes",
 		"--ssh-option", "Port=22",
+		"--",
 		"alice@example.com",
 	}
 	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
@@ -32,6 +34,7 @@ func TestBuildETClientArgsUsesSSHOptionsAndServerPort(t *testing.T) {
 func TestBuildETClientArgsSupportsIPv6Address(t *testing.T) {
 	args := buildETClientArgs(etMetadata{Command: "et", ServerPort: 22022}, "alice", "[2001:db8::1]:22", "/tmp/ssh_config")
 	want := []string{
+		"--telemetry=false",
 		"--port", "22022",
 		"--ssh-option", "IdentitiesOnly=yes",
 		"--ssh-option", "IdentityFile=/tmp/identity",
@@ -39,10 +42,24 @@ func TestBuildETClientArgsSupportsIPv6Address(t *testing.T) {
 		"--ssh-option", "StrictHostKeyChecking=yes",
 		"--ssh-option", "BatchMode=yes",
 		"--ssh-option", "Port=22",
+		"--",
 		"alice@2001:db8::1",
 	}
 	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
+func TestBuildETClientArgsTerminatesOptionsBeforeTarget(t *testing.T) {
+	args := buildETClientArgs(etMetadata{Command: "et", ServerPort: 2022}, "-h", "example.com:22", "/tmp/ssh_config")
+	if len(args) < 2 {
+		t.Fatalf("args = %#v, want option terminator and target", args)
+	}
+	if args[len(args)-2] != "--" {
+		t.Fatalf("args = %#v, want option terminator before target", args)
+	}
+	if args[len(args)-1] != "-h@example.com" {
+		t.Fatalf("target = %q, want %q", args[len(args)-1], "-h@example.com")
 	}
 }
 
