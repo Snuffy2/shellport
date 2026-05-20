@@ -5,13 +5,16 @@ import { describe, expect, test } from "vitest";
 import { triggerConsoleActive } from "./screen_console_activation.js";
 
 describe("screen console", function () {
-  test("waits for tab visibility DOM updates before activating the terminal", async function () {
+  test("waits for tab visibility DOM updates and a paint frame before refreshing the terminal", async function () {
     const calls = [];
 
     await triggerConsoleActive({
       active: true,
       nextTick: async () => {
         calls.push("nextTick");
+      },
+      nextFrame: async () => {
+        calls.push("nextFrame");
       },
       isStillActive: () => true,
       activate: () => {
@@ -25,7 +28,7 @@ describe("screen console", function () {
       },
     });
 
-    expect(calls).toEqual(["nextTick", "activate", "refresh"]);
+    expect(calls).toEqual(["nextTick", "activate", "nextFrame", "refresh"]);
   });
 
   test("deactivates immediately without waiting for a DOM update", async function () {
@@ -88,5 +91,41 @@ describe("screen console", function () {
     await staleActivation;
 
     expect(calls).toEqual(["nextTick", "deactivate"]);
+  });
+
+  test("skips refresh when activation becomes stale during the paint frame wait", async function () {
+    const calls = [];
+    let resolveNextFrame;
+    let active = true;
+
+    const staleActivation = triggerConsoleActive({
+      active: true,
+      nextTick: async () => {
+        calls.push("nextTick");
+      },
+      nextFrame: async () => {
+        calls.push("nextFrame");
+        await new Promise((resolve) => {
+          resolveNextFrame = resolve;
+        });
+      },
+      isStillActive: () => active,
+      activate: () => {
+        calls.push("activate");
+      },
+      refresh: () => {
+        calls.push("refresh");
+      },
+      deactivate: () => {
+        calls.push("unexpectedDeactivate");
+      },
+    });
+
+    await Promise.resolve();
+    active = false;
+    resolveNextFrame();
+    await staleActivation;
+
+    expect(calls).toEqual(["nextTick", "activate", "nextFrame"]);
   });
 });

@@ -218,6 +218,7 @@ class Term {
       }),
     );
     this.fit = markRaw(new FitAddon());
+    this.webgl = null;
 
     this.term.onData((data) => {
       if (this.closed) {
@@ -315,9 +316,11 @@ class Term {
     this.term.loadAddon(markRaw(new Unicode11Addon()));
     try {
       if (webglSupported()) {
-        this.term.loadAddon(markRaw(new WebglAddon()));
+        this.webgl = markRaw(new WebglAddon());
+        this.term.loadAddon(this.webgl);
       }
     } catch {
+      this.webgl = null;
       // ignore: WebGL addon failed to load
     }
     this.term.unicode.activeVersion = "11";
@@ -472,6 +475,9 @@ class Term {
       return;
     }
     try {
+      if (typeof this.webgl?.clearTextureAtlas === "function") {
+        this.webgl.clearTextureAtlas();
+      }
       if (typeof this.term.refresh === "function") {
         this.term.refresh(0, this.term.rows - 1);
       }
@@ -701,6 +707,12 @@ export default {
       await triggerConsoleActive({
         active,
         nextTick: () => this.$nextTick(),
+        nextFrame: () =>
+          new Promise((resolve) => {
+            requestAnimationFrame(() => {
+              resolve();
+            });
+          }),
         isStillActive: () => this.active,
         activate: () => this.activate(),
         refresh: () => this.refresh(),
