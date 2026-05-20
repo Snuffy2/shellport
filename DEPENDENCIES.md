@@ -31,20 +31,14 @@ Major dependencies include:
 - [events](https://github.com/browserify/events), Licensed under MIT license
 - [string_decoder](https://github.com/nodejs/string_decoder), Licensed under MIT license
 - [fontfaceobserver](https://github.com/bramstein/fontfaceobserver), [View license](https://github.com/bramstein/fontfaceobserver/blob/master/LICENSE)
-- [Hack Font](https://github.com/source-foundry/Hack), [View license](https://github.com/source-foundry/Hack/blob/master/LICENSE.md)
-- [Nerd Fonts](https://www.nerdfonts.com/), packaged by [@azurity/pure-nerd-font](http://github.com/azurity/pure-nerd-font)
-  includes icons from following fonts:
-  - [Powerline Extra Symbols](https://github.com/ryanoasis/powerline-extra-symbols), Licensed under MIT license
-  - [Font Awesome](https://github.com/FortAwesome/Font-Awesome), [View license](https://github.com/FortAwesome/Font-Awesome/blob/6.x/LICENSE.txt)
-  - [Font Awesome Extension](https://github.com/AndreLZGava/font-awesome-extension), Licensed under MIT license
-  - [Material Design Icons](https://github.com/Templarian/MaterialDesign), [View license](https://github.com/Templarian/MaterialDesign/blob/master/LICENSE)
-  - [Weather Icons](https://github.com/erikflowers/weather-icons), Licensed under SIL OFL 1.1
-  - [Devicons](https://github.com/vorillaz/devicons), Licensed under MIT license
-  - [Octicons](https://github.com/primer/octicons), Licensed under MIT license
-  - [Codicons](https://github.com/microsoft/vscode-codicons), Licensed under MIT License
-  - [Font Logos (Formerly Font Linux)](https://github.com/Lukas-W/font-logos), Licensed under Unlicense license
-  - [Pomicons](https://github.com/gabrielelana/pomicons), Licensed under OFL-1.1 license
-  - ... and more, see [full list](https://github.com/ryanoasis/nerd-fonts/tree/master/src/glyphs)
+- [JetBrainsMono Nerd Font](https://www.nerdfonts.com/font-downloads), patched from
+  [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) by
+  [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts), Licensed under SIL OFL
+  1.1. Bundled font assets are stored under `ui/fonts/JetBrainsMonoNerdFont/`;
+  see `ui/fonts/JetBrainsMonoNerdFont/OFL.txt`,
+  `ui/fonts/JetBrainsMonoNerdFont/README.md`, and
+  `ui/fonts/JetBrainsMonoNerdFont/manifest.json` for license, source release,
+  and checksum details.
 
 ## For back-end application
 
