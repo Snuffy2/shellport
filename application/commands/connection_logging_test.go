@@ -195,6 +195,10 @@ func TestDebugConnectionDisconnectedLogsExpectedReadShutdownAtDebug(t *testing.T
 			name: "closed mosh session",
 			err:  ErrMoshSessionClosed,
 		},
+		{
+			name: "remote et process unavailable",
+			err:  ErrETRemoteUnavailable,
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
