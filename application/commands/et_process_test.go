@@ -1,0 +1,79 @@
+// Copyright (C) 2026 Snuffy2
+// SPDX-License-Identifier: AGPL-3.0-only
+
+package commands
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestBuildETClientArgsUsesSSHConfigAndServerPort(t *testing.T) {
+	args := buildETClientArgs(etMetadata{Command: "et", ServerPort: 22022}, "alice", "example.com:22", "/tmp/ssh_config")
+	want := []string{"-ssh-config", "/tmp/ssh_config", "alice@example.com:22022"}
+	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
+func TestBuildETClientArgsSupportsIPv6Address(t *testing.T) {
+	args := buildETClientArgs(etMetadata{Command: "et", ServerPort: 22022}, "alice", "[2001:db8::1]:22", "/tmp/ssh_config")
+	want := []string{"-ssh-config", "/tmp/ssh_config", "alice@[2001:db8::1]:22022"}
+	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
+func TestWriteETSSHMaterialCreatesRestrictiveFiles(t *testing.T) {
+	dir := t.TempDir()
+	knownHostsLine := "example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyMaterialForTestOnly"
+	material, err := writeETSSHMaterial(dir, []byte("PRIVATE KEY\n"), knownHostsLine, "example.com:2222")
+	if err != nil {
+		t.Fatalf("writeETSSHMaterial() error = %v", err)
+	}
+
+	for _, path := range []string{material.IdentityPath, material.KnownHostsPath, material.ConfigPath} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		if info.Mode().Perm()&0o077 != 0 {
+			t.Fatalf("%s mode = %v, want no group/other permissions", path, info.Mode().Perm())
+		}
+	}
+
+	knownHostsData, err := os.ReadFile(material.KnownHostsPath)
+	if err != nil {
+		t.Fatalf("read known hosts: %v", err)
+	}
+	if strings.TrimSpace(string(knownHostsData)) != knownHostsLine {
+		t.Fatalf("known hosts line = %q, want %q", strings.TrimSpace(string(knownHostsData)), knownHostsLine)
+	}
+
+	config, err := os.ReadFile(material.ConfigPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	configText := string(config)
+	for _, expected := range []string{"IdentityFile " + material.IdentityPath, "UserKnownHostsFile " + material.KnownHostsPath, "BatchMode yes", "Port 2222"} {
+		if !strings.Contains(configText, expected) {
+			t.Fatalf("config missing %q:\n%s", expected, configText)
+		}
+	}
+}
+
+func TestCleanupETTempDirRemovesDirectory(t *testing.T) {
+	dir := t.TempDir()
+	child := filepath.Join(dir, "file")
+	if err := os.WriteFile(child, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+	if err := cleanupETTempDir(dir); err != nil {
+		t.Fatalf("cleanupETTempDir() error = %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("stat dir error = %v, want not exist", err)
+	}
+}
