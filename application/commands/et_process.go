@@ -47,20 +47,32 @@ type etSSHMaterial struct {
 
 func buildETClientArgs(metadata etMetadata, user string, sshAddress string, sshConfigPath string) []string {
 	target := sshAddress
-	if splitHost, _, err := net.SplitHostPort(sshAddress); err == nil {
-		target = net.JoinHostPort(splitHost, strconv.Itoa(metadata.ServerPort))
-		return []string{
-			"-ssh-config",
-			sshConfigPath,
-			fmt.Sprintf("%s@%s", user, target),
-		}
+	sshPort := ""
+	if splitHost, splitPort, err := net.SplitHostPort(sshAddress); err == nil {
+		target = splitHost
+		sshPort = splitPort
 	}
 
-	return []string{
-		"-ssh-config",
-		sshConfigPath,
-		fmt.Sprintf("%s@%s:%d", user, target, metadata.ServerPort),
+	materialDir := filepath.Dir(sshConfigPath)
+	args := []string{
+		"--port",
+		strconv.Itoa(metadata.ServerPort),
+		"--ssh-option",
+		"IdentitiesOnly=yes",
+		"--ssh-option",
+		"IdentityFile=" + filepath.Join(materialDir, "identity"),
+		"--ssh-option",
+		"UserKnownHostsFile=" + filepath.Join(materialDir, "known_hosts"),
+		"--ssh-option",
+		"StrictHostKeyChecking=yes",
+		"--ssh-option",
+		"BatchMode=yes",
 	}
+	if sshPort != "" {
+		args = append(args, "--ssh-option", "Port="+sshPort)
+	}
+
+	return append(args, fmt.Sprintf("%s@%s", user, target))
 }
 
 func writeETSSHMaterial(dir string, privateKey []byte, knownHostsLine string, sshAddress string) (etSSHMaterial, error) {
