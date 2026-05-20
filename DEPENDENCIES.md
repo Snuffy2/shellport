@@ -9,10 +9,18 @@ Major dependencies include:
 
 ## For front-end application
 
+- [Node.js](https://nodejs.org/), version 24 or newer for local development,
+  lockfile generation, and CI parity, Licensed under MIT license
+- [npm](https://www.npmjs.com/), bundled with Node.js and used for frontend
+  dependency installation, scripts, and lockfile generation
 - [Vue](https://vuejs.org), Licensed under MIT license
 - [Vite](https://vite.dev/), Licensed under MIT license
 - [Vitest](https://vitest.dev/), Licensed under MIT license
 - [XTerm.js](https://xtermjs.org/), Licensed under MIT license
+- [@xterm/addon-fit](https://github.com/xtermjs/xterm.js), Licensed under MIT license
+- [@xterm/addon-unicode11](https://github.com/xtermjs/xterm.js), Licensed under MIT license
+- [@xterm/addon-web-links](https://github.com/xtermjs/xterm.js), Licensed under MIT license
+- [@xterm/addon-webgl](https://github.com/xtermjs/xterm.js), Licensed under MIT license
 - [normalize.css](https://github.com/necolas/normalize.css), Licensed under MIT license
 - [Roboto font](https://en.wikipedia.org/wiki/Roboto), Licensed under Apache license
   Packaged by [Christian Hoffmeister](https://github.com/choffmeister/roboto-fontface-bower), Licensed under Apache 2.0
@@ -42,5 +50,9 @@ Major dependencies include:
 
 - [Go programming language](https://golang.org), [View license](https://github.com/golang/go/blob/master/LICENSE)
 - `github.com/gorilla/websocket`, Licensed under BSD-2-Clause license
+- `github.com/creack/pty`, Licensed under MIT license
 - `golang.org/x/net/proxy` [View license](https://github.com/golang/net/blob/master/LICENSE)
 - `golang.org/x/crypto`, [View license](https://github.com/golang/crypto/blob/master/LICENSE)
+- [Eternal Terminal](https://github.com/MisterTea/EternalTerminal), bundled in
+  the Docker image as the local `et` client from commit
+  `7f566c0f3504e32554d98e71e573976255af91fb`, Licensed under Apache-2.0
