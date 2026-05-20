@@ -291,7 +291,7 @@ as a starting point for your own configuration.
         // Data for predefined ET Server Port field. Defaults to "2022".
         "ET Server Port": "2022",
         // Data for predefined ET Command field. Defaults to "et".
-        // Provide an executable path only, without command arguments.
+        // ShellPort currently only allows the built-in "et" command value.
         "ET Command": "et",
       },
     },
@@ -353,8 +353,8 @@ requires `Authentication` to be `Private Key`.
 ET-specific metadata:
 
 - `ET Server Port`: remote `etserver` TCP port. Defaults to `2022`.
-- `ET Command`: local ET client executable path inside the ShellPort runtime.
-  Defaults to `et`. Arguments are not accepted.
+- `ET Command`: local ET client command inside the ShellPort runtime. ShellPort
+  currently only allows the built-in `et` value.
 
 ET v1 does not support password authentication or SOCKS5 proxying.
 

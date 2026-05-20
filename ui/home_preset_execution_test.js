@@ -160,8 +160,8 @@ describe("preset execution helpers", () => {
           Authentication: "Private Key",
           "Private Key": "PRIVATE KEY DATA",
           Fingerprint: "SHA256:abc",
-          "ET Server Port": "22022",
-          "ET Command": "/usr/local/bin/et",
+	      "ET Server Port": "22022",
+	      "ET Command": "/usr/local/bin/et",
         },
       }),
     );
@@ -175,7 +175,7 @@ describe("preset execution helpers", () => {
       fingerprint: "SHA256:abc",
       presetID: "",
       etServerPort: "22022",
-      etCommand: "/usr/local/bin/et",
+      etCommand: "et",
     });
     assert.strictEqual(execution.session.credential, "PRIVATE KEY DATA");
     assert.deepStrictEqual(execution.keptSessions, ["credential"]);

@@ -10,6 +10,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -266,6 +268,12 @@ func (d *etClient) remote(
 		debugConnectionDisconnected(d.l, details, "remote goroutine exited", nil)
 	}()
 
+	if err := d.validateETRemoteAllowed(address, metadata); err != nil {
+		d.sendConnectFailed((*u)[:], err)
+		debugConnectionFailed(d.l, details, err)
+		return
+	}
+
 	if err := d.hooks.Run(
 		d.baseCtx,
 		configuration.HOOK_BEFORE_CONNECTING,
@@ -417,6 +425,46 @@ func (d *etClient) enableRemoteReadTimeoutRetry() {
 	d.remoteReadTimeoutRetryLock.Lock()
 	defer d.remoteReadTimeoutRetryLock.Unlock()
 	d.remoteReadTimeoutRetry = true
+}
+
+func (d *etClient) validateETRemoteAllowed(address string, metadata etMetadata) error {
+	if !d.cfg.OnlyAllowPresetRemotes {
+		return nil
+	}
+
+	presets := d.cfg.Presets
+	if d.cfg.PresetRepository != nil {
+		presets = d.cfg.PresetRepository.List()
+	}
+	for _, preset := range presets {
+		if preset.Host != address {
+			continue
+		}
+		port, err := etPresetServerPort(preset)
+		if err != nil {
+			continue
+		}
+		if port == metadata.ServerPort {
+			return nil
+		}
+	}
+
+	return network.ErrAccessControlDialTargetHostNotAllowed
+}
+
+func etPresetServerPort(preset configuration.Preset) (int, error) {
+	portText := strings.TrimSpace(preset.Meta["ET Server Port"])
+	if portText == "" {
+		return etDefaultServerPort, nil
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		return 0, ErrETInvalidServerPort
+	}
+	if err := validateETServerPort(port); err != nil {
+		return 0, err
+	}
+	return port, nil
 }
 
 func (d *etClient) disableRemoteReadTimeoutRetry() {

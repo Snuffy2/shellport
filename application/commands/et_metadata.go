@@ -15,7 +15,6 @@ import (
 const (
 	etDefaultCommand    = "et"
 	etDefaultServerPort = 2022
-	etMaxCommandLen     = 512
 )
 
 var (
@@ -90,13 +89,7 @@ func validateETServerPort(port int) error {
 
 func validateETCommand(command string) error {
 	command = strings.TrimSpace(command)
-	if command == "" {
-		return ErrETInvalidCommand
-	}
-	if len(command) > etMaxCommandLen {
-		return ErrETInvalidCommand
-	}
-	if strings.ContainsAny(command, " \t\r\n") {
+	if command != etDefaultCommand {
 		return ErrETInvalidCommand
 	}
 	return nil

@@ -26,7 +26,7 @@ func TestParseETMetadataDefaults(t *testing.T) {
 
 func TestParseETMetadataWireFormat(t *testing.T) {
 	metadata, err := parseETMetadata(
-		makeETMetadataReader(t, []string{"6022", "/usr/local/bin/et"}),
+		makeETMetadataReader(t, []string{"6022", "et"}),
 		make([]byte, 1024),
 	)
 	if err != nil {
@@ -35,15 +35,15 @@ func TestParseETMetadataWireFormat(t *testing.T) {
 	if metadata.ServerPort != 6022 {
 		t.Fatalf("ServerPort = %d, want %d", metadata.ServerPort, 6022)
 	}
-	if metadata.Command != "/usr/local/bin/et" {
-		t.Fatalf("Command = %q, want %q", metadata.Command, "/usr/local/bin/et")
+	if metadata.Command != "et" {
+		t.Fatalf("Command = %q, want %q", metadata.Command, "et")
 	}
 }
 
 func TestParseETMetadataBlankPortIsInvalid(t *testing.T) {
 	for _, port := range []string{"", "   "} {
 		_, err := parseETMetadata(
-			makeETMetadataReader(t, []string{port, "/usr/local/bin/et"}),
+			makeETMetadataReader(t, []string{port, "et"}),
 			make([]byte, 1024),
 		)
 		if err == nil {
@@ -87,10 +87,7 @@ func TestValidateETCommand(t *testing.T) {
 	if err := validateETCommand("et"); err != nil {
 		t.Fatalf("validateETCommand(et) error = %v", err)
 	}
-	if err := validateETCommand("/usr/local/bin/et"); err != nil {
-		t.Fatalf("validateETCommand(path) error = %v", err)
-	}
-	for _, command := range []string{"", "et --flag", "et\nbad"} {
+	for _, command := range []string{"", "/usr/local/bin/et", "et --flag", "et\nbad"} {
 		if err := validateETCommand(command); !errors.Is(err, ErrETInvalidCommand) {
 			t.Fatalf("validateETCommand(%q) error = %v, want ErrETInvalidCommand", command, err)
 		}

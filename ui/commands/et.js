@@ -366,19 +366,13 @@ const initialFieldDef = {
     type: "text",
     value: DEFAULT_ET_COMMAND,
     example: DEFAULT_ET_COMMAND,
-    readonly: false,
+    readonly: true,
     suggestions() {
       return [];
     },
     verify(d) {
-      if (d.length <= 0) {
-        throw new Error("ET Command must be specified");
-      }
-
-      if (/\s/.test(d)) {
-        throw new Error(
-          "ET Command must be an executable path without arguments",
-        );
+      if (d !== DEFAULT_ET_COMMAND) {
+        throw new Error("ET Command is fixed by the ShellPort backend");
       }
 
       return "Will run " + d;
@@ -1172,9 +1166,9 @@ export class Command {
   }
 
   launch(info, launcher, streams, subs, controls, history) {
-    const d = launcher.split("|", 4);
+    const d = launcher.split("|", 5);
 
-    if (d.length < 2 || d.length > 4) {
+    if (d.length < 2 || d.length > 5) {
       throw new Exception('Given launcher "' + launcher + '" was invalid');
     }
 
@@ -1188,14 +1182,26 @@ export class Command {
       host = userHostName[2],
       auth = d[1],
       charset = d.length >= 3 ? d[2] : "utf-8",
-      etCommand =
-        d.length >= 4 ? decodeLauncherETCommand(d[3]) : DEFAULT_ET_COMMAND;
+      etServerPort = DEFAULT_ET_SERVER_PORT,
+      etCommand = DEFAULT_ET_COMMAND;
+
+    if (d.length >= 4) {
+      if (/^[0-9]+$/.test(d[3])) {
+        etServerPort = d[3];
+        if (d.length >= 5) {
+          etCommand = decodeLauncherETCommand(d[4]);
+        }
+      } else {
+        etCommand = decodeLauncherETCommand(d[3]);
+      }
+    }
 
     try {
       initialFieldDef["User"].verify(user);
       initialFieldDef["Host"].verify(host);
       initialFieldDef["Authentication"].verify(auth);
       initialFieldDef["Encoding"].verify(charset);
+      initialFieldDef["ET Server Port"].verify(etServerPort);
       initialFieldDef["ET Command"].verify(etCommand);
     } catch (e) {
       throw new Exception(
@@ -1210,6 +1216,7 @@ export class Command {
         host: host,
         authentication: auth,
         charset: charset,
+        etServerPort: etServerPort,
         etCommand: etCommand,
       },
       null,
@@ -1230,12 +1237,22 @@ export class Command {
       config.authentication +
       "|" +
       (config.charset ? config.charset : "utf-8");
+    const etServerPort = config.etServerPort || DEFAULT_ET_SERVER_PORT;
+    const etCommand = config.etCommand || DEFAULT_ET_COMMAND;
 
-    if (!config.etCommand || config.etCommand === DEFAULT_ET_COMMAND) {
+    if (
+      etServerPort === DEFAULT_ET_SERVER_PORT &&
+      etCommand === DEFAULT_ET_COMMAND
+    ) {
       return launcher;
     }
 
-    return launcher + "|" + encodeURIComponent(config.etCommand);
+    const launcherWithPort = launcher + "|" + etServerPort;
+    if (etCommand === DEFAULT_ET_COMMAND) {
+      return launcherWithPort;
+    }
+
+    return launcherWithPort + "|" + encodeURIComponent(etCommand);
   }
 
   represet(preset) {

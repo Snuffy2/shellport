@@ -51,7 +51,7 @@ describe("ET Command", () => {
         auth: 0x02,
         charset: "utf-8",
         etServerPort: "22022",
-        etCommand: "/usr/local/bin/et",
+        etCommand: "et",
         presetID: "preset-et",
       },
       callbacks,
@@ -77,7 +77,7 @@ describe("ET Command", () => {
     );
     assert.deepStrictEqual(
       (await strings.String.read(rd)).data(),
-      new TextEncoder().encode("/usr/local/bin/et"),
+      new TextEncoder().encode("et"),
     );
     assert.deepStrictEqual(
       (await strings.String.read(rd)).data(),
@@ -113,7 +113,41 @@ describe("ET Command", () => {
     assert.throws(() => port.verify("0"), /between 1 and 65535/);
     assert.throws(() => port.verify("abc"), /numeric/);
     assert.strictEqual(commandField.verify("et"), "Will run et");
-    assert.throws(() => commandField.verify("et --flag"), /without arguments/);
+    assert.throws(() => commandField.verify("et --flag"), /fixed/);
+  });
+
+  it("includes non-default ET server port in launchers", () => {
+    assert.strictEqual(
+      new et.Command().launcher({
+        user: "alice",
+        host: "example.com:22",
+        authentication: "Private Key",
+        charset: "utf-8",
+        etServerPort: "22022",
+        etCommand: "et",
+      }),
+      "alice@example.com:22|Private Key|utf-8|22022",
+    );
+  });
+
+  it("parses non-default ET server port from launchers", () => {
+    const launched = new et.Command().launch(
+      null,
+      "alice@example.com:22|Private Key|utf-8|22022",
+      null,
+      null,
+      {
+        get(type) {
+          assert.strictEqual(type, "ET");
+
+          return {};
+        },
+      },
+      null,
+    );
+
+    assert.strictEqual(launched.config.etServerPort, "22022");
+    assert.strictEqual(launched.config.etCommand, "et");
   });
 
   it("maps unsupported proxy initialization failure to a clear message", () => {

@@ -21,6 +21,7 @@ import (
 	"github.com/Snuffy2/shellport/application/command"
 	"github.com/Snuffy2/shellport/application/configuration"
 	"github.com/Snuffy2/shellport/application/log"
+	"github.com/Snuffy2/shellport/application/network"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -232,7 +233,7 @@ func TestETBootupRejectsPasswordAuth(t *testing.T) {
 		22,
 		SSHAuthMethodPassphrase,
 		"2022",
-		"/usr/local/bin/et",
+		"et",
 		"preset-ssh",
 	)
 	state, fsmErr := client.Bootup(newLimitedReader(payload), make([]byte, 4096))
@@ -271,7 +272,7 @@ func TestETBootupParsesMetadataAndPresetID(t *testing.T) {
 		22,
 		SSHAuthMethodPrivateKey,
 		"22022",
-		"/usr/local/bin/et",
+		"et",
 		"preset-et",
 	)
 	_, fsmErr := client.Bootup(newLimitedReader(payload), make([]byte, 4096))
@@ -281,8 +282,8 @@ func TestETBootupParsesMetadataAndPresetID(t *testing.T) {
 	if client.meta.ServerPort != 22022 {
 		t.Fatalf("ServerPort = %d, want 22022", client.meta.ServerPort)
 	}
-	if client.meta.Command != "/usr/local/bin/et" {
-		t.Fatalf("Command = %q, want /usr/local/bin/et", client.meta.Command)
+	if client.meta.Command != "et" {
+		t.Fatalf("Command = %q, want et", client.meta.Command)
 	}
 
 	select {
@@ -485,12 +486,64 @@ func TestETBuildKnownHostsLineRequiresPublicKey(t *testing.T) {
 	}
 }
 
+func TestETValidateRemoteAllowedRequiresMatchingPresetPort(t *testing.T) {
+	client := &etClient{
+		cfg: command.Configuration{
+			OnlyAllowPresetRemotes: true,
+			Presets: []configuration.Preset{
+				{
+					Host: "example.com:22",
+					Meta: map[string]string{
+						"ET Server Port": "22022",
+					},
+				},
+			},
+		},
+	}
+
+	if err := client.validateETRemoteAllowed("example.com:22", etMetadata{ServerPort: 22022}); err != nil {
+		t.Fatalf("validateETRemoteAllowed() allowed preset error = %v", err)
+	}
+	if err := client.validateETRemoteAllowed("example.com:22", etMetadata{ServerPort: 2022}); !errors.Is(err, network.ErrAccessControlDialTargetHostNotAllowed) {
+		t.Fatalf("validateETRemoteAllowed() error = %v, want preset access error", err)
+	}
+}
+
+func TestETValidateRemoteAllowedUsesLivePresetRepository(t *testing.T) {
+	repository := configuration.NewPresetRepository([]configuration.Preset{
+		{
+			Host: "example.com:22",
+			Meta: map[string]string{
+				"ET Server Port": "22022",
+			},
+		},
+	})
+	client := &etClient{
+		cfg: command.Configuration{
+			OnlyAllowPresetRemotes: true,
+			PresetRepository:       repository,
+		},
+	}
+
+	repository.Replace([]configuration.Preset{
+		{
+			Host: "example.com:22",
+			Meta: map[string]string{
+				"ET Server Port": "2022",
+			},
+		},
+	})
+
+	if err := client.validateETRemoteAllowed("example.com:22", defaultETMetadata()); err != nil {
+		t.Fatalf("validateETRemoteAllowed() live preset error = %v", err)
+	}
+}
+
 func TestETRemoteUsesCachedPrivateKeyAndMaterialInProcessStarter(t *testing.T) {
 	bufferPool := command.NewBufferPool(4096)
 	privateKey := []byte("PRIVATE KEY\n")
 	publicKey := etTestPublicKey(t)
 	metadata := defaultETMetadata()
-	metadata.Command = "/usr/local/bin/et"
 	metadata.ServerPort = 22022
 	fingerprintRequest := make(chan struct{}, 1)
 	credentialRequest := make(chan struct{}, 1)
