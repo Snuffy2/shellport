@@ -83,6 +83,8 @@ type etClient struct {
 	fingerprintVerifyResultReceiveClosed    bool
 	processedLock                           sync.Mutex
 
+	remoteStarter func(user string, address string, authMethodBuilder sshAuthMethodBuilder, metadata etMetadata, presetID string)
+
 	privateKey            []byte
 	privateKeyLock        sync.Mutex
 	sendCredentialRequest func([]byte) error
@@ -130,8 +132,69 @@ func (d *etClient) Bootup(
 		return nil, command.ToFSMError(err, ETRequestErrorUnsupportedProxy)
 	}
 
-	d.meta = defaultETMetadata()
+	sBuf := d.bufferPool.Get()
+	defer d.bufferPool.Put(sBuf)
+
+	userName, userNameErr := ParseString(r.Read, (*sBuf)[:etMaxUsernameLen])
+	if userNameErr != nil {
+		return nil, command.ToFSMError(userNameErr, ETRequestErrorBadUserName)
+	}
+	userNameStr := string(userName.Data())
+
+	addr, addrErr := ParseAddress(r.Read, (*sBuf)[:etMaxHostnameLen])
+	if addrErr != nil {
+		return nil, command.ToFSMError(addrErr, ETRequestErrorBadRemoteAddress)
+	}
+	addrStr := addr.String()
+	if addrStr == "" {
+		return nil, command.ToFSMError(ErrSSHInvalidAddress, ETRequestErrorBadRemoteAddress)
+	}
+
+	authData, authErr := rw.FetchOneByte(r.Fetch)
+	if authErr != nil {
+		return nil, command.ToFSMError(authErr, ETRequestErrorBadAuthMethod)
+	}
+
+	metadata, metadataErr := parseETMetadata(r, (*sBuf)[:])
+	if metadataErr != nil {
+		return nil, command.ToFSMError(metadataErr, ETRequestErrorBadMetadata)
+	}
+	d.meta = metadata
+
+	presetID, presetIDErr := parseOptionalPresetID(r, (*sBuf)[:configuration.MaxPresetIDLength])
+	if presetIDErr != nil {
+		return nil, command.ToFSMError(presetIDErr, ETRequestErrorBadMetadata)
+	}
+
+	authMethodBuilder, authMethodErr := d.buildAuthMethod(authData[0], presetID, userNameStr, addrStr)
+	if authMethodErr != nil {
+		return nil, command.ToFSMError(authMethodErr, ETRequestErrorBadAuthMethod)
+	}
+
+	d.remoteCloseWait.Add(1)
+	if d.remoteStarter != nil {
+		go d.remoteStarter(userNameStr, addrStr, authMethodBuilder, metadata, presetID)
+	} else {
+		go d.remote(userNameStr, addrStr, authMethodBuilder, metadata, presetID)
+	}
+
 	return d.local, command.NoFSMError()
+}
+
+func (d *etClient) remote(
+	user string,
+	address string,
+	authMethodBuilder sshAuthMethodBuilder,
+	metadata etMetadata,
+	presetID string,
+) {
+	defer d.remoteCloseWait.Done()
+	d.baseCtxCancel()
+	_ = user
+	_ = address
+	_ = authMethodBuilder
+	_ = metadata
+	_ = presetID
 }
 
 func (d *etClient) validateProxySupport() error {

@@ -4,6 +4,7 @@
 package commands
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -145,4 +146,126 @@ func TestETClose(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for requestPrivateKey result")
 	}
+}
+
+func TestETBootupRejectsPasswordAuth(t *testing.T) {
+	bufferPool := command.NewBufferPool(4096)
+	client := &etClient{
+		bufferPool: &bufferPool,
+		baseCtx:    context.Background(),
+	}
+
+	payload := buildETBootupPayload(
+		t,
+		"alice",
+		"example.com",
+		22,
+		SSHAuthMethodPassphrase,
+		"2022",
+		"/usr/local/bin/et",
+		"preset-ssh",
+	)
+	state, fsmErr := client.Bootup(newLimitedReader(payload), make([]byte, 4096))
+	if state != nil {
+		t.Fatalf("expected bootup state to stay nil on bad auth method, got %v", state)
+	}
+	if fsmErr.Code() != ETRequestErrorBadAuthMethod {
+		t.Fatalf("expected bad auth method code, got %d, error=%v", fsmErr.Code(), fsmErr)
+	}
+}
+
+func TestETBootupParsesMetadataAndPresetID(t *testing.T) {
+	bufferPool := command.NewBufferPool(4096)
+	remoteStarterResult := make(chan string, 1)
+	client := &etClient{
+		bufferPool:    &bufferPool,
+		baseCtx:       context.Background(),
+		baseCtxCancel: func() {},
+		remoteStarter: func(
+			_ string,
+			_ string,
+			_ sshAuthMethodBuilder,
+			metadata etMetadata,
+			presetID string,
+		) {
+			if metadata.ServerPort != 22022 {
+				t.Fatalf("remoteStarter metadata.ServerPort = %d, want 22022", metadata.ServerPort)
+			}
+			remoteStarterResult <- presetID
+		},
+	}
+	payload := buildETBootupPayload(
+		t,
+		"alice",
+		"example.com",
+		22,
+		SSHAuthMethodPrivateKey,
+		"22022",
+		"/usr/local/bin/et",
+		"preset-et",
+	)
+	_, fsmErr := client.Bootup(newLimitedReader(payload), make([]byte, 4096))
+	if !fsmErr.Succeed() {
+		t.Fatalf("expected bootup to succeed, got %v", fsmErr)
+	}
+	if client.meta.ServerPort != 22022 {
+		t.Fatalf("ServerPort = %d, want 22022", client.meta.ServerPort)
+	}
+	if client.meta.Command != "/usr/local/bin/et" {
+		t.Fatalf("Command = %q, want /usr/local/bin/et", client.meta.Command)
+	}
+
+	select {
+	case remoteStarterPresetID := <-remoteStarterResult:
+		if remoteStarterPresetID != "preset-et" {
+			t.Fatalf("remoteStarter presetID = %q, want preset-et", remoteStarterPresetID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected remoteStarter to be called")
+	}
+}
+
+func buildETBootupPayload(
+	t *testing.T,
+	user string,
+	host string,
+	sshPort uint16,
+	auth byte,
+	etPort string,
+	etCommand string,
+	presetID string,
+) []byte {
+	t.Helper()
+
+	payload := make([]byte, 0, 256)
+	buf := make([]byte, 512)
+
+	userLen, err := NewString([]byte(user)).Marshal(buf)
+	if err != nil {
+		t.Fatalf("marshal user: %v", err)
+	}
+	payload = append(payload, buf[:userLen]...)
+
+	addrLen, err := NewAddress(HostNameAddr, []byte(host), sshPort).Marshal(buf)
+	if err != nil {
+		t.Fatalf("marshal address: %v", err)
+	}
+	payload = append(payload, buf[:addrLen]...)
+	payload = append(payload, auth)
+	payload = appendETString(t, payload, etPort)
+	payload = appendETString(t, payload, etCommand)
+	payload = appendETString(t, payload, presetID)
+	return payload
+}
+
+func appendETString(t *testing.T, payload []byte, value string) []byte {
+	t.Helper()
+
+	buf := make([]byte, MaxInteger+MaxIntegerBytes+len(value))
+	valueLen, err := NewString([]byte(value)).Marshal(buf)
+	if err != nil {
+		t.Fatalf("marshal string %q: %v", value, err)
+	}
+
+	return append(payload, buf[:valueLen]...)
 }
