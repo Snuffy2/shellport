@@ -56,6 +56,8 @@ const (
 	etMaxHostnameLen = 255
 )
 
+const etProcessStartupGrace = 250 * time.Millisecond
+
 var (
 	ErrETSocks5Unsupported = errors.New(
 		"ET does not support SOCKS5 proxying in this version")
@@ -66,6 +68,11 @@ var (
 	ErrETRemoteUnavailable = errors.New(
 		"remote ET process is unavailable")
 )
+
+type etProcessReadResult struct {
+	Data []byte
+	Err  error
+}
 
 type etClient struct {
 	w     command.StreamResponder
@@ -367,38 +374,93 @@ func (d *etClient) remote(
 	d.cacheProcess(process)
 
 	connected := false
+	readResults := make(chan etProcessReadResult, 1)
+	go readETProcessOutput(process, len((*u))-d.w.HeaderSize(), readResults)
+	startupTimer := time.NewTimer(etProcessStartupGrace)
+	defer startupTimer.Stop()
+	pendingOutput := make([][]byte, 0)
 	for {
-		rLen, rErr := process.Read((*u)[d.w.HeaderSize():])
-		if rErr != nil {
-			if !connected {
-				d.sendConnectFailed((*u)[:], rErr)
-				debugConnectionFailed(d.l, details, rErr)
-				return
+		if !connected {
+			select {
+			case result := <-readResults:
+				if result.Err != nil {
+					startupErr := buildETStartupError(pendingOutput, result.Err)
+					d.sendConnectFailed((*u)[:], startupErr)
+					debugConnectionFailed(d.l, details, startupErr)
+					return
+				}
+				if len(result.Data) > 0 {
+					pendingOutput = append(pendingOutput, result.Data)
+				}
+				continue
+			case <-startupTimer.C:
+				if err = d.emitClientFrame(ETServerConnectSucceed, (*u)[:d.w.HeaderSize()]); err != nil {
+					debugConnectionDisconnected(d.l, details, "connect-success response failed", err)
+					return
+				}
+				connected = true
+				debugConnectionEstablished(d.l, details)
+				for _, data := range pendingOutput {
+					if err = d.emitETProcessOutput((*u)[:], data); err != nil {
+						debugConnectionDisconnected(d.l, details, "client send failed", err)
+						return
+					}
+				}
+				pendingOutput = nil
+				continue
 			}
-			debugConnectionDisconnected(d.l, details, "process output ended", rErr)
+		}
+
+		result := <-readResults
+		if result.Err != nil {
+			debugConnectionDisconnected(d.l, details, "process output ended", result.Err)
 			return
 		}
-		if rLen == 0 {
+		if len(result.Data) == 0 {
 			continue
 		}
 
-		if !connected {
-			if err = d.emitClientFrame(ETServerConnectSucceed, (*u)[:d.w.HeaderSize()]); err != nil {
-				debugConnectionDisconnected(d.l, details, "connect-success response failed", err)
-				return
-			}
-			connected = true
-			debugConnectionEstablished(d.l, details)
-		}
-
-		if err = d.emitClientFrame(
-			ETServerRemoteStdOut,
-			(*u)[:d.w.HeaderSize()+rLen],
-		); err != nil {
+		if err = d.emitETProcessOutput((*u)[:], result.Data); err != nil {
 			debugConnectionDisconnected(d.l, details, "client send failed", err)
 			return
 		}
 	}
+}
+
+func readETProcessOutput(process etProcess, maxReadSize int, results chan<- etProcessReadResult) {
+	for {
+		buf := make([]byte, maxReadSize)
+		readLen, readErr := process.Read(buf)
+		if readLen > 0 {
+			results <- etProcessReadResult{Data: buf[:readLen]}
+		}
+		if readErr != nil {
+			results <- etProcessReadResult{Err: readErr}
+			return
+		}
+	}
+}
+
+func buildETStartupError(output [][]byte, err error) error {
+	if len(output) == 0 {
+		return err
+	}
+
+	var message strings.Builder
+	message.WriteString(err.Error())
+	message.WriteString(": ")
+	for _, chunk := range output {
+		message.Write(chunk)
+	}
+	return errors.New(strings.TrimSpace(message.String()))
+}
+
+func (d *etClient) emitETProcessOutput(buf []byte, data []byte) error {
+	dataLen := copy(buf[d.w.HeaderSize():], data)
+	return d.emitClientFrame(
+		ETServerRemoteStdOut,
+		buf[:d.w.HeaderSize()+dataLen],
+	)
 }
 
 func (d *etClient) confirmRemoteFingerprint(

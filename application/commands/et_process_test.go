@@ -20,6 +20,7 @@ func TestBuildETClientArgsUsesSSHOptionsAndServerPort(t *testing.T) {
 		"--ssh-option", "IdentitiesOnly=yes",
 		"--ssh-option", "IdentityFile=/tmp/identity",
 		"--ssh-option", "UserKnownHostsFile=/tmp/known_hosts",
+		"--ssh-option", "GlobalKnownHostsFile=/dev/null",
 		"--ssh-option", "StrictHostKeyChecking=yes",
 		"--ssh-option", "BatchMode=yes",
 		"--ssh-option", "Port=22",
@@ -39,6 +40,7 @@ func TestBuildETClientArgsSupportsIPv6Address(t *testing.T) {
 		"--ssh-option", "IdentitiesOnly=yes",
 		"--ssh-option", "IdentityFile=/tmp/identity",
 		"--ssh-option", "UserKnownHostsFile=/tmp/known_hosts",
+		"--ssh-option", "GlobalKnownHostsFile=/dev/null",
 		"--ssh-option", "StrictHostKeyChecking=yes",
 		"--ssh-option", "BatchMode=yes",
 		"--ssh-option", "Port=22",
@@ -94,7 +96,13 @@ func TestWriteETSSHMaterialCreatesRestrictiveFiles(t *testing.T) {
 		t.Fatalf("read config: %v", err)
 	}
 	configText := string(config)
-	for _, expected := range []string{"IdentityFile " + material.IdentityPath, "UserKnownHostsFile " + material.KnownHostsPath, "BatchMode yes", "Port 2222"} {
+	for _, expected := range []string{
+		"IdentityFile " + material.IdentityPath,
+		"UserKnownHostsFile " + material.KnownHostsPath,
+		"GlobalKnownHostsFile /dev/null",
+		"BatchMode yes",
+		"Port 2222",
+	} {
 		if !strings.Contains(configText, expected) {
 			t.Fatalf("config missing %q:\n%s", expected, configText)
 		}

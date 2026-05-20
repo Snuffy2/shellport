@@ -198,6 +198,24 @@ describe("preset execution helpers", () => {
     assert.strictEqual(execution, null);
   });
 
+  it("does not direct-launch ET presets with invalid server ports", () => {
+    const execution = buildPresetExecution(
+      mergedPreset("ET", {
+        title: "Example ET Invalid Port",
+        type: "ET",
+        host: "example.com:22",
+        meta: {
+          User: "alice",
+          Authentication: "Private Key",
+          "Private Key": "PRIVATE KEY DATA",
+          "ET Server Port": "not-a-port",
+        },
+      }),
+    );
+
+    assert.strictEqual(execution, null);
+  });
+
   it("builds direct Telnet execution for host presets", () => {
     const execution = buildPresetExecution(
       mergedPreset("Telnet", {

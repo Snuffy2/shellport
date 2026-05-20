@@ -154,6 +154,48 @@ describe("ET Command", () => {
     assert.strictEqual(commandField.verify(commandField.value), "Will run et");
   });
 
+  it("normalizes invalid preset ET server port values in the wizard", () => {
+    const wizard = new et.Command().wizard(
+      null,
+      new presets.Preset({
+        id: "preset-et",
+        title: "Example ET",
+        type: "ET",
+        host: "example.com:22",
+        tab_color: "",
+        meta: {
+          User: "alice",
+          Authentication: "Private Key",
+          Encoding: "utf-8",
+          "ET Server Port": "not-a-port",
+          "ET Command": "et",
+        },
+      }),
+      {},
+      [],
+      null,
+      null,
+      {
+        get(type) {
+          assert.strictEqual(type, "ET");
+
+          return {};
+        },
+      },
+      null,
+    );
+
+    const fields = wizard.stepInitialPrompt().data().inputs;
+    const port = fields.find((field) => field.name === "ET Server Port");
+
+    assert.strictEqual(port.value, "2022");
+    assert.strictEqual(port.readonly, true);
+    assert.strictEqual(
+      port.verify(port.value),
+      "Will connect to etserver port 2022",
+    );
+  });
+
   it("includes non-default ET server port in launchers", () => {
     assert.strictEqual(
       new et.Command().launcher({

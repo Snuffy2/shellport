@@ -30,6 +30,15 @@ export function presetCredential(presetData, authentication) {
   }
 }
 
+function validETServerPort(portText) {
+  if (!/^[0-9]+$/.test(portText)) {
+    return false;
+  }
+
+  const port = Number.parseInt(portText, 10);
+  return port >= 1 && port <= 65535;
+}
+
 /**
  * Builds a non-interactive execution payload for presets with complete
  * connection details.
@@ -97,7 +106,12 @@ export function buildPresetExecution(preset) {
       return null;
     }
 
-    config.etServerPort = presetData.metaDefault("ET Server Port", "2022");
+    const etServerPort = presetData.metaDefault("ET Server Port", "2022");
+    if (!validETServerPort(etServerPort)) {
+      return null;
+    }
+
+    config.etServerPort = etServerPort;
     config.etCommand = "et";
   }
 

@@ -259,6 +259,15 @@ export class ET {
   }
 }
 
+function validETServerPort(portText) {
+  if (!/^[0-9]+$/.test(portText)) {
+    return false;
+  }
+
+  const port = Number.parseInt(portText, 10);
+  return port >= 1 && port <= 65535;
+}
+
 const initialFieldDef = {
   Host: {
     name: "Host",
@@ -347,15 +356,15 @@ const initialFieldDef = {
       return [];
     },
     verify(d) {
-      if (!/^[0-9]+$/.test(d)) {
+      if (!validETServerPort(d)) {
+        if (/^[0-9]+$/.test(d)) {
+          throw new Error("ET Server Port must be between 1 and 65535");
+        }
+
         throw new Error("ET Server Port must be numeric");
       }
 
       const port = Number.parseInt(d, 10);
-      if (port < 1 || port > 65535) {
-        throw new Error("ET Server Port must be between 1 and 65535");
-      }
-
       return "Will connect to etserver port " + port;
     },
   },
@@ -567,8 +576,15 @@ function decodeLauncherETCommand(d) {
   }
 }
 
-function normalizeETCommandPreset(fields) {
+function normalizeETPresetFields(fields) {
   for (let i in fields) {
+    if (
+      fields[i].name === "ET Server Port" &&
+      !validETServerPort(fields[i].value)
+    ) {
+      fields[i].value = DEFAULT_ET_SERVER_PORT;
+    }
+
     if (fields[i].name === "ET Command") {
       fields[i].value = DEFAULT_ET_COMMAND;
     }
@@ -874,7 +890,7 @@ class Wizard {
         self.step.resolve(self.stepWaitForAcceptWait());
       },
       () => {},
-      normalizeETCommandPreset(
+      normalizeETPresetFields(
         command.fieldsWithPreset(
           initialFieldDef,
           [

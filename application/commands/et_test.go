@@ -651,7 +651,7 @@ func TestETRemoteUsesCachedPrivateKeyAndMaterialInProcessStarter(t *testing.T) {
 			processStarted <- materialConfigPath
 			process.stdout <- []byte("connected\n")
 			go func() {
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(etProcessStartupGrace + 10*time.Millisecond)
 				_ = process.Close()
 			}()
 			return process, nil
@@ -881,6 +881,75 @@ func TestETRemoteSendsConnectFailedWhenProcessExitsBeforeOutput(t *testing.T) {
 	}
 	if !sawFailed {
 		t.Fatalf("expected ETServerConnectFailed frame with EOF, got frames %#v", snapshot)
+	}
+}
+
+func TestETRemoteSendsConnectSucceedForQuietRunningProcess(t *testing.T) {
+	bufferPool := command.NewBufferPool(4096)
+	privateKey := []byte("PRIVATE KEY\n")
+	publicKey := etTestPublicKey(t)
+	frames := &capturedFrameSink{}
+	process := &fakeETProcess{stdout: make(chan []byte)}
+	client := &etClient{
+		w:                              command.StreamResponder{},
+		l:                              log.NewDitch(),
+		hooks:                          command.NewHooks(configuration.HookSettings{}),
+		cfg:                            command.Configuration{DialTimeout: time.Second},
+		bufferPool:                     &bufferPool,
+		baseCtx:                        context.Background(),
+		baseCtxCancel:                  func() {},
+		fingerprintVerifyResultReceive: make(chan bool, 1),
+		sendToClient:                   false,
+		sendFrameHook:                  frames.add,
+		remoteDialer: func(_ string, address string, sshConfig *ssh.ClientConfig) (io.Closer, net.Addr, func(), error) {
+			fakeAddr := &testNetworkAddress{network: "tcp", str: address}
+			if err := sshConfig.HostKeyCallback(address, fakeAddr, publicKey); err != nil {
+				return nil, nil, nil, err
+			}
+			return &testCloseTracker{}, fakeAddr, func() {}, nil
+		},
+		processStarter: func(
+			_ context.Context,
+			_ etMetadata,
+			_ string,
+			_ string,
+			_ string,
+		) (etProcess, error) {
+			return process, nil
+		},
+	}
+	client.cachePrivateKey(privateKey)
+	client.fingerprintVerifyResultReceive <- true
+	client.remoteCloseWait.Add(1)
+
+	remoteDone := make(chan struct{})
+	go func() {
+		client.remote("alice", "example.com:22", func([]byte) []ssh.AuthMethod {
+			return nil
+		}, defaultETMetadata(), "preset-et")
+		close(remoteDone)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for {
+		for _, f := range frames.snap() {
+			marker, _, ok := decodeETStreamFrame(f)
+			if ok && marker == ETServerConnectSucceed {
+				_ = process.Close()
+				select {
+				case <-remoteDone:
+				case <-time.After(time.Second):
+					t.Fatal("remote goroutine did not exit after quiet process close")
+				}
+				return
+			}
+		}
+
+		select {
+		case <-deadline:
+			t.Fatal("expected ETServerConnectSucceed for quiet running process")
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
 }
 

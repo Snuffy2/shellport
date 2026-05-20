@@ -65,6 +65,8 @@ func buildETClientArgs(metadata etMetadata, user string, sshAddress string, sshC
 		"--ssh-option",
 		"UserKnownHostsFile=" + filepath.Join(materialDir, "known_hosts"),
 		"--ssh-option",
+		"GlobalKnownHostsFile=/dev/null",
+		"--ssh-option",
 		"StrictHostKeyChecking=yes",
 		"--ssh-option",
 		"BatchMode=yes",
@@ -95,6 +97,7 @@ func writeETSSHMaterial(dir string, privateKey []byte, knownHostsLine string, ss
 		"  IdentitiesOnly yes",
 		"  IdentityFile " + material.IdentityPath,
 		"  UserKnownHostsFile " + material.KnownHostsPath,
+		"  GlobalKnownHostsFile /dev/null",
 		"  StrictHostKeyChecking yes",
 		"  BatchMode yes",
 	}
