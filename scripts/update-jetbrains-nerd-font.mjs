@@ -157,6 +157,32 @@ function extractFontFiles(archivePath, extractDir) {
 }
 
 /**
+ * Verifies that an extracted font asset is a standalone regular file.
+ *
+ * @param {string} sourcePath Extracted file path.
+ * @param {string} fontFile Expected archive member name.
+ * @returns {void}
+ */
+function validateExtractedFontFile(sourcePath, fontFile) {
+  let stats;
+  try {
+    stats = fs.lstatSync(sourcePath);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new Error(`expected font file was not extracted: ${fontFile}`);
+    }
+    throw error;
+  }
+
+  if (!stats.isFile()) {
+    throw new Error(`expected font file is not a regular file: ${fontFile}`);
+  }
+  if (stats.nlink !== 1) {
+    throw new Error(`expected font file must not be a hard link: ${fontFile}`);
+  }
+}
+
+/**
  * Copies the selected extracted files into the checked-in font directory.
  *
  * @param {string} extractDir Temporary extraction directory.
@@ -171,6 +197,7 @@ function updateFontDirectory(extractDir, releaseTag, archiveSHA256) {
     const sourcePath = path.join(extractDir, fontFile);
     const targetPath = path.join(fontTargetDir, fontFile);
 
+    validateExtractedFontFile(sourcePath, fontFile);
     fs.copyFileSync(sourcePath, targetPath);
     if (textFontFiles.has(fontFile)) {
       const content = fs.readFileSync(targetPath, "utf8");
@@ -200,24 +227,40 @@ function updateFontDirectory(extractDir, releaseTag, archiveSHA256) {
   );
 }
 
-const tempDir = fs.mkdtempSync(
-  path.join(os.tmpdir(), "shellport-jetbrains-nerd-font-"),
-);
+/**
+ * Downloads, verifies, and installs the latest JetBrainsMono Nerd Font assets.
+ *
+ * @returns {Promise<void>}
+ */
+async function main() {
+  const tempDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "shellport-jetbrains-nerd-font-"),
+  );
 
-try {
-  const releaseTag = await resolveLatestReleaseTag();
-  const expectedArchiveSHA256 = await fetchExpectedArchiveSHA256(releaseTag);
-  const archivePath = path.join(tempDir, fontArchiveName);
+  try {
+    const releaseTag = await resolveLatestReleaseTag();
+    const expectedArchiveSHA256 = await fetchExpectedArchiveSHA256(releaseTag);
+    const archivePath = path.join(tempDir, fontArchiveName);
 
-  await downloadFile(buildReleaseAssetURL(releaseTag, fontArchiveName), archivePath);
-  const archiveSHA256 = fileSHA256(archivePath);
-  if (archiveSHA256 !== expectedArchiveSHA256) {
-    throw new Error(
-      `${fontArchiveName} SHA-256 mismatch: expected ${expectedArchiveSHA256}, got ${archiveSHA256}`,
+    await downloadFile(
+      buildReleaseAssetURL(releaseTag, fontArchiveName),
+      archivePath,
     );
+    const archiveSHA256 = fileSHA256(archivePath);
+    if (archiveSHA256 !== expectedArchiveSHA256) {
+      throw new Error(
+        `${fontArchiveName} SHA-256 mismatch: expected ${expectedArchiveSHA256}, got ${archiveSHA256}`,
+      );
+    }
+    extractFontFiles(archivePath, tempDir);
+    updateFontDirectory(tempDir, releaseTag, archiveSHA256);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
-  extractFontFiles(archivePath, tempDir);
-  updateFontDirectory(tempDir, releaseTag, archiveSHA256);
-} finally {
-  fs.rmSync(tempDir, { recursive: true, force: true });
 }
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  await main();
+}
+
+export { fontFiles, main, updateFontDirectory, validateExtractedFontFile };
