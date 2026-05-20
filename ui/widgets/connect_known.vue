@@ -40,6 +40,15 @@ SPDX-License-Identifier: AGPL-3.0-only
         </div>
       </div>
     </div>
+    <div id="connect-known-list-actions">
+      <button
+        type="button"
+        :disabled="refreshingPresets"
+        @click="refreshPresets"
+      >
+        {{ refreshingPresets ? "Refreshing presets..." : "Refresh presets" }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -54,8 +63,10 @@ import "./connect_known.css";
  *
  * @prop {Array}    presets             - Server-defined preset connections.
  * @prop {boolean}  restrictedToPresets - When true, only fully-specified presets are selectable.
+ * @prop {boolean}  refreshingPresets   - When true, disables the refresh action.
  *
  * @emits select-preset  - User chose a preset. Payload: preset object.
+ * @emits refresh-presets - User requested backend preset reload.
  */
 
 export default {
@@ -68,8 +79,12 @@ export default {
       type: Boolean,
       default: () => false,
     },
+    refreshingPresets: {
+      type: Boolean,
+      default: () => false,
+    },
   },
-  emits: ["select-preset"],
+  emits: ["select-preset", "refresh-presets"],
   computed: {
     /**
      * Returns the number of renderable presets.
@@ -111,6 +126,19 @@ export default {
       }
 
       this.$emit("select-preset", preset);
+    },
+    /**
+     * Emits `refresh-presets` unless a refresh is already running.
+     *
+     * @emits refresh-presets
+     * @returns {void}
+     */
+    refreshPresets() {
+      if (this.refreshingPresets) {
+        return;
+      }
+
+      this.$emit("refresh-presets");
     },
   },
 };

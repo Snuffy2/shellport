@@ -83,10 +83,12 @@ SPDX-License-Identifier: AGPL-3.0-only
       :connectors="connector.connectors"
       :presets="presets"
       :restricted-to-presets="restrictedToPresets"
+      :refreshing-presets="connector.refreshingPresets"
       :busy="connector.busy"
       @display="windows.connect = $event"
       @connector-select="connectNew"
       @preset-select="connectPreset"
+      @refresh-presets="refreshPresets"
     >
       <connector
         :connector="connector.connector"
@@ -266,6 +268,15 @@ export default {
       type: Function,
       default: () => null,
     },
+    /**
+     * Reloads preset config from the backend.
+     *
+     * @type {function}
+     */
+    refreshPresetConfig: {
+      type: Function,
+      default: () => null,
+    },
   },
   emits: [
     "navigate-to",
@@ -290,6 +301,7 @@ export default {
         inputting: false,
         acquired: false,
         busy: false,
+        refreshingPresets: false,
       },
       presets: markRaw(this.commands.mergePresets(this.presetData)),
       tab: {
@@ -609,6 +621,42 @@ export default {
       });
     },
     /**
+     * Replaces the locally merged preset list with backend-returned presets.
+     *
+     * @param {Array<object>} updatedPresets Raw preset configs from backend.
+     * @returns {void}
+     */
+    replacePresets(updatedPresets) {
+      this.presets = markRaw(
+        this.commands.mergePresets(new presets.Presets(updatedPresets)),
+      );
+    },
+    /**
+     * Reloads presets without restarting ShellPort.
+     *
+     * @returns {Promise<void>}
+     */
+    async refreshPresets() {
+      if (!this.refreshPresetConfig || this.connector.refreshingPresets) {
+        return;
+      }
+
+      this.connector.refreshingPresets = true;
+
+      try {
+        const updatedPresets = await this.refreshPresetConfig();
+        if (!Array.isArray(updatedPresets)) {
+          throw new Error("refreshPresetConfig must resolve to an array");
+        }
+
+        this.replacePresets(updatedPresets);
+      } catch (e) {
+        alert("Cannot refresh presets: " + e);
+      } finally {
+        this.connector.refreshingPresets = false;
+      }
+    },
+    /**
      * Builds a preset fingerprint save callback when config persistence is available.
      *
      * @param {{ preset: object }} preset Merged preset entry.
@@ -628,9 +676,7 @@ export default {
           throw new Error("savePresetFingerprint must resolve to an array");
         }
 
-        this.presets = markRaw(
-          this.commands.mergePresets(new presets.Presets(updatedPresets)),
-        );
+        this.replacePresets(updatedPresets);
       };
     },
     /**

@@ -93,3 +93,27 @@
   margin-top: 10px;
   line-height: 1.5;
 }
+
+#connect-known-list-actions {
+  border-top: 1px solid #505050;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding: 12px 20px;
+}
+
+#connect-known-list-actions button {
+  background: #575757;
+  border: 1px solid #777;
+  border-radius: 3px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  padding: 7px 12px;
+}
+
+#connect-known-list-actions button:disabled {
+  color: #aaa;
+  cursor: default;
+  opacity: 0.75;
+}
