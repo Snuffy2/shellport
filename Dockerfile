@@ -53,6 +53,7 @@ RUN set -ex && \
 # Build the final image for running
 FROM alpine:3.23
 ARG SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport
+ARG ET_COMMIT=7f566c0f3504e32554d98e71e573976255af91fb
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0"
 ENV SHELLPORT_DIALTIMEOUT=10 \
     SHELLPORT_DEBUG= \
@@ -78,7 +79,7 @@ RUN set -ex && \
         'Bundled Eternal Terminal (ET) client' \
         '' \
         'The ET client binary in this image is built from:' \
-        'https://github.com/MisterTea/EternalTerminal/tree/7f566c0f3504e32554d98e71e573976255af91fb' \
+        "https://github.com/MisterTea/EternalTerminal/tree/${ET_COMMIT}" \
         'License: Apache-2.0' \
         > /SOURCE.md && \
     apk add --no-cache abseil-cpp-vlog-config-internal libgcc libprotobuf libstdc++ libunwind libsodium openssh-client openssl tzdata zlib && \
