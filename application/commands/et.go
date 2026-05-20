@@ -7,6 +7,7 @@ package commands
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
 
 	"golang.org/x/crypto/ssh"
@@ -68,6 +69,9 @@ type etClient struct {
 
 	meta       etMetadata
 	bufferPool *command.BufferPool
+
+	process     etProcess
+	processLock sync.Mutex
 
 	baseCtx         context.Context
 	baseCtxCancel   func()
@@ -309,14 +313,71 @@ func (d *etClient) local(
 	h command.StreamHeader,
 	b []byte,
 ) error {
+	_ = f
+
 	switch h.Marker() {
 	case ETClientStdIn:
-		if d.meta != defaultETMetadata() {
-			return ErrETRemoteUnavailable
+		process, ok := d.getProcessIfReady()
+		for !r.Completed() {
+			data, err := r.Buffered()
+			if err != nil {
+				return err
+			}
+			if ok {
+				if _, err := process.Write(data); err != nil {
+					closeErr := d.closeProcess()
+					return errors.Join(err, closeErr)
+				}
+			}
 		}
+		return nil
+
+	case ETClientResize:
+		process, ok := d.getProcessIfReady()
+
+		if _, rErr := io.ReadFull(r, b[:4]); rErr != nil {
+			return rErr
+		}
+		if !ok {
+			return nil
+		}
+
+		rows := uint16(b[0])<<8 | uint16(b[1])
+		cols := uint16(b[2])<<8 | uint16(b[3])
+		return process.Resize(rows, cols)
 	}
 
-	return ErrETRemoteUnavailable
+	return ErrSSHUnknownClientSignal
+}
+
+func (d *etClient) getProcessIfReady() (etProcess, bool) {
+	d.processLock.Lock()
+	defer d.processLock.Unlock()
+
+	if d.process == nil {
+		return nil, false
+	}
+	return d.process, true
+}
+
+func (d *etClient) cacheProcess(process etProcess) {
+	d.processLock.Lock()
+	defer d.processLock.Unlock()
+
+	d.process = process
+}
+
+func (d *etClient) closeProcess() error {
+	d.processLock.Lock()
+	process := d.process
+	d.process = nil
+	d.processLock.Unlock()
+
+	if process == nil {
+		return nil
+	}
+
+	return process.Close()
 }
 
 func (d *etClient) Close() error {
@@ -335,13 +396,15 @@ func (d *etClient) Close() error {
 	})
 
 	d.baseCtxCancel()
+	closeErr := d.closeProcess()
 	d.clearPrivateKey()
 	d.remoteCloseWait.Wait()
-	return nil
+	return closeErr
 }
 
 func (d *etClient) Release() error {
+	closeErr := d.closeProcess()
 	d.clearPrivateKey()
 	d.baseCtxCancel()
-	return nil
+	return closeErr
 }

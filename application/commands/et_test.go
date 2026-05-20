@@ -4,7 +4,10 @@
 package commands
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
 	"reflect"
 	"testing"
 	"time"
@@ -134,8 +137,13 @@ func TestETClose(t *testing.T) {
 		result <- err
 	}()
 
+	proc := &fakeETProcess{stdout: make(chan []byte, 1)}
+	client.process = proc
 	if closeErr := client.Close(); closeErr != nil {
 		t.Fatalf("expected close to succeed, got %v", closeErr)
+	}
+	if proc.closeCount != 1 {
+		t.Fatalf("expected process close once, got %d", proc.closeCount)
 	}
 
 	select {
@@ -225,6 +233,167 @@ func TestETBootupParsesMetadataAndPresetID(t *testing.T) {
 	}
 }
 
+func TestETCloseProcess(t *testing.T) {
+	proc := &fakeETProcess{stdout: make(chan []byte, 1)}
+	client := &etClient{
+		process: proc,
+	}
+
+	if err := client.closeProcess(); err != nil {
+		t.Fatalf("closeProcess() error = %v", err)
+	}
+	if proc.closeCount != 1 {
+		t.Fatalf("proc.closeCount = %d, want 1", proc.closeCount)
+	}
+	if client.process != nil {
+		t.Fatalf("client.process = %v, want nil after closeProcess", client.process)
+	}
+
+	if err := client.closeProcess(); err != nil {
+		t.Fatalf("closeProcess() second call error = %v", err)
+	}
+	if proc.closeCount != 1 {
+		t.Fatalf("proc.closeCount = %d, want 1 after second call", proc.closeCount)
+	}
+}
+
+func TestETCloseProcessReturnsProcessError(t *testing.T) {
+	procErr := errors.New("close failed")
+	proc := &fakeETProcess{
+		stdout:   make(chan []byte, 1),
+		closeErr: procErr,
+	}
+	client := &etClient{process: proc}
+
+	if err := client.closeProcess(); !errors.Is(err, procErr) {
+		t.Fatalf("closeProcess() error = %v, want %v", err, procErr)
+	}
+}
+
+func TestETCloseReturnsProcessCloseError(t *testing.T) {
+	bufferPool := command.NewBufferPool(4096)
+	clientMachine := newET(
+		log.NewDitch(),
+		command.NewHooks(configuration.HookSettings{}),
+		command.StreamResponder{},
+		command.Configuration{},
+		&bufferPool,
+	)
+	client, ok := clientMachine.(*etClient)
+	if !ok {
+		t.Fatalf("expected newET to return *etClient")
+	}
+
+	procErr := errors.New("process close failed")
+	client.process = &fakeETProcess{
+		stdout:   make(chan []byte, 1),
+		closeErr: procErr,
+	}
+
+	client.sendCredentialRequest = func([]byte) error {
+		return nil
+	}
+	result := make(chan error, 1)
+	go func() {
+		_, err := client.requestPrivateKey(make([]byte, 128))
+		result <- err
+	}()
+
+	if err := client.Close(); !errors.Is(err, procErr) {
+		t.Fatalf("Close() error = %v, want %v", err, procErr)
+	}
+
+	select {
+	case err := <-result:
+		if err != ErrSSHAuthCancelled {
+			t.Fatalf("expected requestPrivateKey to return %v, got %v", ErrSSHAuthCancelled, err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for requestPrivateKey result")
+	}
+}
+
+func TestETReleaseReturnsProcessCloseError(t *testing.T) {
+	procErr := errors.New("process close failed")
+	client := &etClient{
+		process: &fakeETProcess{
+			stdout:   make(chan []byte, 1),
+			closeErr: procErr,
+		},
+		baseCtxCancel: func() {},
+	}
+
+	if err := client.Release(); !errors.Is(err, procErr) {
+		t.Fatalf("Release() error = %v, want %v", err, procErr)
+	}
+}
+
+func TestETReleaseClosesProcess(t *testing.T) {
+	proc := &fakeETProcess{stdout: make(chan []byte, 1)}
+	client := &etClient{
+		process:       proc,
+		baseCtxCancel: func() {},
+	}
+
+	if err := client.Release(); err != nil {
+		t.Fatalf("Release() error = %v", err)
+	}
+	if proc.closeCount != 1 {
+		t.Fatalf("proc.closeCount = %d, want 1", proc.closeCount)
+	}
+	if client.process != nil {
+		t.Fatalf("client.process = %v, want nil", client.process)
+	}
+}
+
+func TestETLocalWriteErrorClosesProcess(t *testing.T) {
+	processErr := errors.New("write error")
+	proc := &fakeETProcess{
+		stdout:   make(chan []byte, 1),
+		writeErr: processErr,
+	}
+	client := &etClient{process: proc}
+
+	stdinHeader := command.StreamHeader{}
+	stdinHeader.Set(ETClientStdIn, uint16(5))
+	if err := client.local(nil, newLimitedReader([]byte("hello")), stdinHeader, make([]byte, 16)); !errors.Is(err, processErr) {
+		t.Fatalf("local() error = %v, want %v", err, processErr)
+	}
+	if proc.closeCount != 1 {
+		t.Fatalf("proc.closeCount = %d, want 1", proc.closeCount)
+	}
+	if client.process != nil {
+		t.Fatalf("client.process = %v, want nil", client.process)
+	}
+}
+
+func TestETLocalWriteErrorClosesProcessWithCloseError(t *testing.T) {
+	processErr := errors.New("write error")
+	closeErr := errors.New("close error")
+	proc := &fakeETProcess{
+		stdout:   make(chan []byte, 1),
+		writeErr: processErr,
+		closeErr: closeErr,
+	}
+	client := &etClient{process: proc}
+
+	stdinHeader := command.StreamHeader{}
+	stdinHeader.Set(ETClientStdIn, uint16(5))
+	err := client.local(nil, newLimitedReader([]byte("hello")), stdinHeader, make([]byte, 16))
+	if !errors.Is(err, processErr) {
+		t.Fatalf("local() error = %v, want %v", err, processErr)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("local() error = %v, want %v", err, closeErr)
+	}
+	if proc.closeCount != 1 {
+		t.Fatalf("proc.closeCount = %d, want 1", proc.closeCount)
+	}
+	if client.process != nil {
+		t.Fatalf("client.process = %v, want nil", client.process)
+	}
+}
+
 func buildETBootupPayload(
 	t *testing.T,
 	user string,
@@ -268,4 +437,70 @@ func appendETString(t *testing.T, payload []byte, value string) []byte {
 	}
 
 	return append(payload, buf[:valueLen]...)
+}
+
+type fakeETProcess struct {
+	stdin      bytes.Buffer
+	stdout     chan []byte
+	writeErr   error
+	resizes    []struct{ rows, cols uint16 }
+	closeErr   error
+	closeCount int
+	closed     bool
+}
+
+func (f *fakeETProcess) Read(p []byte) (int, error) {
+	data, ok := <-f.stdout
+	if !ok {
+		return 0, io.EOF
+	}
+	return copy(p, data), nil
+}
+
+func (f *fakeETProcess) Write(p []byte) (int, error) {
+	if f.writeErr != nil {
+		return 0, f.writeErr
+	}
+	return f.stdin.Write(p)
+}
+
+func (f *fakeETProcess) Resize(rows uint16, cols uint16) error {
+	f.resizes = append(f.resizes, struct{ rows, cols uint16 }{rows: rows, cols: cols})
+	return nil
+}
+
+func (f *fakeETProcess) Close() error {
+	if f.closed {
+		return nil
+	}
+	f.closeCount++
+	f.closed = true
+	if f.stdout != nil {
+		close(f.stdout)
+	}
+	return f.closeErr
+}
+
+func TestETLocalWritesStdinAndResize(t *testing.T) {
+	proc := &fakeETProcess{stdout: make(chan []byte, 1)}
+	client := &etClient{process: proc}
+
+	stdinHeader := command.StreamHeader{}
+	stdinHeader.Set(ETClientStdIn, 5)
+	if err := client.local(nil, newLimitedReader([]byte("hello")), stdinHeader, make([]byte, 16)); err != nil {
+		t.Fatalf("stdin local error = %v", err)
+	}
+	if got := proc.stdin.String(); got != "hello" {
+		t.Fatalf("stdin = %q, want hello", got)
+	}
+
+	resizePayload := []byte{0, 40, 0, 120}
+	resizeHeader := command.StreamHeader{}
+	resizeHeader.Set(ETClientResize, uint16(len(resizePayload)))
+	if err := client.local(nil, newLimitedReader(resizePayload), resizeHeader, make([]byte, 16)); err != nil {
+		t.Fatalf("resize local error = %v", err)
+	}
+	if len(proc.resizes) != 1 || proc.resizes[0].rows != 40 || proc.resizes[0].cols != 120 {
+		t.Fatalf("resizes = %#v, want 40x120", proc.resizes)
+	}
 }
