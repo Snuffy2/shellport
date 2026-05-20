@@ -126,7 +126,9 @@ import "@xterm/xterm/css/xterm.css";
  */
 
 /** @type {string} Preferred patched monospace font family bundled with ShellPort. */
-const termTypeFaces = '"JetBrainsMono Nerd Font"';
+const termTypeFace = "JetBrainsMono Nerd Font";
+/** @type {string} CSS font-family value for the preferred terminal font. */
+const termTypeFaces = `"${termTypeFace}"`;
 /** @type {string} Local fallback font family used while bundled fonts are loading. */
 const termFallbackTypeFace = "monospace";
 /** @type {number} Milliseconds to wait for each bundled font before falling back. */
@@ -572,9 +574,13 @@ export default {
       const tfs = typefaces.split(",");
       let observers = [];
       for (let v in tfs) {
-        observers.push(new FontFaceObserver(tfs[v].trim()).load(null, timeout));
+        const observerTypeFace = tfs[v].trim().replace(/^"|"$/gu, "");
+
         observers.push(
-          new FontFaceObserver(tfs[v].trim(), {
+          new FontFaceObserver(observerTypeFace).load(null, timeout),
+        );
+        observers.push(
+          new FontFaceObserver(observerTypeFace, {
             weight: "bold",
           }).load(null, timeout),
         );

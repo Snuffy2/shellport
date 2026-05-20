@@ -25,8 +25,10 @@ describe("screen console", function () {
     expect(cssSource).toContain("JetBrainsMonoNerdFontMono-Regular.ttf");
     expect(cssSource).toContain("JetBrainsMonoNerdFontMono-Bold.ttf");
     expect(vueSource).toContain(
-      'const termTypeFaces = \'"JetBrainsMono Nerd Font"\'',
+      'const termTypeFace = "JetBrainsMono Nerd Font"',
     );
+    expect(vueSource).toContain('const termTypeFaces = `"${termTypeFace}"`');
+    expect(vueSource).toContain('replace(/^"|"$/gu, "")');
     expect(vueSource).toContain("lineHeight: 1.35");
     expect(vueSource).toContain("letterSpacing: 0");
     expect(vueSource).not.toContain("Hack, PureNerdFont");

@@ -31,8 +31,10 @@ describe("JetBrainsMono Nerd Font updater", function () {
     expect(workflowSource).toContain("npm run update:fonts");
     expect(workflowSource).toContain("ui/fonts/JetBrainsMonoNerdFont");
     expect(updaterSource).toContain(
-      "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz",
+      "https://api.github.com/repos/${nerdFontsRepo}/releases/latest",
     );
+    expect(updaterSource).toContain("SHA-256.txt");
+    expect(updaterSource).toContain("archiveSHA256");
     expect(updaterSource).toContain("JetBrainsMonoNerdFontMono-Regular.ttf");
     expect(updaterSource).toContain("JetBrainsMonoNerdFontMono-Bold.ttf");
   });
