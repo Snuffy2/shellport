@@ -953,6 +953,38 @@ func TestETRemoteSendsConnectSucceedForQuietRunningProcess(t *testing.T) {
 	}
 }
 
+func TestReadETProcessOutputStopsWhenResultReceiverCloses(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	process := &fakeETProcess{stdout: make(chan []byte, 2)}
+	process.stdout <- []byte("first")
+	process.stdout <- []byte("second")
+	results := make(chan etProcessReadResult, 1)
+	done := make(chan struct{})
+
+	go func() {
+		readETProcessOutput(ctx, process, 16, results)
+		close(done)
+	}()
+
+	select {
+	case result := <-results:
+		if string(result.Data) != "first" {
+			t.Fatalf("first result data = %q, want first", result.Data)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for first reader result")
+	}
+
+	process.stdout <- []byte("third")
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("reader goroutine did not exit after context cancellation")
+	}
+}
+
 func TestETLocalWriteErrorClosesProcess(t *testing.T) {
 	processErr := errors.New("write error")
 	proc := &fakeETProcess{

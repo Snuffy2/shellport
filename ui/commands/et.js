@@ -579,6 +579,13 @@ function decodeLauncherETCommand(d) {
 function normalizeETPresetFields(fields) {
   for (let i in fields) {
     if (
+      fields[i].name === "Authentication" &&
+      fields[i].value !== "Private Key"
+    ) {
+      fields[i].value = "Private Key";
+    }
+
+    if (
       fields[i].name === "ET Server Port" &&
       !validETServerPort(fields[i].value)
     ) {

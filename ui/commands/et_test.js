@@ -196,6 +196,47 @@ describe("ET Command", () => {
     );
   });
 
+  it("normalizes unsupported preset ET authentication values in the wizard", () => {
+    const wizard = new et.Command().wizard(
+      null,
+      new presets.Preset({
+        id: "preset-et",
+        title: "Example ET",
+        type: "ET",
+        host: "example.com:22",
+        tab_color: "",
+        meta: {
+          User: "alice",
+          Authentication: "Password",
+          Encoding: "utf-8",
+          "ET Server Port": "2022",
+          "ET Command": "et",
+        },
+      }),
+      {},
+      [],
+      null,
+      null,
+      {
+        get(type) {
+          assert.strictEqual(type, "ET");
+
+          return {};
+        },
+      },
+      null,
+    );
+
+    const fields = wizard.stepInitialPrompt().data().inputs;
+    const authentication = fields.find(
+      (field) => field.name === "Authentication",
+    );
+
+    assert.strictEqual(authentication.value, "Private Key");
+    assert.strictEqual(authentication.readonly, true);
+    assert.strictEqual(authentication.verify(authentication.value), "");
+  });
+
   it("includes non-default ET server port in launchers", () => {
     assert.strictEqual(
       new et.Command().launcher({

@@ -375,7 +375,7 @@ func (d *etClient) remote(
 
 	connected := false
 	readResults := make(chan etProcessReadResult, 1)
-	go readETProcessOutput(process, len((*u))-d.w.HeaderSize(), readResults)
+	go readETProcessOutput(d.baseCtx, process, len((*u))-d.w.HeaderSize(), readResults)
 	startupTimer := time.NewTimer(etProcessStartupGrace)
 	defer startupTimer.Stop()
 	pendingOutput := make([][]byte, 0)
@@ -427,17 +427,37 @@ func (d *etClient) remote(
 	}
 }
 
-func readETProcessOutput(process etProcess, maxReadSize int, results chan<- etProcessReadResult) {
+func readETProcessOutput(
+	ctx context.Context,
+	process etProcess,
+	maxReadSize int,
+	results chan<- etProcessReadResult,
+) {
 	for {
 		buf := make([]byte, maxReadSize)
 		readLen, readErr := process.Read(buf)
 		if readLen > 0 {
-			results <- etProcessReadResult{Data: buf[:readLen]}
+			if !sendETProcessReadResult(ctx, results, etProcessReadResult{Data: buf[:readLen]}) {
+				return
+			}
 		}
 		if readErr != nil {
-			results <- etProcessReadResult{Err: readErr}
+			_ = sendETProcessReadResult(ctx, results, etProcessReadResult{Err: readErr})
 			return
 		}
+	}
+}
+
+func sendETProcessReadResult(
+	ctx context.Context,
+	results chan<- etProcessReadResult,
+	result etProcessReadResult,
+) bool {
+	select {
+	case results <- result:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 
