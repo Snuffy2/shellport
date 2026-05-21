@@ -587,6 +587,7 @@ class Wizard {
     controls,
     _history,
     saveFingerprint = null,
+    saveAsPreset = null,
   ) {
     this.info = info;
     this.preset = preset;
@@ -601,6 +602,7 @@ class Wizard {
     this.step = subs;
     this.controls = controls.get("ET");
     this.saveFingerprint = saveFingerprint;
+    this.saveAsPreset = saveAsPreset;
     this.requestLifecycle = new ConnectionRequestLifecycle(
       this.step,
       (title, message) => this.stepErrorDone(title, message),
@@ -829,6 +831,18 @@ class Wizard {
 
   stepInitialPrompt() {
     let self = this;
+    const canSaveAsPreset = !self.preset || self.preset.id() === "";
+    const actions = [];
+
+    if (canSaveAsPreset && self.saveAsPreset !== null) {
+      actions.push({
+        text: "Save as preset",
+        keepOpen: true,
+        respond(r) {
+          return self.saveAsPreset("ET", r);
+        },
+      });
+    }
 
     return command.prompt(
       "ET",
@@ -891,6 +905,7 @@ class Wizard {
           () => {},
         ),
       ),
+      actions,
     );
   }
 
@@ -1155,6 +1170,7 @@ export class Command {
     controls,
     history,
     saveFingerprint = null,
+    saveAsPreset = null,
   ) {
     return new Wizard(
       info,
@@ -1166,6 +1182,7 @@ export class Command {
       controls,
       history,
       saveFingerprint,
+      saveAsPreset,
     );
   }
 

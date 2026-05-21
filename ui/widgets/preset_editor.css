@@ -1,0 +1,84 @@
+/*
+ * Copyright (C) 2026 Snuffy2
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+#preset-editor {
+  background: #3a3a3a;
+  color: #ddd;
+  padding: 0 20px 20px;
+}
+
+#preset-editor h2 {
+  color: #ccc;
+  font-size: 1.3em;
+  margin: 0 0 14px;
+}
+
+#preset-editor-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+#preset-editor .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+#preset-editor .field.horizontal {
+  align-items: center;
+  flex-direction: row;
+}
+
+#preset-editor input,
+#preset-editor select,
+#preset-editor textarea {
+  background: #2d2d2d;
+  border: 1px solid #666;
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+  padding: 8px;
+}
+
+#preset-editor textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+#preset-editor .preset-editor-actions {
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
+}
+
+#preset-editor button {
+  background: #575757;
+  border: 1px solid #777;
+  border-radius: 3px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  padding: 7px 12px;
+}
+
+#preset-editor button.secondary {
+  background: #444;
+}
+
+#preset-editor-error {
+  background: #733;
+  color: #fff;
+  margin: 0 0 12px;
+  padding: 10px;
+}
+
+#preset-editor-admin-key-error {
+  background: #733;
+  color: #fff;
+  margin: 0 0 12px;
+  padding: 10px;
+}

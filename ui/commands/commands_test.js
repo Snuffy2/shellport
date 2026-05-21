@@ -19,6 +19,7 @@ describe("Command prompts", () => {
       [
         {
           text: "Save",
+          keepOpen: true,
           respond() {
             return "saved";
           },
@@ -29,15 +30,18 @@ describe("Command prompts", () => {
     assert.deepStrictEqual(prompt.data().actions, [
       {
         text: "Save",
+        keepOpen: true,
         respond: prompt.data().actions[0].respond,
       },
     ]);
     assert.strictEqual(prompt.data().actions[0].respond(), "saved");
   });
 
-  it("forwards fingerprint saver callbacks to interactive command wizards", () => {
+  it("forwards management callbacks to interactive command wizards", () => {
     const saveFingerprint = () => {};
+    const saveAsPreset = () => {};
     let receivedSaveFingerprint = null;
+    let receivedSaveAsPreset = null;
     const commands = new command.Commands([
       {
         id() {
@@ -62,8 +66,10 @@ describe("Command prompts", () => {
           _controls,
           _history,
           saver,
+          savePreset,
         ) {
           receivedSaveFingerprint = saver;
+          receivedSaveAsPreset = savePreset;
           return {
             run() {},
             started() {
@@ -90,9 +96,20 @@ describe("Command prompts", () => {
 
     commands
       .all()[0]
-      .wizard(null, null, null, null, null, null, () => {}, saveFingerprint);
+      .wizard(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        () => {},
+        saveFingerprint,
+        saveAsPreset,
+      );
 
     assert.strictEqual(receivedSaveFingerprint, saveFingerprint);
+    assert.strictEqual(receivedSaveAsPreset, saveAsPreset);
   });
 
   it("does not call the command close hook after a normal done step", async () => {

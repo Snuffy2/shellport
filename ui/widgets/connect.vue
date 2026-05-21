@@ -17,23 +17,41 @@ SPDX-License-Identifier: AGPL-3.0-only
       <slot v-if="inputting"></slot>
 
       <connect-switch
-        v-if="!inputting"
+        v-if="presetEditor === null && !inputting"
         :presets-length="presets.length"
         :tab="tab"
         @switch="switchTab"
       ></connect-switch>
 
+      <preset-editor
+        v-if="presetEditor !== null && !inputting"
+        :mode="presetEditor.mode"
+        :state="presetEditor.state"
+        :policy="presetManagementPolicy"
+        :admin-key-cached="adminKeyCached"
+        :save-preset="presetSaveHandler"
+        :delete-preset="presetDeleteHandler"
+        @cancel="cancelPresetEditor"
+      ></preset-editor>
+
       <connect-known
-        v-if="tab === 'known' && !inputting"
+        v-if="tab === 'known' && presetEditor === null && !inputting"
         :presets="presets"
+        :can-manage-presets="canManagePresets"
         :restricted-to-presets="restrictedToPresets"
         :refreshing-presets="refreshingPresets"
         @select-preset="selectPreset"
+        @edit-preset="editPreset"
         @refresh-presets="refreshPresets"
       ></connect-known>
 
       <connect-new
-        v-if="tab === 'new' && !inputting && !restrictedToPresets"
+        v-if="
+          tab === 'new' &&
+          presetEditor === null &&
+          !inputting &&
+          !restrictedToPresets
+        "
         :connectors="connectors"
         @select="selectConnector"
       ></connect-new>
@@ -71,6 +89,7 @@ import Window from "./window.vue";
 import ConnectSwitch from "./connect_switch.vue";
 import ConnectKnown from "./connect_known.vue";
 import ConnectNew from "./connect_new.vue";
+import PresetEditor from "./preset_editor.vue";
 
 export default {
   components: {
@@ -78,6 +97,7 @@ export default {
     "connect-switch": ConnectSwitch,
     "connect-known": ConnectKnown,
     "connect-new": ConnectNew,
+    "preset-editor": PresetEditor,
   },
   props: {
     display: {
@@ -108,8 +128,39 @@ export default {
       type: Boolean,
       default: false,
     },
+    canManagePresets: {
+      type: Boolean,
+      default: false,
+    },
+    presetEditor: {
+      type: Object,
+      default: () => null,
+    },
+    presetManagementPolicy: {
+      type: Object,
+      default: () => null,
+    },
+    presetSaveHandler: {
+      type: Function,
+      required: true,
+    },
+    presetDeleteHandler: {
+      type: Function,
+      required: true,
+    },
+    adminKeyCached: {
+      type: Boolean,
+      default: false,
+    },
   },
-  emits: ["display", "connector-select", "preset-select", "refresh-presets"],
+  emits: [
+    "display",
+    "connector-select",
+    "preset-select",
+    "preset-edit",
+    "preset-editor-cancel",
+    "refresh-presets",
+  ],
   /**
    * @returns {{tab: string, canSelect: boolean}}
    *   `tab` — active panel: `"known"` or `"new"`.
@@ -179,6 +230,27 @@ export default {
       }
 
       this.$emit("refresh-presets");
+    },
+    /**
+     * Emits preset-edit event for the selected preset row.
+     *
+     * @param {Object} preset - Preset descriptor from known list.
+     * @returns {void}
+     */
+    editPreset(preset) {
+      if (this.inputting) {
+        return;
+      }
+
+      this.$emit("preset-edit", preset);
+    },
+    /**
+     * Emits preset editor close event.
+     *
+     * @returns {void}
+     */
+    cancelPresetEditor() {
+      this.$emit("preset-editor-cancel");
     },
   },
 };

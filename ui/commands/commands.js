@@ -501,7 +501,7 @@ export function prompt(
  *
  * @private
  */
-class Next {
+export class Next {
   /**
    * constructor
    *
@@ -711,8 +711,8 @@ class Builder {
     this.represeter = (n) => {
       return command.represet(n);
     };
-    this.wizarder = (n, i, r, u, y, x, l, p, s) => {
-      return command.wizard(n, i, r, u, y, x, l, p, s);
+    this.wizarder = (n, i, r, u, y, x, l, p, s, q) => {
+      return command.wizard(n, i, r, u, y, x, l, p, s, q);
     };
     this.executer = (n, i, r, u, y, x, l, p) => {
       return command.execute(n, i, r, u, y, x, l, p);
@@ -791,6 +791,7 @@ class Builder {
     keptSessions,
     done,
     saveFingerprint = null,
+    saveAsPreset = null,
   ) {
     let subs = new subscribe.Subscribe();
 
@@ -805,6 +806,7 @@ class Builder {
         controls,
         history,
         saveFingerprint,
+        saveAsPreset,
       ),
       subs,
       done,

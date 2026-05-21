@@ -1,0 +1,53 @@
+// Copyright (C) 2026 Snuffy2
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { describe, expect, test } from "vitest";
+
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+
+function readProjectFile(relativePath) {
+  return readFileSync(path.join(repoRoot, relativePath), "utf8");
+}
+
+describe("preset management UI wiring", () => {
+  test("known preset list has accessible icon edit button", () => {
+    const source = readProjectFile("ui/widgets/connect_known.vue");
+
+    expect(source).toContain("canManagePresets");
+    expect(source).toContain('aria-label="Edit preset"');
+    expect(source).toContain('title="Edit preset"');
+    expect(source).toContain('@click.stop="editPreset(preset)"');
+    expect(source).toContain('"edit-preset"');
+  });
+
+  test("connect widget renders preset editor mode", () => {
+    const source = readProjectFile("ui/widgets/connect.vue");
+
+    expect(source).toContain("preset-editor");
+    expect(source).toContain(':save-preset="presetSaveHandler"');
+    expect(source).toContain(':delete-preset="presetDeleteHandler"');
+  });
+
+  test("home updates full preset list for save and delete", () => {
+    const source = readProjectFile("ui/home.vue");
+
+    expect(source).toContain("openPresetEditor(preset)");
+    expect(source).toContain("savePresetFromEditor(payload)");
+    expect(source).toContain("deletePresetFromEditor(payload)");
+    expect(source).toContain("clearHiddenPasswordIDs");
+  });
+
+  test("home only passes save-as callback when preset management is available", () => {
+    const source = readProjectFile("ui/home.vue");
+
+    expect(source).toContain("const saveAsPreset = self.canManagePresets");
+    expect(source).toContain(": null;");
+    expect(source).toContain("saveAsPreset,");
+  });
+});

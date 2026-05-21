@@ -367,7 +367,7 @@ func TestReplaceFilePresetsWithRuntimeDoesNotResolveRawMeta(t *testing.T) {
 		},
 	}
 
-	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime); err != nil {
+	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime, nil); err != nil {
 		t.Fatalf("ReplaceFilePresetsWithRuntime returned error: %v", err)
 	}
 
@@ -432,7 +432,7 @@ func TestReplaceFilePresetsWithRuntimePreservesRotatedRawMetaReference(t *testin
 		},
 	}
 
-	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime); err != nil {
+	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime, nil); err != nil {
 		t.Fatalf("ReplaceFilePresetsWithRuntime returned error: %v", err)
 	}
 
@@ -494,7 +494,7 @@ func TestReplaceFilePresetsWithRuntimeAllowsInlinePrivateKeyReplacement(t *testi
 		},
 	}
 
-	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime); err != nil {
+	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime, nil); err != nil {
 		t.Fatalf("ReplaceFilePresetsWithRuntime returned error: %v", err)
 	}
 
@@ -546,7 +546,7 @@ func TestReplaceFilePresetsWithRuntimePreservesOmittedRawOnlyMeta(t *testing.T) 
 		},
 	}
 
-	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime); err != nil {
+	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime, nil); err != nil {
 		t.Fatalf("ReplaceFilePresetsWithRuntime returned error: %v", err)
 	}
 
@@ -604,7 +604,7 @@ func TestReplaceFilePresetsWithRuntimeDropsKnownMetaForWrongType(t *testing.T) {
 		},
 	}
 
-	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime); err != nil {
+	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime, nil); err != nil {
 		t.Fatalf("ReplaceFilePresetsWithRuntime returned error: %v", err)
 	}
 

@@ -40,12 +40,13 @@ type socketVerification struct {
 // preset remote connection. It is derived from configuration.Preset and
 // transmitted to the client as part of the socket access configuration.
 type socketRemotePreset struct {
-	ID       string            `json:"id"`
-	Title    string            `json:"title"`
-	Type     string            `json:"type"`
-	Host     string            `json:"host"`
-	TabColor string            `json:"tab_color"`
-	Meta     map[string]string `json:"meta"`
+	ID               string            `json:"id"`
+	Title            string            `json:"title"`
+	Type             string            `json:"type"`
+	Host             string            `json:"host"`
+	TabColor         string            `json:"tab_color"`
+	Meta             map[string]string `json:"meta"`
+	HasSavedPassword bool              `json:"has_saved_password"`
 }
 
 // socketAccessConfiguration is the top-level JSON envelope sent to the client
@@ -54,10 +55,18 @@ type socketRemotePreset struct {
 // message. ServerTitle is plain text; the client renders it with Vue text
 // interpolation rather than v-html.
 type socketAccessConfiguration struct {
-	Presets              []socketRemotePreset `json:"presets"`
-	ServerTitle          string               `json:"server_title"`
-	ServerMessage        string               `json:"server_message"`
-	PresetConfigWritable bool                 `json:"preset_config_writable"`
+	Presets              []socketRemotePreset   `json:"presets"`
+	ServerTitle          string                 `json:"server_title"`
+	ServerMessage        string                 `json:"server_message"`
+	PresetConfigWritable bool                   `json:"preset_config_writable"`
+	PresetManagement     presetManagementPolicy `json:"preset_management"`
+}
+
+type presetManagementPolicy struct {
+	Writable                   bool `json:"writable"`
+	CanManage                  bool `json:"can_manage"`
+	RequiresAdminKey           bool `json:"requires_admin_key"`
+	BlockedByPresetRestriction bool `json:"blocked_by_preset_restriction"`
 }
 
 type authRole int
@@ -77,23 +86,33 @@ func newSocketAccessConfiguration(
 	serverTitle string,
 	serverMessage string,
 	presetConfigWritable bool,
+	presetManagement ...presetManagementPolicy,
 ) socketAccessConfiguration {
+	policy := presetManagementPolicy{
+		Writable: presetConfigWritable,
+	}
+	if len(presetManagement) > 0 {
+		policy = presetManagement[0]
+	}
+
 	presets := make([]socketRemotePreset, len(remotes))
 	for i := range presets {
 		presets[i] = socketRemotePreset{
-			Title:    remotes[i].Title,
-			ID:       remotes[i].ID,
-			Type:     remotes[i].Type,
-			Host:     remotes[i].Host,
-			TabColor: remotes[i].TabColor,
-			Meta:     sanitizeSocketPresetMeta(remotes[i].Meta),
+			Title:            remotes[i].Title,
+			ID:               remotes[i].ID,
+			Type:             remotes[i].Type,
+			Host:             remotes[i].Host,
+			TabColor:         remotes[i].TabColor,
+			Meta:             sanitizeSocketPresetMeta(remotes[i].Meta),
+			HasSavedPassword: presetHasSavedPassword(remotes[i]),
 		}
 	}
 	return socketAccessConfiguration{
 		Presets:              presets,
 		ServerTitle:          serverTitle,
 		ServerMessage:        parseServerMessage(html.EscapeString(serverMessage)),
-		PresetConfigWritable: presetConfigWritable,
+		PresetConfigWritable: policy.Writable,
+		PresetManagement:     policy,
 	}
 }
 
@@ -107,6 +126,42 @@ func sanitizeSocketPresetMeta(meta map[string]string) map[string]string {
 		sanitized[key] = value
 	}
 	return sanitized
+}
+
+func newPresetManagementPolicy(
+	commonCfg configuration.Common,
+	role authRole,
+) presetManagementPolicy {
+	writable := role >= authRoleUser && commonCfg.PresetConfigWritable()
+	blockedByPresetRestriction := commonCfg.OnlyAllowPresetRemotes
+	requiresAdminKey := writable &&
+		!blockedByPresetRestriction &&
+		commonCfg.AdminKey != "" &&
+		role < authRoleAdmin
+
+	return presetManagementPolicy{
+		Writable:                   writable,
+		CanManage:                  writable && !blockedByPresetRestriction,
+		RequiresAdminKey:           requiresAdminKey,
+		BlockedByPresetRestriction: blockedByPresetRestriction,
+	}
+}
+
+func presetHasSavedPassword(preset configuration.Preset) bool {
+	if preset.Meta != nil {
+		if _, hasPassword := preset.Meta[configuration.PresetMetaPassword]; hasPassword {
+			return true
+		}
+		if _, hasEncrypted := preset.Meta[configuration.PresetMetaEncryptedPassword]; hasEncrypted {
+			return true
+		}
+	}
+	if preset.SecretMeta != nil {
+		if _, hasSecretPassword := preset.SecretMeta[configuration.PresetMetaPassword]; hasSecretPassword {
+			return true
+		}
+	}
+	return false
 }
 
 // buildAccessConfigRespondBody serializes accessCfg to JSON. It panics if
@@ -139,7 +194,8 @@ func newSocketVerification(
 				commCfg.Presets,
 				srvCfg.ServerTitle,
 				srvCfg.ServerMessage,
-				commCfg.PresetConfigWritable(),
+				false,
+				newPresetManagementPolicy(commCfg, authRoleUser),
 			),
 		),
 	}
@@ -229,7 +285,8 @@ func (s socketVerification) setServerConfigRespond(
 			s.commonCfg.CurrentPresets(),
 			s.serverCfg.ServerTitle,
 			s.serverCfg.ServerMessage,
-			role >= authRoleUser && s.commonCfg.PresetConfigWritable(),
+			false,
+			newPresetManagementPolicy(s.commonCfg, role),
 		),
 	))
 }

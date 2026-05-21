@@ -45,6 +45,75 @@ const maxTimeDiff = 30000;
 /** @type {number} How long (ms) the tab-update asterisk indicator stays visible. */
 const updateIndicatorMaxDisplayTime = 3000;
 
+/**
+ * Performs a full-list preset config save operation with injected dependencies.
+ *
+ * @param {object} args Operation arguments.
+ * @param {Array<object>} args.updatedPresets Updated preset list to write.
+ * @param {object} args.options Write operation options.
+ * @param {string} [args.options.adminKey] Optional admin key string.
+ * @param {Array<string>} [args.options.clearPasswordIDs] IDs of hidden passwords to clear.
+ * @param {object} args.presetData Runtime preset metadata.
+ * @param {object} args.presetData.management Policy object controlling management permissions.
+ * @param {string} args.presetConfigPassphrase Shared-key passphrase.
+ * @param {string} args.presetAdminPassphrase Cached admin passphrase.
+ * @param {function(string): Promise<Object.<string, string>>} args.presetConfigHeadersForPassphrase
+ *   Function that returns request headers for a passphrase.
+ * @param {function(string, Object.<string, string>, string): Promise<{status:number,responseText:string}>} args.xhrPut
+ *   HTTP PUT function.
+ * @param {string} args.presetConfigInterface Endpoint for preset config writes.
+ * @returns {Promise<{presets:Array<object>,adminKey:string|null}>} Updated presets and key candidate.
+ */
+export async function savePresetConfigRequest({
+  updatedPresets,
+  options = {},
+  presetData,
+  presetConfigPassphrase,
+  presetAdminPassphrase,
+  presetConfigHeadersForPassphrase,
+  xhrPut,
+  presetConfigInterface,
+}) {
+  if (!presetData || presetData.management?.can_manage !== true) {
+    throw new Error("Preset management is not allowed");
+  }
+
+  const providedAdminKey =
+    typeof options.adminKey === "string" && options.adminKey.length > 0
+      ? options.adminKey
+      : null;
+  const passphrase =
+    providedAdminKey !== null
+      ? providedAdminKey
+      : presetAdminPassphrase.length > 0
+        ? presetAdminPassphrase
+        : presetConfigPassphrase;
+  const clearPasswordIDs = Array.isArray(options.clearPasswordIDs)
+    ? options.clearPasswordIDs
+    : [];
+  const headers = await presetConfigHeadersForPassphrase(passphrase);
+  headers["X-Preserve-Hidden-Preset-Passwords"] = "yes";
+  if (clearPasswordIDs.length > 0) {
+    headers["X-Clear-Hidden-Preset-Passwords"] = clearPasswordIDs.join(",");
+  }
+
+  const putResponse = await xhrPut(
+    presetConfigInterface,
+    headers,
+    JSON.stringify({ presets: updatedPresets }),
+  );
+  if (putResponse.status !== 200) {
+    throw new Error("Preset config write failed: " + putResponse.status);
+  }
+
+  const body = JSON.parse(putResponse.responseText);
+
+  return {
+    presets: body.presets ? body.presets : [],
+    adminKey: providedAdminKey,
+  };
+}
+
 const mainTemplate = `
 <home
   v-if="page == 'app'"
@@ -58,6 +127,9 @@ const mainTemplate = `
   :preset-data="presetData.presets"
   :restricted-to-presets="presetData.restricted"
   :preset-config-writable="presetData.writable"
+  :preset-management-policy="presetData.management"
+  :save-preset-config="savePresetConfig"
+  :admin-key-required="presetAdminKeyRequired"
   :save-preset-fingerprint="savePresetFingerprint"
   :refresh-preset-config="refreshPresetConfig"
   :view-port="viewPort"
@@ -160,8 +232,15 @@ function startApp(rootEl) {
           presets: markRaw(new Presets([])),
           restricted: false,
           writable: false,
+          management: {
+            writable: false,
+            can_manage: false,
+            requires_admin_key: false,
+            blocked_by_preset_restriction: false,
+          },
         },
         presetConfigPassphrase: "",
+        presetAdminPassphrase: "",
         authErr: "",
         loadErr: "",
         socket: null,
@@ -363,6 +442,17 @@ function startApp(rootEl) {
        */
       executeHomeApp(authResult, key, passphrase = "") {
         let authData = JSON.parse(authResult.data);
+        const presetManagement = authData.preset_management
+          ? authData.preset_management
+          : {
+              writable: authData.preset_config_writable === true,
+              can_manage:
+                authData.preset_config_writable === true &&
+                !authResult.onlyAllowPresetRemotes,
+              requires_admin_key: false,
+              blocked_by_preset_restriction:
+                authResult.onlyAllowPresetRemotes === true,
+            };
         this.serverTitle = authData.server_title ? authData.server_title : "";
         this.serverMessage = authData.server_message
           ? authData.server_message
@@ -373,6 +463,7 @@ function startApp(rootEl) {
           ),
           restricted: authResult.onlyAllowPresetRemotes,
           writable: authData.preset_config_writable === true,
+          management: presetManagement,
         };
         this.presetConfigPassphrase = passphrase;
         this.socket = markRaw(
@@ -386,23 +477,74 @@ function startApp(rootEl) {
        * @returns {Promise<Object.<string, string>>} HTTP headers.
        */
       async presetConfigHeaders() {
+        return await this.presetConfigHeadersForPassphrase(
+          this.presetConfigPassphrase,
+        );
+      },
+      /**
+       * Returns true when policy requires admin key and cache is empty.
+       *
+       * @returns {boolean} `true` when user-supplied admin key is required but
+       *   not available in page memory.
+       */
+      presetAdminKeyRequired() {
+        return (
+          this.presetData.management &&
+          this.presetData.management.requires_admin_key === true &&
+          this.presetAdminPassphrase.length <= 0
+        );
+      },
+      /**
+       * Builds auth headers for preset config API calls using an explicit passphrase.
+       *
+       * @param {string} passphrase - Passphrase used to derive the HMAC key.
+       * @returns {Promise<Object.<string, string>>} HTTP headers.
+       */
+      async presetConfigHeadersForPassphrase(passphrase) {
         let headers = {
           "Content-Type": "application/json",
         };
 
-        if (this.presetConfigPassphrase.length <= 0 || !this.key) {
+        if (passphrase.length <= 0 || !this.key) {
           headers["X-Key"] = "";
 
           return headers;
         }
 
-        const authKey = await this.getSocketAuthKey(
-          this.presetConfigPassphrase,
-        );
+        const authKey = await this.getSocketAuthKey(passphrase);
 
         headers["X-Key"] = btoa(String.fromCharCode.apply(null, authKey));
 
         return headers;
+      },
+      /**
+       * Saves preset configuration via the full-list API path.
+       *
+       * @param {Array<object>} updatedPresets Updated raw preset configurations.
+       * @param {object} options Operation options.
+       * @param {string} [options.adminKey] Admin key to unlock write authorization.
+       * @param {Array<string>} [options.clearPasswordIDs] Preset IDs to clear hidden passwords.
+       * @returns {Promise<Array<object>>} Updated preset config list.
+       */
+      async savePresetConfig(updatedPresets, options = {}) {
+        const result = await savePresetConfigRequest({
+          updatedPresets,
+          options,
+          presetData: this.presetData,
+          presetConfigPassphrase: this.presetConfigPassphrase,
+          presetAdminPassphrase: this.presetAdminPassphrase,
+          presetConfigHeadersForPassphrase: (passphrase) =>
+            this.presetConfigHeadersForPassphrase(passphrase),
+          xhrPut: xhr.put,
+          presetConfigInterface,
+        });
+
+        if (typeof result.adminKey === "string" && result.adminKey.length > 0) {
+          this.presetAdminPassphrase = result.adminKey;
+        }
+        this.replacePresetData(result.presets);
+
+        return result.presets;
       },
       /**
        * Replaces the cached preset list while preserving current preset policy.
@@ -415,6 +557,7 @@ function startApp(rootEl) {
           presets: markRaw(new Presets(updatedPresets)),
           restricted: this.presetData.restricted,
           writable: this.presetData.writable,
+          management: this.presetData.management,
         };
       },
       /**

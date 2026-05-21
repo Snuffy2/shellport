@@ -30,6 +30,15 @@ SPDX-License-Identifier: AGPL-3.0-only
               <h4 :title="preset.preset.title()">
                 {{ preset.preset.title() }}
               </h4>
+
+              <button
+                v-if="canManagePresets"
+                type="button"
+                class="preset-edit-button icon icon-pencil"
+                aria-label="Edit preset"
+                title="Edit preset"
+                @click.stop="editPreset(preset)"
+              ></button>
             </div>
           </li>
         </ul>
@@ -75,6 +84,10 @@ export default {
       type: Array,
       default: () => [],
     },
+    canManagePresets: {
+      type: Boolean,
+      default: false,
+    },
     restrictedToPresets: {
       type: Boolean,
       default: () => false,
@@ -84,7 +97,7 @@ export default {
       default: () => false,
     },
   },
-  emits: ["select-preset", "refresh-presets"],
+  emits: ["select-preset", "edit-preset", "refresh-presets"],
   computed: {
     /**
      * Returns the number of renderable presets.
@@ -139,6 +152,17 @@ export default {
       }
 
       this.$emit("refresh-presets");
+    },
+    /**
+     * Emits `edit-preset` with the chosen preset for the editor flow.
+     * No-op while preset list is not manageable.
+     *
+     * @param {Object} preset - The preset descriptor.
+     * @emits edit-preset
+     * @returns {void}
+     */
+    editPreset(preset) {
+      this.$emit("edit-preset", preset);
     },
   },
 };

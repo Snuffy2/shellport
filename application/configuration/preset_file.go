@@ -46,7 +46,7 @@ func PersistPresetIDs(filePath string, presets []Preset) error {
 
 // ReplaceFilePresets atomically updates the Presets list in a JSON config file.
 func ReplaceFilePresets(filePath string, presets []Preset) error {
-	return replaceFilePresets(filePath, presets, nil)
+	return replaceFilePresets(filePath, presets, nil, nil)
 }
 
 // ReplaceFilePresetsWithRuntime atomically updates a JSON config file using
@@ -56,14 +56,21 @@ func ReplaceFilePresetsWithRuntime(
 	filePath string,
 	presets []Preset,
 	runtimePresets []Preset,
+	clearPresetPasswordPresetIDs map[string]struct{},
 ) error {
-	return replaceFilePresets(filePath, presets, runtimePresets)
+	return replaceFilePresets(
+		filePath,
+		presets,
+		runtimePresets,
+		clearPresetPasswordPresetIDs,
+	)
 }
 
 func replaceFilePresets(
 	filePath string,
 	presets []Preset,
 	runtimePresets []Preset,
+	clearPresetPasswordPresetIDs map[string]struct{},
 ) error {
 	if filePath == "" {
 		return fmt.Errorf("preset config updates require a file-backed configuration")
@@ -90,6 +97,7 @@ func replaceFilePresets(
 		concrete,
 		presets,
 		runtimePresets,
+		clearPresetPasswordPresetIDs,
 	)
 	return writeCommonInputFileDocument(resolvedPath, doc)
 }
@@ -158,6 +166,7 @@ func mergePresetInputs(
 	concrete []Preset,
 	presets []Preset,
 	runtimePresets []Preset,
+	clearPresetPasswordPresetIDs map[string]struct{},
 ) presetInputs {
 	rawByID := presetInputIndexByID(raw)
 	concreteByID := presetMapByID(concrete)
@@ -171,7 +180,19 @@ func mergePresetInputs(
 		rawIndex, rawOK := rawByID[id]
 		current, currentOK := concreteByID[id]
 		if rawOK && currentOK {
-			merged = append(merged, mergePresetInput(raw[rawIndex], current, preset))
+			clearPresetPassword := false
+			if _, ok := clearPresetPasswordPresetIDs[id]; ok {
+				clearPresetPassword = true
+			}
+			merged = append(
+				merged,
+				mergePresetInput(
+					raw[rawIndex],
+					current,
+					preset,
+					clearPresetPassword,
+				),
+			)
 			continue
 		}
 		merged = append(merged, presetInputFromPreset(preset))
@@ -193,14 +214,25 @@ func mergePresetInputs(
 	return merged
 }
 
-func mergePresetInput(raw presetInput, current Preset, preset Preset) presetInput {
+func mergePresetInput(
+	raw presetInput,
+	current Preset,
+	preset Preset,
+	clearPresetPassword bool,
+) presetInput {
 	merged := raw
 	merged.ID = preset.ID
 	merged.Title = preserveRawString(raw.Title, current.Title, preset.Title)
 	merged.Type = preserveRawString(raw.Type, current.Type, preset.Type)
 	merged.Host = preserveRawString(raw.Host, current.Host, preset.Host)
 	merged.TabColor = preserveRawString(raw.TabColor, current.TabColor, preset.TabColor)
-	merged.Meta = mergePresetMeta(merged.Type, raw.Meta, current.Meta, preset.Meta)
+	merged.Meta = mergePresetMeta(
+		merged.Type,
+		raw.Meta,
+		current.Meta,
+		preset.Meta,
+		clearPresetPassword,
+	)
 	return merged
 }
 
@@ -216,6 +248,7 @@ func mergePresetMeta(
 	raw Meta,
 	current map[string]string,
 	next map[string]string,
+	clearPresetPassword bool,
 ) Meta {
 	merged := Meta{}
 	for key, value := range next {
@@ -236,7 +269,8 @@ func mergePresetMeta(
 	}
 	for key, value := range raw {
 		if _, ok := merged[key]; !ok {
-			if isPresetPasswordMeta(key) && next["Authentication"] != "Password" {
+			if isPresetPasswordMeta(key) &&
+				(next["Authentication"] != "Password" || clearPresetPassword) {
 				continue
 			}
 			if isKnownPresetMeta(key) && !presetMetaAllowedForType(presetType, key) {

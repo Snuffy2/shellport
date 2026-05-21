@@ -202,6 +202,7 @@ func normalizeStartupPresets(
 			c.SourceFile,
 			presets,
 			runtimePresets,
+			nil,
 		); err != nil {
 			return configuration.Configuration{}, err
 		}

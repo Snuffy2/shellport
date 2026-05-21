@@ -32,6 +32,7 @@ describe("Presets", () => {
         Fingerprint: "SHA256:old",
       },
     });
+    assert.strictEqual(preset.hasSavedPassword(), false);
   });
 
   it("exports all presets as config objects", () => {
@@ -55,5 +56,20 @@ describe("Presets", () => {
         meta: {},
       },
     ]);
+  });
+
+  it("tracks has_saved_password and defaults false when omitted", () => {
+    const preset = new Preset({
+      id: "preset-hidden",
+      title: "Hidden",
+      type: "SSH",
+      host: "hidden.home:22",
+      meta: {
+        User: "pi",
+      },
+      has_saved_password: true,
+    });
+
+    assert.strictEqual(preset.hasSavedPassword(), true);
   });
 });

@@ -160,6 +160,47 @@ func TestPresetConfigGetReturnsPresetIDs(t *testing.T) {
 	}
 }
 
+func TestPresetConfigGetMarksHiddenSavedPassword(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				configuration.PresetMetaEncryptedPassword: "v1:aes-256-gcm:nonce:ciphertext",
+				"Authentication": "Password",
+			},
+		},
+	})
+	controller := newTestPresetConfig(t, configPath)
+	request := httptest.NewRequest(http.MethodGet, "/shellport/config/presets", nil)
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Get(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+
+	var response presetConfigResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("json Decode returned error: %v", err)
+	}
+	if len(response.Presets) != 1 {
+		t.Fatalf("response preset count = %d, want 1", len(response.Presets))
+	}
+	if !response.Presets[0].HasSavedPassword {
+		t.Fatal("HasSavedPassword = false, want true")
+	}
+	if _, ok := response.Presets[0].Meta[configuration.PresetMetaPassword]; ok {
+		t.Fatal("response exposed plaintext Password")
+	}
+	if _, ok := response.Presets[0].Meta[configuration.PresetMetaEncryptedPassword]; ok {
+		t.Fatal("response exposed Encrypted Password")
+	}
+}
+
 func TestPresetConfigPutAddsMissingIDsAndPersists(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, []map[string]any{
@@ -286,6 +327,76 @@ func TestPresetConfigPutRequiresAdminKeyForFullReplacement(t *testing.T) {
 	err := controller.Put(&writer, request, log.Ditch{})
 	if err == nil {
 		t.Fatal("Put returned nil error, want admin authentication error")
+	}
+}
+
+func TestPresetConfigPutPreserveHeaderRequiresAdminKeyWithoutPresetID(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
+	})
+	controller := newAdminTestPresetConfig(t, configPath)
+	body := []byte(`{"presets":[{"id":"preset-columbia","title":"Columbia","type":"SSH","host":"columbia.home","meta":{"User":"pi","Authentication":"Password"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizePresetConfigRequest(controller, request)
+	request.Header.Set(preserveHiddenPresetPasswordsHeader, "yes")
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	err := controller.Put(&writer, request, log.Ditch{})
+	if err == nil {
+		t.Fatal("Put returned nil error, want admin authentication error")
+	}
+}
+
+func TestPresetConfigPutRejectsClearHiddenPasswordIDsOnFingerprintSave(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Password",
+				"Password":       "mypassword",
+			},
+		},
+	})
+	controller := newAuthenticatedTestPresetConfig(t, configPath)
+	body := []byte(`{"presets":[{"id":"preset-atlantis","meta":{"Fingerprint":"SHA256:12345"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizePresetConfigRequest(controller, request)
+	request.Header.Set(preserveHiddenPresetPasswordsHeader, "yes")
+	request.Header.Set(presetFingerprintIDHeader, "preset-atlantis")
+	request.Header.Set(clearHiddenPresetPasswordsHeader, "preset-atlantis")
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	err := controller.Put(&writer, request, log.Ditch{})
+	if err == nil {
+		t.Fatal("Put returned nil error, want clear-header fingerprint save rejection")
+	}
+
+	if _, ok := controller.commonCfg.CurrentPresets()[0].Meta[configuration.PresetMetaPassword]; !ok {
+		t.Fatal("live preset lost password after rejected fingerprint save")
+	}
+
+	_, reloaded, customErr := configuration.CustomFile(configPath)(log.Ditch{})
+	if customErr != nil {
+		t.Fatalf("CustomFile returned error: %v", customErr)
+	}
+	if _, ok := reloaded.Presets[0].Meta[configuration.PresetMetaPassword]; !ok {
+		t.Fatal("persisted preset lost password after rejected fingerprint save")
 	}
 }
 
@@ -509,6 +620,87 @@ func TestPresetConfigPutPreservesHiddenPasswordOnFullAdminReplacement(t *testing
 	}
 	if reloaded.Presets[0].Meta[configuration.PresetMetaEncryptedPassword] == "" {
 		t.Fatal("persisted config missing Encrypted Password")
+	}
+}
+
+func TestPresetConfigPutCanClearOneHiddenPasswordWhilePreservingOthers(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Password",
+				"Password":       "mypassword-atlantis",
+			},
+		},
+		{
+			"ID":    "preset-columbia",
+			"Title": "Columbia",
+			"Type":  "SSH",
+			"Host":  "columbia.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Password",
+				"Password":       "mypassword-columbia",
+			},
+		},
+	})
+	controller := newAuthenticatedTestPresetConfig(t, configPath)
+	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home:22","meta":{"User":"pi","Authentication":"Password"}},{"id":"preset-columbia","title":"Columbia","type":"SSH","host":"columbia.home:22","meta":{"User":"pi","Authentication":"Password"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizePresetConfigRequest(controller, request)
+	request.Header.Set(preserveHiddenPresetPasswordsHeader, "yes")
+	request.Header.Set(clearHiddenPresetPasswordsHeader, "preset-atlantis")
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Put(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Put returned error: %v", err)
+	}
+
+	live := controller.commonCfg.CurrentPresets()
+	liveByID := make(map[string]configuration.Preset, len(live))
+	for _, preset := range live {
+		liveByID[preset.ID] = preset
+	}
+
+	if _, ok := liveByID["preset-atlantis"].SecretMeta[configuration.PresetMetaPassword]; ok {
+		t.Fatal("preset-atlantis still contains hidden Password after clear header")
+	}
+	if _, ok := liveByID["preset-atlantis"].Meta[configuration.PresetMetaPassword]; ok {
+		t.Fatal("preset-atlantis still contains plaintext Password after clear header")
+	}
+	if _, ok := liveByID["preset-atlantis"].Meta[configuration.PresetMetaEncryptedPassword]; ok {
+		t.Fatal("preset-atlantis still contains Encrypted Password after clear header")
+	}
+	if _, ok := liveByID["preset-columbia"].SecretMeta[configuration.PresetMetaPassword]; !ok {
+		t.Fatal("preset-columbia lost hidden Password when clear-header targeted another preset")
+	}
+
+	_, reloaded, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("CustomFile returned error: %v", err)
+	}
+	reloadedByID := make(map[string]configuration.Preset, len(reloaded.Presets))
+	for _, preset := range reloaded.Presets {
+		reloadedByID[preset.ID] = preset
+	}
+	if _, ok := reloadedByID["preset-atlantis"].Meta[configuration.PresetMetaPassword]; ok {
+		t.Fatal("persisted preset-atlantis contains plaintext Password after clear header")
+	}
+	if _, ok := reloadedByID["preset-atlantis"].Meta[configuration.PresetMetaEncryptedPassword]; ok {
+		t.Fatal("persisted preset-atlantis still contains Encrypted Password after clear header")
+	}
+	if _, ok := reloadedByID["preset-columbia"].Meta[configuration.PresetMetaPassword]; !ok {
+		t.Fatal("persisted preset-columbia lost plaintext Password when another preset was cleared")
 	}
 }
 

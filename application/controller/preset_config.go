@@ -17,6 +17,7 @@ import (
 
 const (
 	preserveHiddenPresetPasswordsHeader = "X-Preserve-Hidden-Preset-Passwords"
+	clearHiddenPresetPasswordsHeader    = "X-Clear-Hidden-Preset-Passwords"
 	presetFingerprintIDHeader           = "X-Preset-Fingerprint-ID"
 	maxPresetConfigRequestBytes         = 256 * 1024
 	maxPresetConfigPresets              = 512
@@ -75,6 +76,7 @@ func (p presetConfig) Put(
 	if err != nil {
 		return err
 	}
+	targetPresetID := strings.TrimSpace(r.Header.Get(presetFingerprintIDHeader))
 	if !p.commonCfg.PresetConfigWritable() {
 		return NewError(
 			http.StatusConflict,
@@ -95,10 +97,18 @@ func (p presetConfig) Put(
 	defer p.unlockPresetUpdates()
 
 	currentPresets := p.commonCfg.CurrentPresets()
-	fingerprintOnly := r.Header.Get(preserveHiddenPresetPasswordsHeader) == "yes"
+	clearPresetIDs := parsePresetIDSet(r.Header.Get(clearHiddenPresetPasswordsHeader))
+	fingerprintOnly := r.Header.Get(preserveHiddenPresetPasswordsHeader) == "yes" && targetPresetID != ""
 	var presets []configuration.Preset
+	clearPresetIDsForPersistence := clearPresetIDs
 	if fingerprintOnly {
-		targetPresetID := strings.TrimSpace(r.Header.Get(presetFingerprintIDHeader))
+		if len(clearPresetIDs) > 0 {
+			return NewError(
+				http.StatusBadRequest,
+				"cannot clear hidden passwords on fingerprint-only preset save",
+			)
+		}
+		clearPresetIDsForPersistence = nil
 		var err error
 		if isCompactFingerprintRequest(request, targetPresetID) {
 			presets, err = applyCompactFingerprintUpdate(
@@ -114,18 +124,24 @@ func (p presetConfig) Put(
 				return NewError(http.StatusBadRequest, err.Error())
 			}
 			presets = presetConfigRequestPresets(request)
-			presets = preserveHiddenPresetPasswords(presets, currentPresets)
+			presets = preserveHiddenPresetPasswordsExcept(
+				presets,
+				currentPresets,
+				clearPresetIDs,
+			)
 		}
 		presets, err = p.commands.Reconfigure(presets)
 		if err != nil {
 			return NewError(http.StatusBadRequest, err.Error())
 		}
-		if err := validateFingerprintOnlyPresetUpdate(
-			presets,
-			currentPresets,
-			targetPresetID,
-		); err != nil {
-			return NewError(http.StatusBadRequest, err.Error())
+		if targetPresetID != "" {
+			if err := validateFingerprintOnlyPresetUpdate(
+				presets,
+				currentPresets,
+				targetPresetID,
+			); err != nil {
+				return NewError(http.StatusBadRequest, err.Error())
+			}
 		}
 	} else if role < authRoleAdmin {
 		return NewError(
@@ -137,7 +153,11 @@ func (p presetConfig) Put(
 			return NewError(http.StatusBadRequest, err.Error())
 		}
 		presets = presetConfigRequestPresets(request)
-		presets = preserveHiddenPresetPasswords(presets, currentPresets)
+		presets = preserveHiddenPresetPasswordsExcept(
+			presets,
+			currentPresets,
+			clearPresetIDs,
+		)
 	}
 	normalized, _, err := configuration.EnsurePresetIDs(presets)
 	if err != nil {
@@ -155,6 +175,7 @@ func (p presetConfig) Put(
 		p.commonCfg.SourceFile,
 		normalized,
 		currentPresets,
+		clearPresetIDsForPersistence,
 	); err != nil {
 		return NewError(http.StatusInternalServerError, err.Error())
 	}
@@ -395,9 +416,29 @@ func samePresetMetaExceptFingerprint(
 	return true
 }
 
+func parsePresetIDSet(raw string) map[string]struct{} {
+	idSet := make(map[string]struct{})
+	for _, presetID := range strings.Split(raw, ",") {
+		presetID = strings.TrimSpace(presetID)
+		if presetID == "" {
+			continue
+		}
+		idSet[presetID] = struct{}{}
+	}
+	return idSet
+}
+
 func preserveHiddenPresetPasswords(
 	presets []configuration.Preset,
 	current []configuration.Preset,
+) []configuration.Preset {
+	return preserveHiddenPresetPasswordsExcept(presets, current, nil)
+}
+
+func preserveHiddenPresetPasswordsExcept(
+	presets []configuration.Preset,
+	current []configuration.Preset,
+	clearPresetIDs map[string]struct{},
 ) []configuration.Preset {
 	currentByID := make(map[string]configuration.Preset, len(current))
 	for _, preset := range current {
@@ -412,6 +453,9 @@ func preserveHiddenPresetPasswords(
 		}
 		if preset.Meta["Authentication"] != "Password" ||
 			currentPreset.Meta["Authentication"] != "Password" {
+			continue
+		}
+		if _, clear := clearPresetIDs[preset.ID]; clear {
 			continue
 		}
 		if hasPresetPasswordMeta(preset.Meta) {

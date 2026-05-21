@@ -25,6 +25,7 @@ const presetItem = {
   host: "",
   tab_color: "",
   meta: {},
+  has_saved_password: false,
 };
 
 /**
@@ -196,6 +197,15 @@ export class Preset {
     } catch (e) {
       return defaultValue;
     }
+  }
+
+  /**
+   * Return whether this preset has a hidden saved password.
+   *
+   * @returns {boolean}
+   */
+  hasSavedPassword() {
+    return this.preset.has_saved_password;
   }
 
   /**
