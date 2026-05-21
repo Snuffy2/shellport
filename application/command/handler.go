@@ -314,7 +314,7 @@ func (e *Handler) handleClose(h Header, d byte, _ log.Logger) error {
 	}
 
 	if st.closing() {
-		return nil
+		return e.sender.signal(hhd, nil, e.rBuf[:])
 	}
 
 	cErr := st.close()
