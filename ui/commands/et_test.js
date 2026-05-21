@@ -115,6 +115,76 @@ describe("ET Command", () => {
     assert.throws(() => commandField.verify("et --flag"), /fixed/);
   });
 
+  it("builds new remote requests without preset-only metadata", () => {
+    let commandHandler = null;
+    let initialSends = [];
+    const streams = {
+      request(_commandId, builder) {
+        commandHandler = builder({ close() {} });
+
+        commandHandler.run({
+          send(payload) {
+            initialSends.push(Uint8Array.from(payload));
+          },
+        });
+      },
+    };
+    const controls = {
+      get(type) {
+        assert.strictEqual(type, "ET");
+
+        return {};
+      },
+    };
+    const wizard = new et.Command().wizard(
+      new command.Info(new et.Command()),
+      null,
+      null,
+      [],
+      streams,
+      { resolve() {} },
+      controls,
+      { save() {} },
+    );
+    const parsedHost = address.parseHostPort("example.com:22", 22);
+    const user = new strings.String(new TextEncoder().encode("alice")).buffer();
+    const addr = new address.Address(
+      parsedHost.type,
+      parsedHost.address,
+      parsedHost.port,
+    ).buffer();
+    const etServerPort = new strings.String(
+      new TextEncoder().encode("2022"),
+    ).buffer();
+    const etCommand = new strings.String(
+      new TextEncoder().encode("et"),
+    ).buffer();
+    const expected = new Uint8Array(
+      user.length + addr.length + 1 + etServerPort.length + etCommand.length,
+    );
+
+    wizard.stepInitialPrompt().data().respond({
+      user: "alice",
+      host: "example.com:22",
+      authentication: "Private Key",
+      encoding: "utf-8",
+      "et server port": "2022",
+      "et command": "et",
+    });
+
+    expected.set(user, 0);
+    expected.set(addr, user.length);
+    expected[user.length + addr.length] = 0x02;
+    expected.set(etServerPort, user.length + addr.length + 1);
+    expected.set(
+      etCommand,
+      user.length + addr.length + 1 + etServerPort.length,
+    );
+
+    assert.ok(commandHandler);
+    assert.deepStrictEqual(initialSends[0], expected);
+  });
+
   it("normalizes preset ET command values in the wizard", () => {
     const wizard = new et.Command().wizard(
       null,

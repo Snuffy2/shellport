@@ -107,10 +107,13 @@ export class Mosh {
         common.strToUint8Array(this.config.moshServer || DEFAULT_MOSH_SERVER),
       ),
       moshServerBuf = moshServer.buffer();
-    const presetID = new strings.String(
-        common.strToUint8Array(this.config.presetID || ""),
-      ),
-      presetIDBuf = presetID.buffer();
+    let presetIDBuf = new Uint8Array(0);
+
+    if (this.config.presetID) {
+      presetIDBuf = new strings.String(
+        common.strToUint8Array(this.config.presetID),
+      ).buffer();
+    }
 
     let data = new Uint8Array(
       userBuf.length +
@@ -124,10 +127,12 @@ export class Mosh {
     data.set(addrBuf, userBuf.length);
     data.set(authMethod, userBuf.length + addrBuf.length);
     data.set(moshServerBuf, userBuf.length + addrBuf.length + 1);
-    data.set(
-      presetIDBuf,
-      userBuf.length + addrBuf.length + 1 + moshServerBuf.length,
-    );
+    if (presetIDBuf.length > 0) {
+      data.set(
+        presetIDBuf,
+        userBuf.length + addrBuf.length + 1 + moshServerBuf.length,
+      );
+    }
 
     initialSender.send(data);
   }
@@ -356,22 +361,6 @@ const initialFieldDef = {
       }
 
       return "Will start " + d;
-    },
-  },
-  Notice: {
-    name: "Notice",
-    description: "",
-    type: "textdata",
-    value:
-      "Mosh session is handled by the backend. Traffic will be decrypted " +
-      "on the backend server and then transmit back to your client.",
-    example: "",
-    readonly: false,
-    suggestions() {
-      return [];
-    },
-    verify() {
-      return "";
     },
   },
   Password: {
@@ -864,7 +853,6 @@ class Wizard {
           { name: "Authentication" },
           { name: "Encoding" },
           { name: "Mosh Server" },
-          { name: "Notice" },
         ],
         self.preset,
         () => {},
