@@ -356,17 +356,6 @@ body {
   color: #fff;
 }
 
-.window.window1 .window-close {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  border-color: var(--shellport-royal-blue);
-  cursor: pointer;
-}
-.window.window1 .window-close::after {
-  border-color: var(--shellport-royal-blue);
-}
-
 /* Form1 */
 .form1 {
   text-wrap: wrap;

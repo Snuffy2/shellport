@@ -70,6 +70,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
         <p class="secondary" v-html="shellPortTag"></p>
         <p id="home-content-source" class="secondary">
+          <span id="home-content-version">Version {{ version }}</span>
           <a :href="sourceURL" target="_blank" rel="noopener noreferrer">
             View source code
           </a>
@@ -140,7 +141,7 @@ import * as home_socket from "./home_socketctl.js";
 import * as presets from "./commands/presets.js";
 import { buildPresetExecution } from "./home_preset_execution.js";
 
-/* global __SHELLPORT_SOURCE_URL__ */
+/* global __SHELLPORT_SOURCE_URL__, __SHELLPORT_VERSION__ */
 
 const BACKEND_CONNECT_ERROR =
   "Unable to connect to the ShellPort backend server: ";
@@ -310,6 +311,7 @@ export default {
         tabs: [],
       },
       sourceURL: __SHELLPORT_SOURCE_URL__,
+      version: __SHELLPORT_VERSION__,
     };
   },
   computed: {
@@ -360,6 +362,8 @@ export default {
     this.ticker = setInterval(() => {
       this.tick();
     }, 1000);
+
+    this.startConnectionMonitor();
 
     if (this.query.length > 1 && this.query.indexOf("+") === 0) {
       this.connectLaunch(this.query.slice(1, this.query.length), (success) => {
@@ -431,31 +435,52 @@ export default {
       }
     },
     /**
-     * Closes all overlays and opens the connection status/delay window.
+     * Toggles the connection status/delay window and closes other overlays.
      *
      * @returns {void}
      */
     showDelayWindow() {
+      const display = !this.windows.delay;
+
       this.closeAllWindow();
-      this.windows.delay = true;
+      this.windows.delay = display;
     },
     /**
-     * Closes all overlays and opens the connection wizard window.
+     * Toggles the connection wizard window and closes other overlays.
      *
      * @returns {void}
      */
     showConnectWindow() {
+      const display = !this.windows.connect;
+
       this.closeAllWindow();
-      this.windows.connect = true;
+      this.windows.connect = display;
     },
     /**
-     * Closes all overlays and opens the tab list window.
+     * Toggles the tab list window and closes other overlays.
      *
      * @returns {void}
      */
     showTabsWindow() {
+      const display = !this.windows.tabs;
+
       this.closeAllWindow();
-      this.windows.tabs = true;
+      this.windows.tabs = display;
+    },
+    /**
+     * Opens the backend stream so heartbeat delay is visible before a remote
+     * session is started.
+     *
+     * @returns {void}
+     */
+    startConnectionMonitor() {
+      if (this.connection === null) {
+        return;
+      }
+
+      this.connection.get(this.socket).catch((e) => {
+        process.env.NODE_ENV === "development" && console.trace(e);
+      });
     },
     /**
      * Acquires the backend stream and calls `run` with it, calling `end` in all
@@ -840,6 +865,10 @@ export default {
 
       this.tab.tabs.splice(index, 1);
       this.tab.current = isLast ? this.tab.tabs.length - 1 : index;
+
+      if (this.tab.tabs.length === 0) {
+        this.windows.tabs = false;
+      }
     },
     /**
      * Switches the active session tab to `to`.

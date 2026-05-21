@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import vue from "@vitejs/plugin-vue";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,7 @@ const distDir = path.join(repoRoot, ".tmp", "dist");
 const backendTarget = "http://127.0.0.1:8182";
 const publicDir = path.join(uiRoot, "public");
 const defaultSourceURL = "https://github.com/Snuffy2/shellport";
+const versionFilePath = path.join(repoRoot, ".shellport-version");
 
 /**
  * Resolve and validate the source URL embedded into the frontend.
@@ -46,6 +48,68 @@ export function resolveSourceURL(env = process.env) {
 }
 
 const sourceURL = resolveSourceURL();
+
+/**
+ * Resolve the version embedded into the frontend.
+ *
+ * @param {NodeJS.ProcessEnv} env Environment variables.
+ * @param {{
+ *   execFileSync?: typeof execFileSync,
+ *   readFileSync?: typeof fs.readFileSync,
+ *   versionFilePath?: string,
+ * }} options Optional test seams for version sources.
+ * @returns {string} Existing environment version, Git description, or dev.
+ */
+export function resolveVersion(env = process.env, options = {}) {
+  const cleanVersion = (value) => {
+    const version = value.trim();
+
+    return version.length > 0 ? version : null;
+  };
+
+  if (env.SHELLPORT_VERSION) {
+    const version = cleanVersion(env.SHELLPORT_VERSION);
+    if (version) {
+      return version;
+    }
+  }
+
+  const runGit = options.execFileSync ?? execFileSync;
+  try {
+    const version = cleanVersion(
+      runGit(
+        "git",
+        ["describe", "--always", "--dirty=*", "--tag"],
+        {
+          cwd: repoRoot,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      ),
+    );
+    if (version) {
+      return version;
+    }
+  } catch {
+    // Fall through to the source-tree version file used by archive deploys.
+  }
+
+  const readVersionFile = options.readFileSync ?? fs.readFileSync;
+  try {
+    const version = cleanVersion(
+      readVersionFile(options.versionFilePath ?? versionFilePath, "utf8"),
+    );
+    if (version) {
+      return version;
+    }
+  } catch {
+    // Fall through to the development fallback.
+  }
+
+  return "dev";
+}
+
+const version = resolveVersion();
 
 const copiedRootFiles = [
   "README.md",
@@ -352,6 +416,7 @@ export default defineConfig(
       __VUE_PROD_DEVTOOLS__: JSON.stringify(false),
       __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false),
       __SHELLPORT_SOURCE_URL__: JSON.stringify(sourceURL),
+      __SHELLPORT_VERSION__: JSON.stringify(version),
       "process.env.NODE_ENV": JSON.stringify(mode),
     },
     build: {

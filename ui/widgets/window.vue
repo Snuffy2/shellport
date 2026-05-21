@@ -13,12 +13,6 @@ SPDX-License-Identifier: AGPL-3.0-only
     <div class="window-frame">
       <slot />
     </div>
-
-    <span
-      :id="id + '-close'"
-      class="window-close icon icon-close1"
-      @click="hide"
-    />
   </div>
 </template>
 
@@ -27,10 +21,10 @@ SPDX-License-Identifier: AGPL-3.0-only
  * @fileoverview Generic floating overlay window widget. Renders a `.window1`
  * div that toggles the `display` and `flashClass` CSS classes based on an
  * internal `displaying` boolean. Exposes `show()` / `hide()` methods driven by
- * the `display` prop watcher and a close icon that calls `hide()` directly.
+ * the `display` prop watcher.
  *
  * All overlay panels (connect, status, tab-window) wrap their content in this
- * component to get consistent show/hide behaviour and a styled close button.
+ * component to get consistent show/hide behaviour.
  *
  * @prop {string}  id         - HTML id applied to the root element.
  * @prop {boolean} display    - External signal to show (true) or hide (false) the window.
@@ -86,7 +80,6 @@ export default {
     },
     /**
      * Hides the overlay and emits `display` with `false`.
-     * Also called when the user clicks the built-in close icon.
      *
      * @emits display - Payload: `{false}`.
      * @returns {void}

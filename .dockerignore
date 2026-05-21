@@ -10,6 +10,7 @@
 !*.mod
 !Dockerfile
 !docker-entrypoint.sh
+!.shellport-version
 !*.json
 !*.js
 !*.mjs
