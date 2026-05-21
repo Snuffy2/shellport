@@ -2,9 +2,38 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { triggerConsoleActive } from "./screen_console_activation.js";
 
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
+
+function readProjectFile(relativePath) {
+  return readFileSync(path.join(repoRoot, relativePath), "utf8");
+}
+
 describe("screen console", function () {
+  test("uses the patched JetBrainsMono Nerd Font for terminal rendering", function () {
+    const vueSource = readProjectFile("ui/widgets/screen_console.vue");
+    const cssSource = readProjectFile("ui/widgets/screen_console.css");
+
+    expect(cssSource).toContain("JetBrainsMono Nerd Font");
+    expect(cssSource).toContain("JetBrainsMonoNerdFontMono-Regular.ttf");
+    expect(cssSource).toContain("JetBrainsMonoNerdFontMono-Bold.ttf");
+    expect(vueSource).toContain(
+      'const termTypeFace = "JetBrainsMono Nerd Font"',
+    );
+    expect(vueSource).toContain('const termTypeFaces = `"${termTypeFace}"`');
+    expect(vueSource).toContain('replace(/^"|"$/gu, "")');
+    expect(vueSource).toContain("lineHeight: 1.35");
+    expect(vueSource).toContain("letterSpacing: 0");
+    expect(vueSource).not.toContain("Hack, PureNerdFont");
+  });
+
   test("waits for tab visibility DOM updates and a paint frame before refreshing the terminal", async function () {
     const calls = [];
 

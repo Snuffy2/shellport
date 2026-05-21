@@ -45,8 +45,11 @@ jobs:
       - name: Update package-lock.json
         run: npm install --package-lock-only --ignore-scripts
 
+      - name: Update bundled JetBrainsMono Nerd Font
+        run: npm run update:fonts
+
       - name: Commit and Push
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore: regenerate dependency lockfiles"
-          file_pattern: go.mod go.sum package-lock.json
+          file_pattern: go.mod go.sum package-lock.json ui/fonts/JetBrainsMonoNerdFont
