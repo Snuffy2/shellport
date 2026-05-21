@@ -10,6 +10,7 @@ import viteConfig from "../../vite.config.js";
 import {
   resolveDevAssetRoute,
   resolveSourceURL,
+  resolveVersion,
   renderDevShellHtml,
   rewriteDevShellScriptPaths,
 } from "../../vite.config.js";
@@ -92,13 +93,24 @@ describe("vite config cleanup guards", () => {
     );
   });
 
+  test("vite config exposes the resolved version to the frontend", () => {
+    const config = viteConfig({ command: "build", mode: "test" });
+
+    expect(resolveVersion({ SHELLPORT_VERSION: "v1.2.3" })).toBe("v1.2.3");
+    expect(config.define.__SHELLPORT_VERSION__).toBe(
+      JSON.stringify(resolveVersion()),
+    );
+  });
+
   test("home screen binds the source link to the configured frontend value", () => {
     const connectVue = readSource(connectVuePath);
     const homeVue = readSource(homeVuePath);
 
+    expect(homeVue).toContain("Version {{ version }}");
     expect(homeVue).toContain(':href="sourceURL"');
     expect(homeVue).toContain('rel="noopener noreferrer"');
     expect(homeVue).toContain("sourceURL: __SHELLPORT_SOURCE_URL__");
+    expect(homeVue).toContain("version: __SHELLPORT_VERSION__");
     expect(connectVue).not.toContain("connect-warning");
     expect(connectVue).not.toContain(
       'href="https://github.com/Snuffy2/shellport"',

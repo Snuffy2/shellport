@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import vue from "@vitejs/plugin-vue";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,6 +47,34 @@ export function resolveSourceURL(env = process.env) {
 }
 
 const sourceURL = resolveSourceURL();
+
+/**
+ * Resolve the version embedded into the frontend.
+ *
+ * @param {NodeJS.ProcessEnv} env Environment variables.
+ * @returns {string} Existing environment version, Git description, or dev.
+ */
+export function resolveVersion(env = process.env) {
+  if (env.SHELLPORT_VERSION) {
+    return env.SHELLPORT_VERSION;
+  }
+
+  try {
+    return execFileSync(
+      "git",
+      ["describe", "--always", "--dirty=*", "--tag"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    ).trim();
+  } catch {
+    return "dev";
+  }
+}
+
+const version = resolveVersion();
 
 const copiedRootFiles = [
   "README.md",
@@ -352,6 +381,7 @@ export default defineConfig(
       __VUE_PROD_DEVTOOLS__: JSON.stringify(false),
       __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false),
       __SHELLPORT_SOURCE_URL__: JSON.stringify(sourceURL),
+      __SHELLPORT_VERSION__: JSON.stringify(version),
       "process.env.NODE_ENV": JSON.stringify(mode),
     },
     build: {

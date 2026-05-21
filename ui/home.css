@@ -391,6 +391,10 @@
   color: #fff;
 }
 
+#home-content-version {
+  margin-right: 12px;
+}
+
 #home-content hr {
   height: 2px;
   background: #3c3c3c;

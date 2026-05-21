@@ -305,6 +305,7 @@ export class Socket {
     this.dial = new Dial(address, timeout, privateKey);
     this.echoInterval = echoInterval;
     this.streamHandler = null;
+    this.streamHandlerPromise = null;
   }
 
   /**
@@ -322,11 +323,36 @@ export class Socket {
    * @throws {Error} Re-throws any dial failure after calling `callbacks.failed`.
    */
   async get(callbacks) {
-    let self = this;
-
     if (this.streamHandler) {
       return this.streamHandler;
     }
+
+    if (this.streamHandlerPromise) {
+      return this.streamHandlerPromise;
+    }
+
+    this.streamHandlerPromise = this.open(callbacks);
+
+    try {
+      return await this.streamHandlerPromise;
+    } finally {
+      this.streamHandlerPromise = null;
+    }
+  }
+
+  /**
+   * Opens a new backend WebSocket stream and starts its heartbeat service.
+   *
+   * @private
+   * @param {{ connecting: function(): void, connected: function(): void,
+   *   failed: function(Error): void, close: function(Error|null): void,
+   *   traffic: function(number, number): void,
+   *   echo: function(number): void }} callbacks - Lifecycle and traffic callbacks.
+   * @returns {Promise<streams.Streams>} The active stream manager.
+   * @throws {Error} Re-throws any dial failure after calling `callbacks.failed`.
+   */
+  async open(callbacks) {
+    let self = this;
 
     callbacks.connecting();
 
