@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-ShellPort is browser-based remote shell access over SSH, Telnet, and Mosh. The
+ShellPort is browser-based remote shell access over SSH, Telnet, ET, and Mosh. The
 repository combines:
 
 - A Go backend in `shellport.go` and `application/`.

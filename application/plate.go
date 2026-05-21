@@ -11,7 +11,7 @@ const (
 	// Name is the short application name.
 	Name = "ShellPort"
 	// FullName is the human-readable full application name.
-	FullName = "ShellPort — browser-based remote shell access over SSH, Telnet, and Mosh"
+	FullName = "ShellPort — browser-based remote shell access over SSH, Telnet, ET, and Mosh"
 	// Author identifies the fork maintainer.
 	Author = "Snuffy2"
 	// URL is the canonical project URL.

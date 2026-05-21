@@ -1,6 +1,6 @@
 # ShellPort
 
-Browser-based remote shell access over SSH, Telnet, Mosh, and ET
+Browser-based remote shell access over SSH, Telnet, Mosh, and Eternal Terminal (ET)
 
 ![Screenshot](screenshot.png)
 
@@ -68,11 +68,11 @@ $rng.GetBytes($bytes)
 [Convert]::ToBase64String($bytes)
 ```
 
+## Mosh and Eternal Terminal (ET)
+
 Mosh support is available with SSH used for bootstrap only. The browser connection to ShellPort still uses WebSocket, while Mosh data flows over UDP between the backend container and the remote host. Remote hosts need `mosh-server` installed, SOCKS5 is not supported for Mosh, the backend-to-host Mosh leg is IPv4-only, and terminal encoding is fixed to UTF-8.
 
 ET support is available for private-key authentication. ShellPort verifies the SSH host fingerprint and private key before launching the local `et` client, then proxies the ET client PTY over the existing browser WebSocket. ET uses the remote `etserver` TCP port, defaulting to `2022`. SOCKS5 proxying and password authentication are not supported for ET v1. Closing the ShellPort browser session terminates the backend `et` client process, matching the current Mosh-style session lifetime.
-
-The Docker image bundles the ET client from `MisterTea/EternalTerminal` commit `7f566c0f3504e32554d98e71e573976255af91fb` under Apache-2.0. The runtime `/SOURCE.md` includes both ShellPort and ET source references, and the bundled ET attribution is also covered by the Docker image license metadata.
 
 <details>
 <summary><h2>Running From Source</h2></summary>
