@@ -678,6 +678,7 @@ func (d *etClient) buildAuthMethod(
 						if signerErr != nil {
 							return nil, signerErr
 						}
+						d.cachePrivateKey([]byte(credential))
 						return []ssh.Signer{signer}, nil
 					}
 
