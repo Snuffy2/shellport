@@ -201,6 +201,46 @@ func TestPresetConfigGetMarksHiddenSavedPassword(t *testing.T) {
 	}
 }
 
+func TestPresetConfigGetDoesNotMigratePrivateKeysForUserRole(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "shellport.conf.json")
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"Authentication": "Private Key",
+				"Private Key":    "INLINE PRIVATE KEY DATA",
+			},
+		},
+	})
+	controller := newAdminTestPresetConfig(t, configPath)
+	request := httptest.NewRequest(http.MethodGet, "/shellport/config/presets", nil)
+	authorizePresetConfigRequest(controller, request)
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Get(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+
+	var response presetConfigResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("json Decode returned error: %v", err)
+	}
+	if response.Presets[0].Meta["Private Key"] != "INLINE PRIVATE KEY DATA" {
+		t.Fatal("non-admin GET migrated private key metadata")
+	}
+	if len(response.PrivateKeyFiles) != 0 {
+		t.Fatalf("PrivateKeyFiles count = %d, want 0", len(response.PrivateKeyFiles))
+	}
+	if _, err := os.Stat(filepath.Join(configDir, "private_keys")); !os.IsNotExist(err) {
+		t.Fatalf("private_keys directory stat error = %v, want not exist", err)
+	}
+}
+
 func TestPresetConfigPutAddsMissingIDsAndPersists(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, []map[string]any{

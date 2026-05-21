@@ -101,6 +101,9 @@ func presetPrivateKeyCredential(
 		if err != nil {
 			return "", false
 		}
+		if parsed == "" {
+			return "", false
+		}
 		return parsed, true
 	}
 	return "", false

@@ -152,3 +152,62 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 		t.Fatal("encrypted password leaked into socket preset metadata")
 	}
 }
+
+func TestSocketAccessConfigurationListsPrivateKeyFilesOnlyWhenManageable(
+	t *testing.T,
+) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "shellport.conf.json")
+	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile config returned error: %v", err)
+	}
+	keyDir := filepath.Join(configDir, "private_keys")
+	if err := os.Mkdir(keyDir, 0o700); err != nil {
+		t.Fatalf("os.Mkdir keyDir returned error: %v", err)
+	}
+	keyPath := filepath.Join(keyDir, "atlantis.key")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+
+	cfg := newSocketAccessConfiguration(
+		nil,
+		"",
+		"",
+		false,
+		newPresetManagementPolicy(configuration.Common{
+			SourceFile:             configPath,
+			OnlyAllowPresetRemotes: true,
+		}, authRoleAdmin),
+	)
+	cfg = socketAccessConfigurationWithPrivateKeyFiles(cfg, configuration.Common{
+		SourceFile:             configPath,
+		OnlyAllowPresetRemotes: true,
+	})
+	if len(cfg.PrivateKeyFiles) != 0 {
+		t.Fatalf("blocked policy PrivateKeyFiles count = %d, want 0", len(cfg.PrivateKeyFiles))
+	}
+
+	cfg = newSocketAccessConfiguration(
+		nil,
+		"",
+		"",
+		false,
+		newPresetManagementPolicy(configuration.Common{
+			SourceFile: configPath,
+		}, authRoleAdmin),
+	)
+	cfg = socketAccessConfigurationWithPrivateKeyFiles(cfg, configuration.Common{
+		SourceFile: configPath,
+	})
+	if len(cfg.PrivateKeyFiles) != 1 {
+		t.Fatalf("manageable policy PrivateKeyFiles count = %d, want 1", len(cfg.PrivateKeyFiles))
+	}
+	resolvedKeyPath, err := filepath.EvalSymlinks(keyPath)
+	if err != nil {
+		t.Fatalf("filepath.EvalSymlinks returned error: %v", err)
+	}
+	if cfg.PrivateKeyFiles[0] != "file://"+resolvedKeyPath {
+		t.Fatalf("PrivateKeyFiles[0] = %q, want file://%s", cfg.PrivateKeyFiles[0], resolvedKeyPath)
+	}
+}

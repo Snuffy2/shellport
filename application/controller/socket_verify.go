@@ -303,6 +303,10 @@ func socketAccessConfigurationWithPrivateKeyFiles(
 	accessConfig socketAccessConfiguration,
 	commonCfg configuration.Common,
 ) socketAccessConfiguration {
+	if !accessConfig.PresetManagement.CanManage {
+		accessConfig.PrivateKeyFiles = []string{}
+		return accessConfig
+	}
 	files, err := configuration.ListPresetPrivateKeyFiles(commonCfg.SourceFile)
 	if err != nil {
 		accessConfig.PrivateKeyFiles = []string{}

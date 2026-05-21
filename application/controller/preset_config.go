@@ -61,16 +61,21 @@ func (p presetConfig) Get(
 	r *http.Request,
 	l log.Logger,
 ) error {
-	if _, err := p.requireAuth(r); err != nil {
+	role, err := p.requireAuth(r)
+	if err != nil {
 		return err
 	}
-	p.lockPresetUpdates()
-	defer p.unlockPresetUpdates()
-	presets, err := p.migrateCurrentPresetPrivateKeys()
-	if err != nil {
-		return NewError(http.StatusInternalServerError, err.Error())
+	presets := p.commonCfg.CurrentPresets()
+	if role >= authRoleAdmin {
+		p.lockPresetUpdates()
+		defer p.unlockPresetUpdates()
+		var err error
+		presets, err = p.migrateCurrentPresetPrivateKeys()
+		if err != nil {
+			return NewError(http.StatusInternalServerError, err.Error())
+		}
 	}
-	return p.writePresets(w, presets)
+	return p.writePresets(w, presets, newPresetManagementPolicy(p.commonCfg, role))
 }
 
 // Put replaces the full preset list, adding missing IDs and persisting the file.
@@ -201,7 +206,11 @@ func (p presetConfig) Put(
 	if p.commonCfg.PresetRepository != nil {
 		p.commonCfg.PresetRepository.Replace(normalized)
 	}
-	return p.writePresets(w, normalized)
+	return p.writePresets(
+		w,
+		normalized,
+		newPresetManagementPolicy(p.commonCfg, role),
+	)
 }
 
 func (p presetConfig) lockPresetUpdates() {
@@ -573,17 +582,21 @@ func (p presetConfig) requireAuth(r *http.Request) (authRole, error) {
 func (p presetConfig) writePresets(
 	w *ResponseWriter,
 	presets []configuration.Preset,
+	policy presetManagementPolicy,
 ) error {
 	w.Header().Add("Cache-Control", "no-store")
 	w.Header().Add("Pragma", "no-store")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	return json.NewEncoder(w).Encode(presetConfigResponse{
 		Presets:         newSocketAccessConfiguration(presets, "", "", false).Presets,
-		PrivateKeyFiles: p.privateKeyFiles(),
+		PrivateKeyFiles: p.privateKeyFiles(policy),
 	})
 }
 
-func (p presetConfig) privateKeyFiles() []string {
+func (p presetConfig) privateKeyFiles(policy presetManagementPolicy) []string {
+	if !policy.CanManage {
+		return []string{}
+	}
 	files, err := configuration.ListPresetPrivateKeyFiles(p.commonCfg.SourceFile)
 	if err != nil {
 		return []string{}

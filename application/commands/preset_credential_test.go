@@ -112,6 +112,38 @@ func TestPresetPrivateKeyCredentialPreservesEnvironmentReference(t *testing.T) {
 	}
 }
 
+func TestPresetPrivateKeyCredentialTreatsEmptyResolvedReferenceAsMissing(
+	t *testing.T,
+) {
+	credential, ok := presetPrivateKeyCredential(
+		command.Configuration{
+			Presets: []configuration.Preset{
+				{
+					ID:   "preset-atlantis",
+					Type: "SSH",
+					Host: "atlantis.home:22",
+					Meta: map[string]string{
+						"Authentication": "Private Key",
+						"User":           "pi",
+						"Private Key":    "environment://SHELLPORT_TEST_PRIVATE_KEY",
+					},
+				},
+			},
+		},
+		"SSH",
+		"preset-atlantis",
+		"pi",
+		"atlantis.home:22",
+	)
+
+	if ok {
+		t.Fatal("presetPrivateKeyCredential ok = true, want false")
+	}
+	if credential != "" {
+		t.Fatalf("credential = %q, want empty", credential)
+	}
+}
+
 func TestPresetPasswordCredentialUsesLivePresetRepository(t *testing.T) {
 	repo := configuration.NewPresetRepository([]configuration.Preset{
 		{
