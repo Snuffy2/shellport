@@ -116,7 +116,12 @@ export function buildEditorState(preset, defaults = {}) {
 
 export function cloneEditorState(state) {
   if (typeof structuredClone === "function") {
-    return structuredClone(state);
+    try {
+      return structuredClone(state);
+    } catch (_e) {
+      // Fall through to JSON cloning for browser runtimes that expose
+      // structuredClone but reject this plain editor payload.
+    }
   }
 
   return JSON.parse(JSON.stringify(state));

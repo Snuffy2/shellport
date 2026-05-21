@@ -86,6 +86,28 @@ describe("preset editor state", () => {
     }
   });
 
+  test("cloneEditorState falls back when structuredClone rejects state", () => {
+    const originalStructuredClone = globalThis.structuredClone;
+    try {
+      globalThis.structuredClone = () => {
+        throw new DOMException("cannot clone", "DataCloneError");
+      };
+      const state = {
+        id: "preset-atlantis",
+        title: "Atlantis",
+        meta: { User: "pi" },
+      };
+
+      const cloned = cloneEditorState(state);
+      cloned.meta.User = "root";
+
+      expect(cloned.meta.User).toBe("root");
+      expect(state.meta.User).toBe("pi");
+    } finally {
+      globalThis.structuredClone = originalStructuredClone;
+    }
+  });
+
   test("buildPresetConfigFromEditorState keeps replacement password only when entered", () => {
     const state = buildEditorState(null, {
       title: "Atlantis",

@@ -17,19 +17,21 @@ SPDX-License-Identifier: AGPL-3.0-only
             :key="pk"
             :class="{ disabled: presetDisabled(preset) }"
           >
-            <div class="lst-wrap" @click="selectPreset(preset)">
-              <div class="labels">
-                <span
-                  class="type"
-                  :style="'background-color: ' + preset.command.color()"
-                >
-                  {{ preset.command.name() }}
-                </span>
-              </div>
+            <div class="preset-row">
+              <div class="lst-wrap" @click="selectPreset(preset)">
+                <div class="labels">
+                  <span
+                    class="type"
+                    :style="'background-color: ' + preset.command.color()"
+                  >
+                    {{ preset.command.name() }}
+                  </span>
+                </div>
 
-              <h4 :title="preset.preset.title()">
-                {{ preset.preset.title() }}
-              </h4>
+                <h4 :title="preset.preset.title()">
+                  {{ preset.preset.title() }}
+                </h4>
+              </div>
 
               <button
                 v-if="canManagePresets"
@@ -37,8 +39,10 @@ SPDX-License-Identifier: AGPL-3.0-only
                 class="preset-edit-button icon icon-pencil"
                 aria-label="Edit preset"
                 title="Edit preset"
-                @click.stop="editPreset(preset)"
-              ></button>
+                @click="editPreset(preset)"
+              >
+                <span aria-hidden="true">&#9998;</span>
+              </button>
             </div>
           </li>
         </ul>

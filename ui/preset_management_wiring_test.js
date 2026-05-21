@@ -23,9 +23,11 @@ describe("preset management UI wiring", () => {
     expect(source).toContain("canManagePresets");
     expect(source).toContain('aria-label="Edit preset"');
     expect(source).toContain('title="Edit preset"');
-    expect(source).toContain('@click.stop="editPreset(preset)"');
+    expect(source).toContain('@click="editPreset(preset)"');
+    expect(source).toContain('<span aria-hidden="true">&#9998;</span>');
     expect(source).toContain('"edit-preset"');
-    expect(styles).toContain(".preset-edit-button.icon-pencil::before");
+    expect(styles).toContain(".preset-edit-button > span");
+    expect(styles).toContain("preset-row");
   });
 
   test("connect widget renders preset editor mode", () => {

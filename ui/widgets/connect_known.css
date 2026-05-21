@@ -55,17 +55,26 @@
   }
 }
 
-#connect-known-list-presets li > .lst-wrap {
+#connect-known-list-presets li > .preset-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 12px 10px 10px 0;
+}
+
+#connect-known-list-presets li > .preset-row > .lst-wrap {
   align-items: center;
   cursor: pointer;
   display: flex;
+  flex: 1;
   gap: 8px;
   border-radius: 0 3px 3px 3px;
-  margin: 12px 10px 10px 0;
+  margin: 0;
+  min-width: 0;
   padding: 10px;
 }
 
-#connect-known-list-presets li > .lst-wrap > .labels {
+#connect-known-list-presets li > .preset-row > .lst-wrap > .labels {
   position: static;
   top: 0;
   left: 0;
@@ -75,7 +84,7 @@
   white-space: nowrap;
 }
 
-#connect-known-list-presets li > .lst-wrap > .labels > .type {
+#connect-known-list-presets li > .preset-row > .lst-wrap > .labels > .type {
   display: inline-block;
   padding: 3px;
   background: var(--shellport-royal-blue);
@@ -83,7 +92,7 @@
   border-radius: 3px 3px 3px 0;
 }
 
-#connect-known-list-presets li > .lst-wrap > h4 {
+#connect-known-list-presets li > .preset-row > .lst-wrap > h4 {
   flex: 1;
   font-size: 1.3em;
   min-width: 0;
@@ -105,8 +114,7 @@
   width: 30px;
 }
 
-.preset-edit-button.icon-pencil::before {
-  content: "\270E";
+.preset-edit-button > span {
   font-size: 18px;
   line-height: 1;
 }
