@@ -626,14 +626,14 @@ class Wizard {
   stepWaitForEstablishWait(host) {
     return command.wait(
       "Connecting to " + host,
-      "Establishing connection with the remote host, may take a while",
+      "Establishing connection with the remote host",
     );
   }
 
   stepContinueWaitForEstablishWait() {
     return command.wait(
       "Connecting",
-      "Establishing connection with the remote host, may take a while",
+      "Establishing connection with the remote host",
     );
   }
 

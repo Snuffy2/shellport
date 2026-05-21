@@ -431,31 +431,37 @@ export default {
       }
     },
     /**
-     * Closes all overlays and opens the connection status/delay window.
+     * Toggles the connection status/delay window and closes other overlays.
      *
      * @returns {void}
      */
     showDelayWindow() {
+      const display = !this.windows.delay;
+
       this.closeAllWindow();
-      this.windows.delay = true;
+      this.windows.delay = display;
     },
     /**
-     * Closes all overlays and opens the connection wizard window.
+     * Toggles the connection wizard window and closes other overlays.
      *
      * @returns {void}
      */
     showConnectWindow() {
+      const display = !this.windows.connect;
+
       this.closeAllWindow();
-      this.windows.connect = true;
+      this.windows.connect = display;
     },
     /**
-     * Closes all overlays and opens the tab list window.
+     * Toggles the tab list window and closes other overlays.
      *
      * @returns {void}
      */
     showTabsWindow() {
+      const display = !this.windows.tabs;
+
       this.closeAllWindow();
-      this.windows.tabs = true;
+      this.windows.tabs = display;
     },
     /**
      * Acquires the backend stream and calls `run` with it, calling `end` in all

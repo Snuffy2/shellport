@@ -33,13 +33,6 @@
   display: block;
 }
 
-#tab-window-close {
-  cursor: pointer;
-  right: 10px;
-  top: 20px;
-  color: #999;
-}
-
 #tab-window h1 {
   padding: 15px 15px 0 15px;
   margin-bottom: 10px;

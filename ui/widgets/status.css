@@ -197,10 +197,3 @@
 #conn-status-traffic-chart-out > g {
   stroke: url(#conn-status-traffic-chart-out-background) #2a6;
 }
-
-#conn-status-close {
-  /* ID mainly use for document.getElementById */
-  cursor: pointer;
-  right: 10px;
-  top: 20px;
-}
