@@ -176,8 +176,8 @@
 }
 
 #home-hd-delay-icon.red {
-  color: #e11;
-  text-shadow: 0 0 3px #e11;
+  color: var(--shellport-royal-blue);
+  text-shadow: 0 0 3px var(--shellport-royal-blue);
 }
 
 #home-hd-delay-icon.flash {
@@ -205,33 +205,33 @@
 
 @keyframes home-hd-plus-icon-flash {
   0% {
-    background: #a56;
+    background: var(--shellport-royal-blue);
   }
 
   20% {
-    background: #5a7;
+    background: var(--shellport-royal-blue);
   }
 
   40% {
-    background: #96a;
+    background: var(--shellport-royal-blue);
   }
 
   60% {
-    background: #379;
+    background: var(--shellport-royal-blue);
   }
 
   80% {
-    background: #da0;
+    background: var(--shellport-royal-blue);
   }
 
   100% {
-    background: #a56;
+    background: var(--shellport-royal-blue);
   }
 }
 
 #home-hd-plus.working {
   color: #fff;
-  background: #a56;
+  background: var(--shellport-royal-blue);
   animation-name: home-hd-plus-icon-flash;
   animation-duration: 10s;
   animation-iteration-count: infinite;
@@ -291,7 +291,7 @@
 }
 
 #home-hd-tabs-tabs > li.error::after {
-  background: #d55;
+  background: var(--shellport-royal-blue);
   height: 2px;
 }
 
@@ -388,7 +388,7 @@
 }
 
 #home-content p a {
-  color: #e9a;
+  color: #fff;
 }
 
 #home-content hr {

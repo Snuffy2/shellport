@@ -5,7 +5,7 @@
  */
 
 body.landing {
-  background: #945;
+  background: #333;
 }
 
 #landing {
@@ -29,7 +29,7 @@ body.landing {
 
 #landing-message a {
   text-decoration: none;
-  color: #fab;
+  color: #fff;
 }
 
 #landing-message p {
@@ -38,7 +38,7 @@ body.landing {
 
 #landing-message p.copy {
   margin: 20px 0 10px 0;
-  color: #fab;
+  color: var(--shellport-royal-blue);
 }
 
 #landing-message p.copy.copy-first {
@@ -46,7 +46,7 @@ body.landing {
 }
 
 #landing-message p.copy a {
-  border: 1px solid #fab;
+  border: 1px solid #fff;
   display: inline-block;
   padding: 3px 7px;
   margin: 5px;
@@ -92,7 +92,7 @@ body.landing {
 
 #auth-content > h1 {
   margin-bottom: 20px;
-  color: #fab;
+  color: var(--shellport-royal-blue);
   font-size: 1.2em;
   font-weight: bold;
   text-transform: uppercase;

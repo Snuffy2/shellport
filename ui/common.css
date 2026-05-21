@@ -6,6 +6,10 @@
 
 @import "~normalize.css";
 
+:root {
+  --shellport-royal-blue: #4169e1;
+}
+
 html,
 body {
   height: 100%;
@@ -99,7 +103,7 @@ body {
   margin: 0;
   height: 100%;
   color: #aaa;
-  border-bottom: 1px solid #a56;
+  border-bottom: 1px solid var(--shellport-royal-blue);
   background: #333;
   padding: 0 10px;
   position: relative;
@@ -131,9 +135,9 @@ body {
 
 .tab2 > li.active {
   color: #fff;
-  background: #644;
+  background: #2b3f8c;
   margin-bottom: -1px;
-  border-color: #a56;
+  border-color: var(--shellport-royal-blue);
   border-style: solid;
   box-shadow: 0 -2px 2px #0002;
 }
@@ -245,7 +249,7 @@ body {
 
 .icon.icon-plus1 {
   color: #fff;
-  background: #a56;
+  background: var(--shellport-royal-blue);
 }
 
 .icon.icon-plus1::before {
@@ -270,7 +274,7 @@ body {
 .icon.icon-warning1::after {
   content: "!";
   font-weight: bold;
-  background: #e11;
+  background: var(--shellport-royal-blue);
   padding: 3px 13px;
 }
 
@@ -316,7 +320,7 @@ body {
 }
 
 .window.window1 {
-  background: #a56;
+  background: var(--shellport-royal-blue);
   box-shadow: 0 0 5px #0006;
   color: #fff;
   font-size: 1em;
@@ -334,7 +338,7 @@ body {
   content: " ";
   width: 10px;
   height: 10px;
-  background: #a56;
+  background: var(--shellport-royal-blue);
   transform: rotate(45deg);
 }
 
@@ -348,18 +352,18 @@ body {
   font-size: 0.9em;
   font-weight: bold;
   text-transform: uppercase;
-  color: #e9a;
+  color: var(--shellport-royal-blue);
 }
 
 .window.window1 .window-close {
   position: absolute;
   top: 10px;
   right: 10px;
-  border-color: #844;
+  border-color: var(--shellport-royal-blue);
   cursor: pointer;
 }
 .window.window1 .window-close::after {
-  border-color: #844;
+  border-color: var(--shellport-royal-blue);
 }
 
 /* Form1 */
@@ -500,7 +504,7 @@ body {
 }
 
 .form1 > fieldset .field > .message > a {
-  color: #e9a;
+  color: #fff;
 }
 
 .form1 > fieldset .field.highlight > input[type="text"],
@@ -555,7 +559,7 @@ body {
 .form1 > fieldset .field > input[type="radio"]:active,
 .form1 > fieldset .field > input[type="checkbox"]:focus,
 .form1 > fieldset .field > input[type="radio"]:focus {
-  outline: 1px solid #e9a;
+  outline: 1px solid var(--shellport-royal-blue);
 }
 
 .form1 > fieldset .field > input[type="text"]:focus,
@@ -568,27 +572,27 @@ body {
 .form1 > fieldset .field > select:focus,
 .form1 > fieldset .field > textarea:focus {
   background: #222;
-  border-bottom: 2px solid #e9a;
+  border-bottom: 2px solid var(--shellport-royal-blue);
 }
 
 .form1 > fieldset .field > button {
   padding: 8px 13px;
   font-weight: normal;
-  background: #c78;
-  border-color: #c78;
+  background: var(--shellport-royal-blue);
+  border-color: var(--shellport-royal-blue);
   border-width: 2px;
   border-style: solid;
 }
 
 .form1 > fieldset .field > button:focus,
 .form1 > fieldset .field > button:hover {
-  border-color: #a56;
-  background: #c78;
+  border-color: var(--shellport-royal-blue);
+  background: var(--shellport-royal-blue);
 }
 
 .form1 > fieldset .field > button:active {
-  background: #a56;
-  border-color: #a56;
+  background: var(--shellport-royal-blue);
+  border-color: var(--shellport-royal-blue);
 }
 
 .form1 > fieldset .field > button.secondary {

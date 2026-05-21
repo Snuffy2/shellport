@@ -14,7 +14,7 @@
 }
 
 body.app-error {
-  background: #944;
+  background: #333;
   color: #fff;
 }
 
@@ -50,7 +50,7 @@ body.app-error .app-error-message {
 }
 
 #app-loading-title {
-  color: #fab;
+  color: var(--shellport-royal-blue);
   font-size: 1.2em;
   font-weight: lighter;
   max-width: 500px;

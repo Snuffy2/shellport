@@ -26,7 +26,7 @@
 }
 
 #connect-new li h2 {
-  color: #e9a;
+  color: var(--shellport-royal-blue);
 }
 
 #connect-new li h2::before {

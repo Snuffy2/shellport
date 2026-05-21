@@ -92,7 +92,7 @@
 }
 
 #tab-window-tabs > li.error::after {
-  background: #d55;
+  background: var(--shellport-royal-blue);
   width: 5px;
 }
 
