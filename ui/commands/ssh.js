@@ -832,6 +832,7 @@ class Wizard {
       actions.push({
         text: "Save as preset",
         keepOpen: true,
+        validate: false,
         respond(r) {
           return self.saveAsPreset("SSH", r);
         },

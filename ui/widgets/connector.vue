@@ -1113,9 +1113,10 @@ export default {
       }
     },
     /**
-     * Runs a secondary prompt action after validating the current fields.
+     * Runs a secondary prompt action after optional field validation.
      *
-     * @param {{respond: function}} action - Prompt action descriptor.
+     * @param {{respond: function, validate?: boolean}} action - Prompt action
+     *   descriptor.
      * @returns {Promise<void>}
      */
     async runAction(action) {
@@ -1127,7 +1128,7 @@ export default {
         return;
       }
 
-      if (!this.verifyAll()) {
+      if (action.validate !== false && !this.verifyAll()) {
         return;
       }
 

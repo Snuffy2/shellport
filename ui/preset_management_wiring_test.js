@@ -58,9 +58,28 @@ describe("preset management UI wiring", () => {
   test("connector action buttons have visible separation", () => {
     const source = readProjectFile("ui/widgets/connector.vue");
     const styles = readProjectFile("ui/widgets/connector.css");
+    const presetEditorStyles = readProjectFile("ui/widgets/preset_editor.css");
 
     expect(source).toContain("connector-actions");
     expect(styles).toContain("#connector .connector-actions > button + button");
-    expect(styles).toContain("margin-left: 2px");
+    expect(styles).toContain("margin-left: 8px");
+    expect(presetEditorStyles).toContain("gap: 8px");
+  });
+
+  test("save as preset can open editor without required connection fields", () => {
+    const connectorSource = readProjectFile("ui/widgets/connector.vue");
+
+    expect(connectorSource).toContain("action.validate !== false");
+    for (const commandPath of [
+      "ui/commands/ssh.js",
+      "ui/commands/mosh.js",
+      "ui/commands/et.js",
+      "ui/commands/telnet.js",
+    ]) {
+      const source = readProjectFile(commandPath);
+
+      expect(source).toContain('text: "Save as preset"');
+      expect(source).toContain("validate: false");
+    }
   });
 });
