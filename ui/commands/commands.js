@@ -593,7 +593,7 @@ class Wizard {
     let n = await this.subs.subscribe();
 
     if (n.type() === NEXT_DONE) {
-      this.close();
+      this.closed = true;
       this.done(n);
     }
 

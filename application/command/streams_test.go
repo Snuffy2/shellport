@@ -253,9 +253,12 @@ func TestStreamCloseIsIdempotent(t *testing.T) {
 		t.Fatalf("expected duplicate close to be ignored, got %v", closeErr)
 	}
 
-	expected := []byte{byte(HeaderCompleted | streamID)}
+	expected := []byte{
+		byte(HeaderCompleted | streamID),
+		byte(HeaderCompleted | streamID),
+	}
 	if !bytes.Equal(output.Bytes(), expected) {
-		t.Fatalf("expected one completion frame %v, got %v", expected, output.Bytes())
+		t.Fatalf("expected duplicate close completion frames %v, got %v", expected, output.Bytes())
 	}
 
 	if machine.closeCalls != 1 {
@@ -266,13 +269,13 @@ func TestStreamCloseIsIdempotent(t *testing.T) {
 		t.Fatalf("expected release to succeed, got %v", releaseErr)
 	}
 
-	closeErr = handler.handleClose(header, streamID, log.NewDitch())
-	if !errors.Is(closeErr, ErrStreamsStreamClosingInactiveStream) {
-		t.Fatalf(
-			"expected released stream close to return %v, got %v",
-			ErrStreamsStreamClosingInactiveStream,
-			closeErr,
-		)
+	if closeErr = handler.handleClose(header, streamID, log.NewDitch()); closeErr != nil {
+		t.Fatalf("expected released stream close to be ignored, got %v", closeErr)
+	}
+
+	expected = append(expected, byte(HeaderCompleted|streamID))
+	if !bytes.Equal(output.Bytes(), expected) {
+		t.Fatalf("expected completion frames %v, got %v", expected, output.Bytes())
 	}
 
 	if machine.releaseCalls != 1 {

@@ -8,6 +8,7 @@ import * as common from "./common.js";
 import * as event from "./events.js";
 import Exception from "./exception.js";
 import * as presets from "./presets.js";
+import { ConnectionRequestLifecycle } from "./request_lifecycle.js";
 import * as strings from "./string.js";
 
 const _AUTHMETHOD_NONE = 0x00;
@@ -134,7 +135,7 @@ export class ET {
       );
     }
 
-    initialSender.send(data);
+    return initialSender.send(data);
   }
 
   /**
@@ -625,6 +626,10 @@ class Wizard {
     this.step = subs;
     this.controls = controls.get("ET");
     this.saveFingerprint = saveFingerprint;
+    this.requestLifecycle = new ConnectionRequestLifecycle(
+      this.step,
+      (title, message) => this.stepErrorDone(title, message),
+    );
   }
 
   run() {
@@ -640,12 +645,7 @@ class Wizard {
   }
 
   close() {
-    this.step.resolve(
-      this.stepErrorDone(
-        "Action cancelled",
-        "Action has been cancelled without reach any success",
-      ),
-    );
+    this.requestLifecycle.cancel();
   }
 
   stepErrorDone(title, message) {
@@ -712,6 +712,7 @@ class Wizard {
 
     return new ET(sender, config, {
       "initialization.failed"(hd) {
+        self.requestLifecycle.accepted();
         switch (hd.data()) {
           case SERVER_REQUEST_ERROR_BAD_USERNAME:
             self.step.resolve(
@@ -755,6 +756,7 @@ class Wizard {
         );
       },
       initialized() {
+        self.requestLifecycle.accepted();
         self.step.resolve(self.stepWaitForEstablishWait(configInput.host));
       },
       async "connect.failed"(rd) {
@@ -860,9 +862,9 @@ class Wizard {
       (r) => {
         self.hasStarted = true;
 
-        self.streams.request(COMMAND_ID, (sd) => {
-          return self.buildCommand(
-            sd,
+        let request;
+        try {
+          request = self.startBackendRequest(
             {
               user: r.user,
               authentication: r.authentication,
@@ -879,7 +881,18 @@ class Wizard {
             },
             self.session,
           );
-        });
+        } catch (e) {
+          self.step.resolve(
+            self.stepErrorDone(
+              "Request failed",
+              "Unable to start connection request: " + e,
+            ),
+          );
+          return;
+        }
+        if (request === null) {
+          return;
+        }
 
         self.step.resolve(self.stepWaitForAcceptWait());
       },
@@ -905,6 +918,14 @@ class Wizard {
         ),
       ),
     );
+  }
+
+  startBackendRequest(configInput, sessionData) {
+    return this.requestLifecycle.start(() => {
+      return this.streams.request(COMMAND_ID, (sd) => {
+        return this.buildCommand(sd, configInput, sessionData);
+      });
+    });
   }
 
   async stepFingerprintPrompt(
@@ -1095,9 +1116,9 @@ class Executer extends Wizard {
 
     self.hasStarted = true;
 
-    self.streams.request(COMMAND_ID, (sd) => {
-      return self.buildCommand(
-        sd,
+    let request;
+    try {
+      request = self.startBackendRequest(
         {
           user: self.config.user,
           authentication: self.config.authentication,
@@ -1114,7 +1135,18 @@ class Executer extends Wizard {
         },
         self.session,
       );
-    });
+    } catch (e) {
+      return self.stepErrorDone(
+        "Request failed",
+        "Unable to start connection request: " + e,
+      );
+    }
+    if (request === null) {
+      return self.stepErrorDone(
+        "Request failed",
+        "Unable to start connection request",
+      );
+    }
 
     return self.stepWaitForAcceptWait();
   }

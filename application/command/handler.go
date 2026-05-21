@@ -301,13 +301,20 @@ func (e *Handler) handleClose(h Header, d byte, _ log.Logger) error {
 		return stErr
 	}
 
-	if st.closing() {
-		return nil
-	}
+	hhd := HeaderCompleted
+	hhd.Set(h.Data())
 
 	if e.senderPaused {
 		e.sender.resume()
 		defer e.sender.pause()
+	}
+
+	if !st.running() {
+		return e.sender.signal(hhd, nil, e.rBuf[:])
+	}
+
+	if st.closing() {
+		return e.sender.signal(hhd, nil, e.rBuf[:])
 	}
 
 	cErr := st.close()
@@ -315,9 +322,6 @@ func (e *Handler) handleClose(h Header, d byte, _ log.Logger) error {
 	if cErr != nil {
 		return cErr
 	}
-
-	hhd := HeaderCompleted
-	hhd.Set(h.Data())
 
 	return e.sender.signal(hhd, nil, e.rBuf[:])
 }

@@ -357,6 +357,12 @@ export class Streams {
       ),
       streamReader = new reader.Limited(rd, streamHeader.length());
 
+    if (stream.closing()) {
+      await reader.readCompletely(streamReader);
+
+      return;
+    }
+
     let tickResult = await stream.tick(streamHeader, streamReader);
 
     await reader.readCompletely(streamReader);
@@ -390,11 +396,17 @@ export class Streams {
       );
     }
 
-    let cResult = await stream.close();
-
     let completedHeader = new header.Header(header.COMPLETED);
     completedHeader.set(hd.data());
-    this.sender.send(new Uint8Array([completedHeader.value()]));
+
+    if (stream.closing()) {
+      await this.sender.send(new Uint8Array([completedHeader.value()]));
+      return;
+    }
+
+    let cResult = await stream.close();
+
+    await this.sender.send(new Uint8Array([completedHeader.value()]));
 
     return cResult;
   }
