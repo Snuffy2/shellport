@@ -102,18 +102,10 @@ func newTelnet(
 // It normalises the preset host by appending the default Telnet port when no
 // explicit port is present.
 func parseTelnetConfig(p configuration.Preset) (configuration.Preset, error) {
-	oldHost := p.Host
-
-	_, _, sErr := net.SplitHostPort(p.Host)
-	if sErr != nil {
-		p.Host = net.JoinHostPort(p.Host, telnetDefaultPortString)
-	}
-
-	if len(p.Host) <= 0 {
-		p.Host = oldHost
-	}
-
-	return p, nil
+	p = configuration.NormalizePresetMeta(p, map[string]string{
+		"Encoding": "utf-8",
+	})
+	return normalizePresetHost(p, telnetDefaultPortString), nil
 }
 
 // telnetMaxHostnameLen is the maximum byte length accepted when parsing the

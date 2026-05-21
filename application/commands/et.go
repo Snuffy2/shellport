@@ -175,7 +175,12 @@ func (d *etClient) emitClientFrame(marker byte, data []byte) error {
 }
 
 func parseETConfig(p configuration.Preset) (configuration.Preset, error) {
-	return parseSSHConfig(p)
+	p = configuration.NormalizePresetMeta(p, map[string]string{
+		"Encoding":       "utf-8",
+		"ET Server Port": strconv.Itoa(etDefaultServerPort),
+		"ET Command":     etDefaultCommand,
+	})
+	return normalizePresetHost(p, sshDefaultPortString), nil
 }
 
 func (d *etClient) Bootup(

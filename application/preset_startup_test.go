@@ -58,6 +58,77 @@ func TestNormalizeStartupPresetIDsPersistsFileBackedIDs(t *testing.T) {
 	}
 }
 
+func TestNormalizeStartupPresetsPersistsMetaCleanupAndDefaults(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configData := map[string]any{
+		"Servers": []map[string]any{
+			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
+		},
+		"Presets": []map[string]any{
+			{
+				"ID":    "preset-atlantis",
+				"Title": "Atlantis",
+				"Type":  "SSH",
+				"Host":  "atlantis.home",
+				"Meta": map[string]string{
+					"User":           "pi",
+					"Authentication": "Private Key",
+					"Mosh Server":    "mosh-server",
+					"ET Server Port": "2022",
+					"Future Meta":    "preserve-me",
+				},
+			},
+		},
+	}
+	content, err := json.MarshalIndent(configData, "", "  ")
+	if err != nil {
+		t.Fatalf("json.MarshalIndent returned error: %v", err)
+	}
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("CustomFile returned error: %v", err)
+	}
+	normalized, err := normalizeStartupPresets(cfg, commands.New())
+	if err != nil {
+		t.Fatalf("normalizeStartupPresets returned error: %v", err)
+	}
+	meta := normalized.Presets[0].Meta
+	if _, ok := meta["Mosh Server"]; ok {
+		t.Fatal("normalized SSH preset still contains Mosh Server")
+	}
+	if _, ok := meta["ET Server Port"]; ok {
+		t.Fatal("normalized SSH preset still contains ET Server Port")
+	}
+	if meta["Encoding"] != "utf-8" {
+		t.Fatalf("normalized Encoding = %q, want utf-8", meta["Encoding"])
+	}
+	if meta["Future Meta"] != "preserve-me" {
+		t.Fatal("normalized preset did not preserve unknown metadata")
+	}
+
+	_, reloaded, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("second CustomFile returned error: %v", err)
+	}
+	meta = reloaded.Presets[0].Meta
+	if _, ok := meta["Mosh Server"]; ok {
+		t.Fatal("persisted SSH preset still contains Mosh Server")
+	}
+	if _, ok := meta["ET Server Port"]; ok {
+		t.Fatal("persisted SSH preset still contains ET Server Port")
+	}
+	if meta["Encoding"] != "utf-8" {
+		t.Fatalf("persisted Encoding = %q, want utf-8", meta["Encoding"])
+	}
+	if meta["Future Meta"] != "preserve-me" {
+		t.Fatal("persisted preset did not preserve unknown metadata")
+	}
+}
+
 func TestNormalizeStartupPresetsKeepsBlankAdminKeyWhenSharedKeyIsSet(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	configData := map[string]any{

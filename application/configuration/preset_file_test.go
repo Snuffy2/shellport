@@ -563,6 +563,70 @@ func TestReplaceFilePresetsWithRuntimePreservesOmittedRawOnlyMeta(t *testing.T) 
 	}
 }
 
+func TestReplaceFilePresetsWithRuntimeDropsKnownMetaForWrongType(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	writePresetConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home:22",
+			"Meta": map[string]any{
+				"User":            "pi",
+				"Mosh Server":     "mosh-server",
+				"ET Server Port":  "2022",
+				"Future Raw Meta": "preserve-me",
+			},
+		},
+	})
+	runtime := []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "atlantis.home:22",
+			Meta: map[string]string{
+				"User":     "pi",
+				"Encoding": "utf-8",
+			},
+		},
+	}
+	next := []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "atlantis.home:22",
+			Meta: map[string]string{
+				"User":     "pi",
+				"Encoding": "utf-8",
+			},
+		},
+	}
+
+	if err := ReplaceFilePresetsWithRuntime(configPath, next, runtime); err != nil {
+		t.Fatalf("ReplaceFilePresetsWithRuntime returned error: %v", err)
+	}
+
+	raw, _, err := readCommonInputFile(configPath)
+	if err != nil {
+		t.Fatalf("readCommonInputFile returned error: %v", err)
+	}
+	requireRawPresetCount(t, raw.Presets, 1)
+	if _, ok := raw.Presets[0].Meta["Mosh Server"]; ok {
+		t.Fatal("Mosh Server metadata was preserved for SSH preset")
+	}
+	if _, ok := raw.Presets[0].Meta["ET Server Port"]; ok {
+		t.Fatal("ET Server Port metadata was preserved for SSH preset")
+	}
+	if raw.Presets[0].Meta["Encoding"] != String("utf-8") {
+		t.Fatal("default Encoding metadata was not persisted")
+	}
+	if raw.Presets[0].Meta["Future Raw Meta"] != String("preserve-me") {
+		t.Fatal("unknown raw-only metadata was not preserved")
+	}
+}
+
 func TestReplaceFilePresetsUpdatesSymlinkTarget(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "shellport.conf.json")
