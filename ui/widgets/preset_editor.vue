@@ -209,7 +209,7 @@ SPDX-License-Identifier: AGPL-3.0-only
         <button type="button" @click="confirmDelete">Delete preset</button>
         <button
           type="button"
-          class="secondary"
+          class="secondary preset-editor-cancel-action"
           @click="confirmingDelete = false"
         >
           Cancel
@@ -236,18 +236,15 @@ SPDX-License-Identifier: AGPL-3.0-only
       </div>
 
       <div v-else class="field preset-editor-actions">
-        <button type="submit">
-          {{ mode === "create" ? "Save preset" : "Save" }}
-        </button>
-        <button
-          v-if="mode === 'edit'"
-          type="button"
-          class="secondary"
-          @click="requestDelete"
-        >
+        <button type="submit">Save</button>
+        <button v-if="mode === 'edit'" type="button" @click="requestDelete">
           Delete
         </button>
-        <button type="button" class="secondary" @click="$emit('cancel')">
+        <button
+          type="button"
+          class="secondary preset-editor-cancel-action"
+          @click="$emit('cancel')"
+        >
           Cancel
         </button>
       </div>
