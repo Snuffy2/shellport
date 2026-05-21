@@ -180,7 +180,7 @@ class Term {
         fontFamily: termTypeFaces + ", " + termFallbackTypeFace,
         fontSize: this.fontSize,
         letterSpacing: 0,
-        lineHeight: 1.35,
+        lineHeight: 1,
         logLevel: process.env.NODE_ENV === "development" ? "info" : "off",
         theme: {
           background: this.control.color(),
