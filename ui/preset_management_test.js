@@ -12,6 +12,7 @@ import {
   canManagePresets,
   cloneEditorState,
   clearHiddenPasswordIDs,
+  privateKeyFileLabel,
   requiresAdminKey,
 } from "./preset_management.js";
 
@@ -29,6 +30,15 @@ describe("preset management policy", () => {
 });
 
 describe("preset editor state", () => {
+  test("private key selector labels file references by filename", () => {
+    expect(
+      privateKeyFileLabel("file:///config/private_keys/atlantis.key"),
+    ).toBe("atlantis.key");
+    expect(privateKeyFileLabel("environment://SHELLPORT_TEST_KEY")).toBe(
+      "environment://SHELLPORT_TEST_KEY",
+    );
+  });
+
   test("defaults existing hidden password to keep checked", () => {
     const preset = new Preset({
       id: "preset-atlantis",

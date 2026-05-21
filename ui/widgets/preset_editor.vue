@@ -125,14 +125,14 @@ SPDX-License-Identifier: AGPL-3.0-only
             v-if="showCurrentPrivateKeyReference"
             :value="localState.privateKeyFile"
           >
-            {{ localState.privateKeyFile }}
+            {{ privateKeyFileLabel(localState.privateKeyFile) }}
           </option>
           <option
             v-for="keyFile in privateKeyFiles"
             :key="keyFile"
             :value="keyFile"
           >
-            {{ keyFile }}
+            {{ privateKeyFileLabel(keyFile) }}
           </option>
         </select>
       </label>
@@ -262,6 +262,7 @@ import {
   authenticationOptionsForType,
   buildPresetConfigFromEditorState,
   cloneEditorState,
+  privateKeyFileLabel,
   requiresAdminKey,
 } from "../preset_management.js";
 
@@ -352,6 +353,7 @@ export default {
     },
   },
   methods: {
+    privateKeyFileLabel,
     normalizeAuthentication() {
       if (this.authenticationOptions.length === 0) {
         delete this.localState.meta.Authentication;

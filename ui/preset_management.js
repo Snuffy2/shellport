@@ -51,6 +51,15 @@ function privateKeyModeForValue(value) {
   return "existing";
 }
 
+export function privateKeyFileLabel(value) {
+  if (!value.startsWith("file://")) {
+    return value;
+  }
+  const path = value.slice("file://".length);
+  const parts = path.split("/").filter((part) => part.length > 0);
+  return parts.length > 0 ? parts[parts.length - 1] : value;
+}
+
 export function canManagePresets(policy) {
   return !!policy && policy.can_manage === true;
 }
