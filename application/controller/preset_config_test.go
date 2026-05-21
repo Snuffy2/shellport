@@ -330,6 +330,48 @@ func TestPresetConfigPutRequiresAdminKeyForFullReplacement(t *testing.T) {
 	}
 }
 
+func TestPresetConfigPutRejectsFullReplacementWhenRestrictedToPresets(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
+	})
+	controller := newAdminTestPresetConfig(t, configPath)
+	controller.commonCfg.OnlyAllowPresetRemotes = true
+	body := []byte(`{"presets":[{"id":"preset-columbia","title":"Columbia","type":"SSH","host":"columbia.home"}]}`)
+	request := httptest.NewRequest(http.MethodPut, "/shellport/config/presets", bytes.NewReader(body))
+	authorizePresetConfigRequest(controller, request)
+	authorizeAdminRequest(controller, request)
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	err := controller.Put(&writer, request, log.Ditch{})
+	if err == nil {
+		t.Fatal("Put returned nil error, want preset restriction error")
+	}
+
+	live := controller.commonCfg.CurrentPresets()
+	if len(live) != 1 {
+		t.Fatalf("live preset count = %d, want 1", len(live))
+	}
+	if live[0].ID != "preset-atlantis" {
+		t.Fatalf("live preset ID = %q, want preset-atlantis", live[0].ID)
+	}
+
+	_, reloaded, customErr := configuration.CustomFile(configPath)(log.Ditch{})
+	if customErr != nil {
+		t.Fatalf("CustomFile returned error: %v", customErr)
+	}
+	if len(reloaded.Presets) != 1 {
+		t.Fatalf("persisted preset count = %d, want 1", len(reloaded.Presets))
+	}
+	if reloaded.Presets[0].ID != "preset-atlantis" {
+		t.Fatalf(
+			"persisted preset ID = %q, want preset-atlantis",
+			reloaded.Presets[0].ID,
+		)
+	}
+}
+
 func TestPresetConfigPutPreserveHeaderRequiresAdminKeyWithoutPresetID(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, []map[string]any{
@@ -564,6 +606,59 @@ func TestPresetConfigPutPreservesHiddenPasswordOnFingerprintSave(t *testing.T) {
 	}
 	if reloaded.Presets[0].Meta[configuration.PresetMetaEncryptedPassword] == "" {
 		t.Fatal("persisted config missing Encrypted Password")
+	}
+	if reloaded.Presets[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatal("persisted config missing fingerprint")
+	}
+}
+
+func TestPresetConfigPutAllowsFingerprintSaveWhenRestrictedToPresets(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "PRIVATE KEY DATA",
+			},
+		},
+	})
+	controller := newAuthenticatedTestPresetConfig(t, configPath)
+	controller.commonCfg.OnlyAllowPresetRemotes = true
+	body := []byte(`{"presets":[{"id":"preset-atlantis","meta":{"Fingerprint":"SHA256:abc"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizePresetConfigRequest(controller, request)
+	request.Header.Set(preserveHiddenPresetPasswordsHeader, "yes")
+	request.Header.Set(presetFingerprintIDHeader, "preset-atlantis")
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Put(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Put returned error: %v", err)
+	}
+
+	live := controller.commonCfg.CurrentPresets()
+	if live[0].Host != "atlantis.home:22" {
+		t.Fatalf("live host = %q, want atlantis.home:22", live[0].Host)
+	}
+	if live[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatal("live preset missing fingerprint")
+	}
+
+	_, reloaded, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("CustomFile returned error: %v", err)
+	}
+	if reloaded.Presets[0].Host != "atlantis.home" {
+		t.Fatalf("persisted host = %q, want atlantis.home", reloaded.Presets[0].Host)
 	}
 	if reloaded.Presets[0].Meta["Fingerprint"] != "SHA256:abc" {
 		t.Fatal("persisted config missing fingerprint")

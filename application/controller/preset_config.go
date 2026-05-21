@@ -148,6 +148,11 @@ func (p presetConfig) Put(
 			http.StatusForbidden,
 			"Full preset updates require AdminKey authentication",
 		)
+	} else if p.commonCfg.OnlyAllowPresetRemotes {
+		return NewError(
+			http.StatusForbidden,
+			"Preset management is disabled when OnlyAllowPresetRemotes is enabled",
+		)
 	} else {
 		if err := validatePresetConfigRequest(request); err != nil {
 			return NewError(http.StatusBadRequest, err.Error())
