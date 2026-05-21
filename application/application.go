@@ -13,6 +13,7 @@ import (
 	goLog "log"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"sync"
 	"syscall"
@@ -180,6 +181,7 @@ func normalizeStartupPresets(
 	if err != nil {
 		return configuration.Configuration{}, err
 	}
+	reconfigureChanged := !reflect.DeepEqual(c.Presets, presets)
 	runtimePresets := presets
 
 	presets, secretsChanged, err := configuration.ApplyPresetSecrets(presets)
@@ -187,9 +189,9 @@ func normalizeStartupPresets(
 		return configuration.Configuration{}, err
 	}
 	c.Presets = presets
-	if secretsChanged {
+	if reconfigureChanged || secretsChanged {
 		if !configuration.PresetConfigWritable(c.SourceFile) {
-			if c.SourceFile != "" {
+			if secretsChanged && c.SourceFile != "" {
 				return configuration.Configuration{}, fmt.Errorf(
 					"preset password migration requires a writable file-backed configuration",
 				)

@@ -200,7 +200,7 @@ func mergePresetInput(raw presetInput, current Preset, preset Preset) presetInpu
 	merged.Type = preserveRawString(raw.Type, current.Type, preset.Type)
 	merged.Host = preserveRawString(raw.Host, current.Host, preset.Host)
 	merged.TabColor = preserveRawString(raw.TabColor, current.TabColor, preset.TabColor)
-	merged.Meta = mergePresetMeta(raw.Meta, current.Meta, preset.Meta)
+	merged.Meta = mergePresetMeta(merged.Type, raw.Meta, current.Meta, preset.Meta)
 	return merged
 }
 
@@ -211,7 +211,12 @@ func preserveRawString(raw string, current string, next string) string {
 	return next
 }
 
-func mergePresetMeta(raw Meta, current map[string]string, next map[string]string) Meta {
+func mergePresetMeta(
+	presetType string,
+	raw Meta,
+	current map[string]string,
+	next map[string]string,
+) Meta {
 	merged := Meta{}
 	for key, value := range next {
 		if rawValue, rawOK := raw[key]; rawOK &&
@@ -232,6 +237,9 @@ func mergePresetMeta(raw Meta, current map[string]string, next map[string]string
 	for key, value := range raw {
 		if _, ok := merged[key]; !ok {
 			if isPresetPasswordMeta(key) && next["Authentication"] != "Password" {
+				continue
+			}
+			if isKnownPresetMeta(key) && !presetMetaAllowedForType(presetType, key) {
 				continue
 			}
 			merged[key] = value

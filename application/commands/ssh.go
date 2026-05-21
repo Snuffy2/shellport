@@ -259,18 +259,28 @@ func newSSH(
 // normalises the preset host by appending the default SSH port when no explicit
 // port is present.
 func parseSSHConfig(p configuration.Preset) (configuration.Preset, error) {
+	p = configuration.NormalizePresetMeta(p, map[string]string{
+		"Encoding": "utf-8",
+	})
+	return normalizePresetHost(p, sshDefaultPortString), nil
+}
+
+func normalizePresetHost(
+	p configuration.Preset,
+	defaultPort string,
+) configuration.Preset {
 	oldHost := p.Host
 
 	_, _, sErr := net.SplitHostPort(p.Host)
 	if sErr != nil {
-		p.Host = net.JoinHostPort(p.Host, sshDefaultPortString)
+		p.Host = net.JoinHostPort(p.Host, defaultPort)
 	}
 
 	if len(p.Host) <= 0 {
 		p.Host = oldHost
 	}
 
-	return p, nil
+	return p
 }
 
 // sshMaxUsernameLen and sshMaxHostnameLen are the maximum byte lengths accepted

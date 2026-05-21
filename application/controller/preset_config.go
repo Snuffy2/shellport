@@ -116,6 +116,10 @@ func (p presetConfig) Put(
 			presets = presetConfigRequestPresets(request)
 			presets = preserveHiddenPresetPasswords(presets, currentPresets)
 		}
+		presets, err = p.commands.Reconfigure(presets)
+		if err != nil {
+			return NewError(http.StatusBadRequest, err.Error())
+		}
 		if err := validateFingerprintOnlyPresetUpdate(
 			presets,
 			currentPresets,

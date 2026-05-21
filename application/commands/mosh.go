@@ -125,7 +125,11 @@ func newMosh(
 }
 
 func parseMoshConfig(p configuration.Preset) (configuration.Preset, error) {
-	return parseSSHConfig(p)
+	p = configuration.NormalizePresetMeta(p, map[string]string{
+		"Encoding":    "utf-8",
+		"Mosh Server": moshDefaultServerCommand,
+	})
+	return normalizePresetHost(p, sshDefaultPortString), nil
 }
 
 func moshRemoteHost(hostport string) string {

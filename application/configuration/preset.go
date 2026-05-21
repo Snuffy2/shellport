@@ -36,6 +36,81 @@ type Preset struct {
 	SecretMeta map[string]string
 }
 
+var knownPresetMetaByType = map[string]map[string]struct{}{
+	"Telnet": {
+		"Encoding": {},
+	},
+	"SSH": {
+		"Authentication":            {},
+		PresetMetaEncryptedPassword: {},
+		"Encoding":                  {},
+		"Fingerprint":               {},
+		PresetMetaPassword:          {},
+		"Private Key":               {},
+		"User":                      {},
+	},
+	"Mosh": {
+		"Authentication":            {},
+		PresetMetaEncryptedPassword: {},
+		"Encoding":                  {},
+		"Fingerprint":               {},
+		"Mosh Server":               {},
+		PresetMetaPassword:          {},
+		"Private Key":               {},
+		"User":                      {},
+	},
+	"ET": {
+		"Authentication": {},
+		"ET Command":     {},
+		"ET Server Port": {},
+		"Encoding":       {},
+		"Fingerprint":    {},
+		"Private Key":    {},
+		"User":           {},
+	},
+}
+
+// NormalizePresetMeta returns a preset with known metadata removed when it is
+// not valid for the preset type, and with missing type-specific defaults set.
+func NormalizePresetMeta(
+	preset Preset,
+	defaults map[string]string,
+) Preset {
+	normalized := copyPreset(preset)
+	if normalized.Meta == nil {
+		normalized.Meta = map[string]string{}
+	}
+	for key := range normalized.Meta {
+		if isKnownPresetMeta(key) && !presetMetaAllowedForType(normalized.Type, key) {
+			delete(normalized.Meta, key)
+		}
+	}
+	for key, value := range defaults {
+		if _, ok := normalized.Meta[key]; !ok {
+			normalized.Meta[key] = value
+		}
+	}
+	return normalized
+}
+
+func presetMetaAllowedForType(presetType string, key string) bool {
+	allowed, ok := knownPresetMetaByType[presetType]
+	if !ok {
+		return false
+	}
+	_, ok = allowed[key]
+	return ok
+}
+
+func isKnownPresetMeta(key string) bool {
+	for _, allowed := range knownPresetMetaByType {
+		if _, ok := allowed[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // EnsurePresetIDs returns a copy of presets with every missing ID filled.
 //
 // Existing IDs are preserved. Duplicate non-empty IDs return an error because
