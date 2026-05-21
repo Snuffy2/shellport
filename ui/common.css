@@ -8,6 +8,7 @@
 
 :root {
   --shellport-royal-blue: #4169e1;
+  --shellport-logo-purple: #5b21b6;
 }
 
 html,
@@ -352,7 +353,7 @@ body {
   font-size: 0.9em;
   font-weight: bold;
   text-transform: uppercase;
-  color: var(--shellport-royal-blue);
+  color: #fff;
 }
 
 .window.window1 .window-close {
@@ -586,13 +587,13 @@ body {
 
 .form1 > fieldset .field > button:focus,
 .form1 > fieldset .field > button:hover {
-  border-color: var(--shellport-royal-blue);
-  background: var(--shellport-royal-blue);
+  border-color: var(--shellport-logo-purple);
+  background: var(--shellport-logo-purple);
 }
 
 .form1 > fieldset .field > button:active {
-  background: var(--shellport-royal-blue);
-  border-color: var(--shellport-royal-blue);
+  background: var(--shellport-logo-purple);
+  border-color: var(--shellport-logo-purple);
 }
 
 .form1 > fieldset .field > button.secondary {

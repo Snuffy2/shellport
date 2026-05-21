@@ -205,27 +205,27 @@
 
 @keyframes home-hd-plus-icon-flash {
   0% {
-    background: var(--shellport-royal-blue);
+    background: #a56;
   }
 
   20% {
-    background: var(--shellport-royal-blue);
+    background: #5a7;
   }
 
   40% {
-    background: var(--shellport-royal-blue);
+    background: #96a;
   }
 
   60% {
-    background: var(--shellport-royal-blue);
+    background: #379;
   }
 
   80% {
-    background: var(--shellport-royal-blue);
+    background: #da0;
   }
 
   100% {
-    background: var(--shellport-royal-blue);
+    background: #a56;
   }
 }
 
