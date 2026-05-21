@@ -105,6 +105,12 @@
   width: 30px;
 }
 
+.preset-edit-button.icon-pencil::before {
+  content: "\270E";
+  font-size: 18px;
+  line-height: 1;
+}
+
 #connect-known-list-presets-alert {
   font-size: 1.15em;
   color: #fff;

@@ -186,6 +186,7 @@ import "./preset_editor.css";
 import {
   authenticationOptionsForType,
   buildPresetConfigFromEditorState,
+  cloneEditorState,
   requiresAdminKey,
 } from "../preset_management.js";
 
@@ -218,8 +219,13 @@ export default {
   },
   emits: ["cancel"],
   data() {
+    const localState = cloneEditorState(this.state);
+    if (!localState.meta) {
+      localState.meta = {};
+    }
+
     return {
-      localState: structuredClone(this.state),
+      localState,
       submitting: false,
       error: "",
       promptingAdminKey: false,

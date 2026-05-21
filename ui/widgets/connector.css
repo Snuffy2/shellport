@@ -35,6 +35,10 @@
   font-size: 0.9em;
 }
 
+#connector .connector-actions > button + button {
+  margin-left: 2px;
+}
+
 #connector-continue {
   margin-top: 10px;
   font-size: 0.9em;

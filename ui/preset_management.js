@@ -114,6 +114,14 @@ export function buildEditorState(preset, defaults = {}) {
   };
 }
 
+export function cloneEditorState(state) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(state);
+  }
+
+  return JSON.parse(JSON.stringify(state));
+}
+
 export function buildPresetConfigFromEditorState(state) {
   const meta = { ...state.meta };
   const usesAuthentication = typeUsesAuthentication(state.type);

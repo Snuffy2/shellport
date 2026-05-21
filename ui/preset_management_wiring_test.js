@@ -18,12 +18,14 @@ function readProjectFile(relativePath) {
 describe("preset management UI wiring", () => {
   test("known preset list has accessible icon edit button", () => {
     const source = readProjectFile("ui/widgets/connect_known.vue");
+    const styles = readProjectFile("ui/widgets/connect_known.css");
 
     expect(source).toContain("canManagePresets");
     expect(source).toContain('aria-label="Edit preset"');
     expect(source).toContain('title="Edit preset"');
     expect(source).toContain('@click.stop="editPreset(preset)"');
     expect(source).toContain('"edit-preset"');
+    expect(styles).toContain(".preset-edit-button.icon-pencil::before");
   });
 
   test("connect widget renders preset editor mode", () => {
@@ -49,5 +51,14 @@ describe("preset management UI wiring", () => {
     expect(source).toContain("const saveAsPreset = self.canManagePresets");
     expect(source).toContain(": null;");
     expect(source).toContain("saveAsPreset,");
+  });
+
+  test("connector action buttons have visible separation", () => {
+    const source = readProjectFile("ui/widgets/connector.vue");
+    const styles = readProjectFile("ui/widgets/connector.css");
+
+    expect(source).toContain("connector-actions");
+    expect(styles).toContain("#connector .connector-actions > button + button");
+    expect(styles).toContain("margin-left: 2px");
   });
 });

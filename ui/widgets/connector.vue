@@ -229,7 +229,10 @@ SPDX-License-Identifier: AGPL-3.0-only
         ></div>
       </div>
 
-      <div v-if="current.submittable || showCancelButton()" class="field">
+      <div
+        v-if="current.submittable || showCancelButton()"
+        class="field connector-actions"
+      >
         <button
           v-if="current.submittable"
           v-focus="submitterTabIndex === 1"

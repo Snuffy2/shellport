@@ -10,6 +10,7 @@ import {
   buildPresetConfigFromEditorState,
   buildPresetConfigFromWizardFields,
   canManagePresets,
+  cloneEditorState,
   clearHiddenPasswordIDs,
   requiresAdminKey,
 } from "./preset_management.js";
@@ -59,6 +60,30 @@ describe("preset editor state", () => {
 
     expect(state.savePassword).toBe(false);
     expect(state.savePrivateKey).toBe(true);
+  });
+
+  test("cloneEditorState works when structuredClone is unavailable", () => {
+    const originalStructuredClone = globalThis.structuredClone;
+    try {
+      globalThis.structuredClone = undefined;
+      const state = {
+        id: "preset-atlantis",
+        title: "Atlantis",
+        meta: { User: "pi" },
+      };
+
+      const cloned = cloneEditorState(state);
+      cloned.meta.User = "root";
+
+      expect(cloned).toEqual({
+        id: "preset-atlantis",
+        title: "Atlantis",
+        meta: { User: "root" },
+      });
+      expect(state.meta.User).toBe("pi");
+    } finally {
+      globalThis.structuredClone = originalStructuredClone;
+    }
   });
 
   test("buildPresetConfigFromEditorState keeps replacement password only when entered", () => {
