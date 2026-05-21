@@ -357,6 +357,12 @@ export class Streams {
       ),
       streamReader = new reader.Limited(rd, streamHeader.length());
 
+    if (stream.closing()) {
+      await reader.readCompletely(streamReader);
+
+      return;
+    }
+
     let tickResult = await stream.tick(streamHeader, streamReader);
 
     await reader.readCompletely(streamReader);

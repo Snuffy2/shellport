@@ -103,4 +103,25 @@ describe("ConnectionRequestLifecycle", () => {
       },
     ]);
   });
+
+  it("handles asynchronous close failures during cleanup", async () => {
+    const lifecycle = new ConnectionRequestLifecycle(
+      {
+        resolve() {},
+      },
+      (title, message) => ({ title, message }),
+    );
+
+    lifecycle.start(() => ({
+      stream: {
+        close() {
+          return Promise.reject(new Error("sender closed"));
+        },
+      },
+    }));
+    lifecycle.cancel();
+    await Promise.resolve();
+
+    assert.strictEqual(lifecycle.request, null);
+  });
 });

@@ -127,7 +127,12 @@ export class ConnectionRequestLifecycle {
     }
 
     try {
-      this.request.stream.close();
+      const closeResult = this.request.stream.close();
+      if (closeResult && typeof closeResult.catch === "function") {
+        closeResult.catch((e) => {
+          process.env.NODE_ENV === "development" && console.trace(e);
+        });
+      }
     } catch (e) {
       process.env.NODE_ENV === "development" && console.trace(e);
     }
