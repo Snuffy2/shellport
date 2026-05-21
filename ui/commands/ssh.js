@@ -18,6 +18,7 @@ import * as common from "./common.js";
 import * as event from "./events.js";
 import Exception from "./exception.js";
 import * as presets from "./presets.js";
+import { ConnectionRequestLifecycle } from "./request_lifecycle.js";
 import * as strings from "./string.js";
 
 const AUTHMETHOD_NONE = 0x00;
@@ -123,7 +124,7 @@ class SSH {
     data.set(authMethod, userBuf.length + addrBuf.length);
     data.set(presetIDBuf, userBuf.length + addrBuf.length + 1);
 
-    initialSender.send(data);
+    return initialSender.send(data);
   }
 
   /**
@@ -564,6 +565,10 @@ class Wizard {
     this.step = subs;
     this.controls = controls.get("SSH");
     this.saveFingerprint = saveFingerprint;
+    this.requestLifecycle = new ConnectionRequestLifecycle(
+      this.step,
+      (title, message) => this.stepErrorDone(title, message),
+    );
   }
 
   /**
@@ -596,12 +601,7 @@ class Wizard {
    * message.
    */
   close() {
-    this.step.resolve(
-      this.stepErrorDone(
-        "Action cancelled",
-        "Action has been cancelled without reach any success",
-      ),
-    );
+    this.requestLifecycle.cancel();
   }
 
   /**
@@ -703,6 +703,7 @@ class Wizard {
 
     return new SSH(sender, config, {
       "initialization.failed"(hd) {
+        self.requestLifecycle.accepted();
         switch (hd.data()) {
           case SERVER_REQUEST_ERROR_BAD_USERNAME:
             self.step.resolve(
@@ -731,6 +732,7 @@ class Wizard {
         );
       },
       initialized(_hd) {
+        self.requestLifecycle.accepted();
         self.step.resolve(self.stepWaitForEstablishWait(configInput.host));
       },
       async "connect.failed"(rd) {
@@ -843,24 +845,24 @@ class Wizard {
       (r) => {
         self.hasStarted = true;
 
-        self.streams.request(COMMAND_ID, (sd) => {
-          return self.buildCommand(
-            sd,
-            {
-              user: r.user,
-              authentication: r.authentication,
-              host: r.host,
-              charset: r.encoding,
-              tabColor: self.preset ? self.preset.tabColor() : "",
-              fingerprint: self.preset
-                ? self.preset.metaDefault("Fingerprint", "")
-                : "",
-              presetID: self.preset ? self.preset.id() : "",
-              saveFingerprint: self.saveFingerprint,
-            },
-            self.session,
-          );
-        });
+        const request = self.startBackendRequest(
+          {
+            user: r.user,
+            authentication: r.authentication,
+            host: r.host,
+            charset: r.encoding,
+            tabColor: self.preset ? self.preset.tabColor() : "",
+            fingerprint: self.preset
+              ? self.preset.metaDefault("Fingerprint", "")
+              : "",
+            presetID: self.preset ? self.preset.id() : "",
+            saveFingerprint: self.saveFingerprint,
+          },
+          self.session,
+        );
+        if (request === null) {
+          return;
+        }
 
         self.step.resolve(self.stepWaitForAcceptWait());
       },
@@ -883,6 +885,22 @@ class Wizard {
         (_r) => {},
       ),
     );
+  }
+
+  /**
+   * Starts the backend stream request for this SSH wizard.
+   *
+   * @private
+   * @param {object} configInput Validated command configuration.
+   * @param {object} sessionData Mutable session state.
+   * @returns {object|null} Started request, or null when startup failed.
+   */
+  startBackendRequest(configInput, sessionData) {
+    return this.requestLifecycle.start(() => {
+      return this.streams.request(COMMAND_ID, (sd) => {
+        return this.buildCommand(sd, configInput, sessionData);
+      });
+    });
   }
 
   /**
@@ -1136,24 +1154,27 @@ class Executer extends Wizard {
 
     self.hasStarted = true;
 
-    self.streams.request(COMMAND_ID, (sd) => {
-      return self.buildCommand(
-        sd,
-        {
-          user: self.config.user,
-          authentication: self.config.authentication,
-          host: self.config.host,
-          charset: self.config.charset ? self.config.charset : "utf-8",
-          tabColor: self.config.tabColor ? self.config.tabColor : "",
-          fingerprint: self.config.fingerprint,
-          presetID: self.config.presetID ? self.config.presetID : "",
-          saveFingerprint: self.config.saveFingerprint
-            ? self.config.saveFingerprint
-            : null,
-        },
-        self.session,
+    const request = self.startBackendRequest(
+      {
+        user: self.config.user,
+        authentication: self.config.authentication,
+        host: self.config.host,
+        charset: self.config.charset ? self.config.charset : "utf-8",
+        tabColor: self.config.tabColor ? self.config.tabColor : "",
+        fingerprint: self.config.fingerprint,
+        presetID: self.config.presetID ? self.config.presetID : "",
+        saveFingerprint: self.config.saveFingerprint
+          ? self.config.saveFingerprint
+          : null,
+      },
+      self.session,
+    );
+    if (request === null) {
+      return self.stepErrorDone(
+        "Request failed",
+        "Unable to start connection request",
       );
-    });
+    }
 
     return self.stepWaitForAcceptWait();
   }

@@ -95,6 +95,64 @@ describe("Command prompts", () => {
     assert.strictEqual(receivedSaveFingerprint, saveFingerprint);
   });
 
+  it("does not call the command close hook after a normal done step", async () => {
+    let closeCalled = false;
+    const steps = {
+      subscribe() {
+        return Promise.resolve(command.done(true, null, "", ""));
+      },
+    };
+    const commands = new command.Commands([
+      {
+        id() {
+          return 0;
+        },
+        name() {
+          return "Fake";
+        },
+        description() {
+          return "Fake command";
+        },
+        color() {
+          return "#000";
+        },
+        wizard() {
+          return {
+            run() {},
+            started() {
+              return true;
+            },
+            control() {
+              return {
+                ui() {
+                  return "Fake";
+                },
+              };
+            },
+            close() {
+              closeCalled = true;
+            },
+          };
+        },
+        execute() {},
+        launch() {},
+        launcher() {},
+        represet(preset) {
+          return preset;
+        },
+      },
+    ]);
+
+    const wizard = commands
+      .all()[0]
+      .wizard(null, null, null, null, null, null, () => {});
+    wizard.subs = steps;
+
+    await wizard.next();
+
+    assert.strictEqual(closeCalled, false);
+  });
+
   it("sorts merged presets by preset title before command type", () => {
     const commands = new command.Commands([
       fakeCommand(0, "SSH"),

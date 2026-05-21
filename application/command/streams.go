@@ -402,6 +402,8 @@ func (c *stream) reinit(
 	}
 
 	l = l.TitledContext("Command (%d)", hd.command())
+	l.Debug("Initial request received: stream_id=%d command_id=%d payload_bytes=%d",
+		h.Data(), hd.command(), hd.data())
 
 	ccc, cccErr := cc.Run(
 		hd.command(), l, hooks, newStreamResponder(w, h), cfg, bufferPool)

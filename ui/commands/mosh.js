@@ -22,6 +22,7 @@ import * as common from "./common.js";
 import * as event from "./events.js";
 import Exception from "./exception.js";
 import * as presets from "./presets.js";
+import { ConnectionRequestLifecycle } from "./request_lifecycle.js";
 import * as strings from "./string.js";
 
 const AUTHMETHOD_NONE = 0x00;
@@ -129,7 +130,7 @@ export class Mosh {
       userBuf.length + addrBuf.length + 1 + moshServerBuf.length,
     );
 
-    initialSender.send(data);
+    return initialSender.send(data);
   }
 
   /**
@@ -594,6 +595,10 @@ class Wizard {
     this.step = subs;
     this.controls = controls.get("Mosh");
     this.saveFingerprint = saveFingerprint;
+    this.requestLifecycle = new ConnectionRequestLifecycle(
+      this.step,
+      (title, message) => this.stepErrorDone(title, message),
+    );
   }
 
   run() {
@@ -609,12 +614,7 @@ class Wizard {
   }
 
   close() {
-    this.step.resolve(
-      this.stepErrorDone(
-        "Action cancelled",
-        "Action has been cancelled without reach any success",
-      ),
-    );
+    this.requestLifecycle.cancel();
   }
 
   stepErrorDone(title, message) {
@@ -677,6 +677,7 @@ class Wizard {
 
     return new Mosh(sender, config, {
       "initialization.failed"(hd) {
+        self.requestLifecycle.accepted();
         switch (hd.data()) {
           case SERVER_REQUEST_ERROR_BAD_USERNAME:
             self.step.resolve(
@@ -720,6 +721,7 @@ class Wizard {
         );
       },
       initialized() {
+        self.requestLifecycle.accepted();
         self.step.resolve(self.stepWaitForEstablishWait(configInput.host));
       },
       async "connect.failed"(rd) {
@@ -828,25 +830,25 @@ class Wizard {
       (r) => {
         self.hasStarted = true;
 
-        self.streams.request(COMMAND_ID, (sd) => {
-          return self.buildCommand(
-            sd,
-            {
-              user: r.user,
-              authentication: r.authentication,
-              host: r.host,
-              charset: r.encoding,
-              moshServer: r["mosh server"],
-              tabColor: self.preset ? self.preset.tabColor() : "",
-              fingerprint: self.preset
-                ? self.preset.metaDefault("Fingerprint", "")
-                : "",
-              presetID: self.preset ? self.preset.id() : "",
-              saveFingerprint: self.saveFingerprint,
-            },
-            self.session,
-          );
-        });
+        const request = self.startBackendRequest(
+          {
+            user: r.user,
+            authentication: r.authentication,
+            host: r.host,
+            charset: r.encoding,
+            moshServer: r["mosh server"],
+            tabColor: self.preset ? self.preset.tabColor() : "",
+            fingerprint: self.preset
+              ? self.preset.metaDefault("Fingerprint", "")
+              : "",
+            presetID: self.preset ? self.preset.id() : "",
+            saveFingerprint: self.saveFingerprint,
+          },
+          self.session,
+        );
+        if (request === null) {
+          return;
+        }
 
         self.step.resolve(self.stepWaitForAcceptWait());
       },
@@ -870,6 +872,14 @@ class Wizard {
         () => {},
       ),
     );
+  }
+
+  startBackendRequest(configInput, sessionData) {
+    return this.requestLifecycle.start(() => {
+      return this.streams.request(COMMAND_ID, (sd) => {
+        return this.buildCommand(sd, configInput, sessionData);
+      });
+    });
   }
 
   async stepFingerprintPrompt(
@@ -1075,27 +1085,30 @@ class Executer extends Wizard {
 
     self.hasStarted = true;
 
-    self.streams.request(COMMAND_ID, (sd) => {
-      return self.buildCommand(
-        sd,
-        {
-          user: self.config.user,
-          authentication: self.config.authentication,
-          host: self.config.host,
-          charset: self.config.charset ? self.config.charset : "utf-8",
-          moshServer: self.config.moshServer
-            ? self.config.moshServer
-            : "mosh-server",
-          tabColor: self.config.tabColor ? self.config.tabColor : "",
-          fingerprint: self.config.fingerprint,
-          presetID: self.config.presetID ? self.config.presetID : "",
-          saveFingerprint: self.config.saveFingerprint
-            ? self.config.saveFingerprint
-            : null,
-        },
-        self.session,
+    const request = self.startBackendRequest(
+      {
+        user: self.config.user,
+        authentication: self.config.authentication,
+        host: self.config.host,
+        charset: self.config.charset ? self.config.charset : "utf-8",
+        moshServer: self.config.moshServer
+          ? self.config.moshServer
+          : "mosh-server",
+        tabColor: self.config.tabColor ? self.config.tabColor : "",
+        fingerprint: self.config.fingerprint,
+        presetID: self.config.presetID ? self.config.presetID : "",
+        saveFingerprint: self.config.saveFingerprint
+          ? self.config.saveFingerprint
+          : null,
+      },
+      self.session,
+    );
+    if (request === null) {
+      return self.stepErrorDone(
+        "Request failed",
+        "Unable to start connection request",
       );
-    });
+    }
 
     return self.stepWaitForAcceptWait();
   }

@@ -19,6 +19,7 @@ import * as common from "./common.js";
 import * as event from "./events.js";
 import Exception from "./exception.js";
 import * as presets from "./presets.js";
+import { ConnectionRequestLifecycle } from "./request_lifecycle.js";
 import * as strings from "./string.js";
 
 const COMMAND_ID = 0x00;
@@ -88,7 +89,7 @@ class Telnet {
 
     data.set(addrBuf, 0);
 
-    initialSender.send(data);
+    return initialSender.send(data);
   }
 
   /**
@@ -290,6 +291,10 @@ class Wizard {
     this.keptSessions = keptSessions;
     this.step = subs;
     this.controls = controls.get("Telnet");
+    this.requestLifecycle = new ConnectionRequestLifecycle(
+      this.step,
+      (title, message) => this.stepErrorDone(title, message),
+    );
   }
 
   /**
@@ -322,12 +327,7 @@ class Wizard {
    * message.
    */
   close() {
-    this.step.resolve(
-      this.stepErrorDone(
-        "Action cancelled",
-        "Action has been cancelled without reach any success",
-      ),
-    );
+    this.requestLifecycle.cancel();
   }
 
   /**
@@ -429,6 +429,7 @@ class Wizard {
 
     return new Telnet(sender, parsedConfig, {
       "initialization.failed"(streamInitialHeader) {
+        self.requestLifecycle.accepted();
         switch (streamInitialHeader.data()) {
           case SERVER_INITIAL_ERROR_BAD_ADDRESS:
             self.step.resolve(
@@ -446,6 +447,7 @@ class Wizard {
         );
       },
       initialized(_streamInitialHeader) {
+        self.requestLifecycle.accepted();
         self.step.resolve(self.stepWaitForEstablishWait(configInput.host));
       },
       async "hook.before_connected"(rd) {
@@ -509,17 +511,17 @@ class Wizard {
       (r) => {
         self.hasStarted = true;
 
-        self.streams.request(COMMAND_ID, (sd) => {
-          return self.buildCommand(
-            sd,
-            {
-              host: r.host,
-              charset: r.encoding,
-              tabColor: self.preset ? self.preset.tabColor() : "",
-            },
-            self.session,
-          );
-        });
+        const request = self.startBackendRequest(
+          {
+            host: r.host,
+            charset: r.encoding,
+            tabColor: self.preset ? self.preset.tabColor() : "",
+          },
+          self.session,
+        );
+        if (request === null) {
+          return;
+        }
 
         self.step.resolve(self.stepWaitForAcceptWait());
       },
@@ -539,6 +541,22 @@ class Wizard {
         (_r) => {},
       ),
     );
+  }
+
+  /**
+   * Starts the backend stream request for this Telnet wizard.
+   *
+   * @private
+   * @param {object} configInput Validated command configuration.
+   * @param {object} sessionData Mutable session state.
+   * @returns {object|null} Started request, or null when startup failed.
+   */
+  startBackendRequest(configInput, sessionData) {
+    return this.requestLifecycle.start(() => {
+      return this.streams.request(COMMAND_ID, (sd) => {
+        return this.buildCommand(sd, configInput, sessionData);
+      });
+    });
   }
 }
 
@@ -595,17 +613,20 @@ class Executor extends Wizard {
 
     self.hasStarted = true;
 
-    self.streams.request(COMMAND_ID, (sd) => {
-      return self.buildCommand(
-        sd,
-        {
-          host: self.config.host,
-          charset: self.config.charset ? self.config.charset : "utf-8",
-          tabColor: self.config.tabColor ? self.config.tabColor : "",
-        },
-        self.session,
+    const request = self.startBackendRequest(
+      {
+        host: self.config.host,
+        charset: self.config.charset ? self.config.charset : "utf-8",
+        tabColor: self.config.tabColor ? self.config.tabColor : "",
+      },
+      self.session,
+    );
+    if (request === null) {
+      return self.stepErrorDone(
+        "Request failed",
+        "Unable to start connection request",
       );
-    });
+    }
 
     return self.stepWaitForAcceptWait();
   }

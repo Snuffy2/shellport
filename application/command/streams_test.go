@@ -266,13 +266,8 @@ func TestStreamCloseIsIdempotent(t *testing.T) {
 		t.Fatalf("expected release to succeed, got %v", releaseErr)
 	}
 
-	closeErr = handler.handleClose(header, streamID, log.NewDitch())
-	if !errors.Is(closeErr, ErrStreamsStreamClosingInactiveStream) {
-		t.Fatalf(
-			"expected released stream close to return %v, got %v",
-			ErrStreamsStreamClosingInactiveStream,
-			closeErr,
-		)
+	if closeErr = handler.handleClose(header, streamID, log.NewDitch()); closeErr != nil {
+		t.Fatalf("expected released stream close to be ignored, got %v", closeErr)
 	}
 
 	if machine.releaseCalls != 1 {

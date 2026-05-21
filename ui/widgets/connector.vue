@@ -437,7 +437,9 @@ export default {
     showCancelButton() {
       return (
         this.current.data !== null &&
-        (this.current.submittable || (!this.working && this.disabled))
+        (this.current.submittable ||
+          this.working ||
+          (!this.working && this.disabled))
       );
     },
     /**
@@ -468,7 +470,7 @@ export default {
      * @returns {Promise<void>}
      */
     async cancelFromButton() {
-      if (this.current.cancellable) {
+      if (this.current.submittable && this.current.cancellable) {
         await this.cancelAndGetNext();
 
         return;
@@ -477,18 +479,14 @@ export default {
       this.cancel();
     },
     /**
-     * Initiates wizard cancellation if not already working or cancelled.
+     * Initiates wizard cancellation if not already cancelled.
      *
      * Guards against double-cancel by setting `cancelled` before delegating to
-     * `sendCancel`. No-op while the connection handshake is in progress.
+     * `sendCancel`.
      *
      * @returns {void}
      */
     cancel() {
-      if (this.working) {
-        return;
-      }
-
       if (this.cancelled) {
         return;
       }
