@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import assert from "assert";
+import * as header from "./header.js";
 import * as sender from "./sender.js";
 import * as streams from "./streams.js";
 
@@ -42,5 +43,52 @@ describe("Streams", () => {
 
     assert.strictEqual(transportClosed, true);
     assert.deepStrictEqual(sent, [[1, 2]]);
+  });
+
+  it("acknowledges a late remote close after local close starts", async () => {
+    const sent = [];
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send(data) {
+          sent.push(Array.from(data));
+
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {},
+      },
+    );
+    const streamID = 3;
+    const closeHeader = new header.Header(header.CLOSE);
+
+    closeHeader.set(streamID);
+    st.streams[streamID].run(
+      1,
+      (streamSender) => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        close() {
+          return streamSender.close();
+        },
+        completed() {},
+      }),
+      st.sender,
+    );
+    st.streams[streamID].close();
+
+    await st.handleClose(closeHeader);
+
+    assert.deepStrictEqual(sent, [
+      [header.CLOSE | streamID],
+      [header.COMPLETED | streamID],
+    ]);
   });
 });

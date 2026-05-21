@@ -390,10 +390,15 @@ export class Streams {
       );
     }
 
-    let cResult = await stream.close();
-
     let completedHeader = new header.Header(header.COMPLETED);
     completedHeader.set(hd.data());
+
+    if (stream.closing()) {
+      return this.sender.send(new Uint8Array([completedHeader.value()]));
+    }
+
+    let cResult = await stream.close();
+
     this.sender.send(new Uint8Array([completedHeader.value()]));
 
     return cResult;

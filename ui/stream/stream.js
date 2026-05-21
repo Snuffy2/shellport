@@ -240,6 +240,16 @@ export class Stream {
   }
 
   /**
+   * Returns whether or not current stream is closing
+   *
+   * @returns {boolean} True when close has started, false otherwise
+   *
+   */
+  closing() {
+    return this.running() && this.isShuttingDown;
+  }
+
+  /**
    * Unsets current stream
    *
    */
