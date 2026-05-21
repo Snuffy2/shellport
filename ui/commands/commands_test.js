@@ -5,6 +5,7 @@
 import assert from "assert";
 import { describe, it } from "vitest";
 import * as command from "./commands.js";
+import * as presets from "./presets.js";
 
 describe("Command prompts", () => {
   it("exposes secondary prompt actions", () => {
@@ -93,4 +94,57 @@ describe("Command prompts", () => {
 
     assert.strictEqual(receivedSaveFingerprint, saveFingerprint);
   });
+
+  it("sorts merged presets by preset title before command type", () => {
+    const commands = new command.Commands([
+      fakeCommand(0, "SSH"),
+      fakeCommand(1, "Telnet"),
+    ]);
+    const merged = commands.mergePresets(
+      new presets.Presets([
+        presetConfig("zulu ssh", "SSH", "z.example.com:22"),
+        presetConfig("alpha telnet", "Telnet", "a.example.com:23"),
+        presetConfig("bravo ssh", "SSH", "b.example.com:22"),
+      ]),
+    );
+
+    assert.deepStrictEqual(
+      merged.map((preset) => preset.preset.title()),
+      ["alpha telnet", "bravo ssh", "zulu ssh"],
+    );
+  });
 });
+
+function fakeCommand(id, name) {
+  return {
+    id() {
+      return id;
+    },
+    name() {
+      return name;
+    },
+    description() {
+      return name + " command";
+    },
+    color() {
+      return "#000";
+    },
+    wizard() {},
+    execute() {},
+    launch() {},
+    launcher() {},
+    represet(preset) {
+      return preset;
+    },
+  };
+}
+
+function presetConfig(title, type, host) {
+  return {
+    title,
+    type,
+    host,
+    tab_color: "",
+    meta: {},
+  };
+}
