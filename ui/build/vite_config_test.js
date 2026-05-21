@@ -120,7 +120,7 @@ describe("vite config cleanup guards", () => {
     expect(homeVue).toContain('this.$emit("title-change", this.homeTitle)');
     expect(homeVue).toContain("homeMessage()");
     expect(homeVue).toContain(
-      '"ShellPort - browser-based remote shell access over SSH, Telnet, and Mosh"',
+      '"ShellPort - browser-based remote shell access over SSH, Telnet, ET, and Mosh"',
     );
   });
 

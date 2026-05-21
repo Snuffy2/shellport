@@ -328,7 +328,7 @@ export default {
      */
     homeMessage() {
       if (!this.serverTitle.length > 0 && !this.serverMessage.length > 0) {
-        return "Browser-based remote shell access over SSH, Telnet, and Mosh";
+        return "Browser-based remote shell access over SSH, Telnet, ET, and Mosh";
       }
       return this.serverMessage.length > 0 ? this.serverMessage : "";
     },
@@ -339,7 +339,7 @@ export default {
      */
     shellPortTag() {
       if (this.serverTitle.length > 0 || this.serverMessage.length > 0) {
-        return "ShellPort - browser-based remote shell access over SSH, Telnet, and Mosh";
+        return "ShellPort - browser-based remote shell access over SSH, Telnet, ET, and Mosh";
       }
       return "";
     },

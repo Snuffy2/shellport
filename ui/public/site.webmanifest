@@ -1,7 +1,7 @@
 {
   "name": "ShellPort",
   "short_name": "ShellPort",
-  "description": "Browser-based remote shell access over SSH, Telnet, and Mosh",
+  "description": "Browser-based remote shell access over SSH, Telnet, ET, and Mosh",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
