@@ -511,14 +511,25 @@ class Wizard {
       (r) => {
         self.hasStarted = true;
 
-        const request = self.startBackendRequest(
-          {
-            host: r.host,
-            charset: r.encoding,
-            tabColor: self.preset ? self.preset.tabColor() : "",
-          },
-          self.session,
-        );
+        let request;
+        try {
+          request = self.startBackendRequest(
+            {
+              host: r.host,
+              charset: r.encoding,
+              tabColor: self.preset ? self.preset.tabColor() : "",
+            },
+            self.session,
+          );
+        } catch (e) {
+          self.step.resolve(
+            self.stepErrorDone(
+              "Request failed",
+              "Unable to start connection request: " + e,
+            ),
+          );
+          return;
+        }
         if (request === null) {
           return;
         }
@@ -613,14 +624,22 @@ class Executor extends Wizard {
 
     self.hasStarted = true;
 
-    const request = self.startBackendRequest(
-      {
-        host: self.config.host,
-        charset: self.config.charset ? self.config.charset : "utf-8",
-        tabColor: self.config.tabColor ? self.config.tabColor : "",
-      },
-      self.session,
-    );
+    let request;
+    try {
+      request = self.startBackendRequest(
+        {
+          host: self.config.host,
+          charset: self.config.charset ? self.config.charset : "utf-8",
+          tabColor: self.config.tabColor ? self.config.tabColor : "",
+        },
+        self.session,
+      );
+    } catch (e) {
+      return self.stepErrorDone(
+        "Request failed",
+        "Unable to start connection request: " + e,
+      );
+    }
     if (request === null) {
       return self.stepErrorDone(
         "Request failed",

@@ -845,21 +845,32 @@ class Wizard {
       (r) => {
         self.hasStarted = true;
 
-        const request = self.startBackendRequest(
-          {
-            user: r.user,
-            authentication: r.authentication,
-            host: r.host,
-            charset: r.encoding,
-            tabColor: self.preset ? self.preset.tabColor() : "",
-            fingerprint: self.preset
-              ? self.preset.metaDefault("Fingerprint", "")
-              : "",
-            presetID: self.preset ? self.preset.id() : "",
-            saveFingerprint: self.saveFingerprint,
-          },
-          self.session,
-        );
+        let request;
+        try {
+          request = self.startBackendRequest(
+            {
+              user: r.user,
+              authentication: r.authentication,
+              host: r.host,
+              charset: r.encoding,
+              tabColor: self.preset ? self.preset.tabColor() : "",
+              fingerprint: self.preset
+                ? self.preset.metaDefault("Fingerprint", "")
+                : "",
+              presetID: self.preset ? self.preset.id() : "",
+              saveFingerprint: self.saveFingerprint,
+            },
+            self.session,
+          );
+        } catch (e) {
+          self.step.resolve(
+            self.stepErrorDone(
+              "Request failed",
+              "Unable to start connection request: " + e,
+            ),
+          );
+          return;
+        }
         if (request === null) {
           return;
         }
@@ -1154,21 +1165,29 @@ class Executer extends Wizard {
 
     self.hasStarted = true;
 
-    const request = self.startBackendRequest(
-      {
-        user: self.config.user,
-        authentication: self.config.authentication,
-        host: self.config.host,
-        charset: self.config.charset ? self.config.charset : "utf-8",
-        tabColor: self.config.tabColor ? self.config.tabColor : "",
-        fingerprint: self.config.fingerprint,
-        presetID: self.config.presetID ? self.config.presetID : "",
-        saveFingerprint: self.config.saveFingerprint
-          ? self.config.saveFingerprint
-          : null,
-      },
-      self.session,
-    );
+    let request;
+    try {
+      request = self.startBackendRequest(
+        {
+          user: self.config.user,
+          authentication: self.config.authentication,
+          host: self.config.host,
+          charset: self.config.charset ? self.config.charset : "utf-8",
+          tabColor: self.config.tabColor ? self.config.tabColor : "",
+          fingerprint: self.config.fingerprint,
+          presetID: self.config.presetID ? self.config.presetID : "",
+          saveFingerprint: self.config.saveFingerprint
+            ? self.config.saveFingerprint
+            : null,
+        },
+        self.session,
+      );
+    } catch (e) {
+      return self.stepErrorDone(
+        "Request failed",
+        "Unable to start connection request: " + e,
+      );
+    }
     if (request === null) {
       return self.stepErrorDone(
         "Request failed",

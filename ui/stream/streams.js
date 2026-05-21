@@ -400,12 +400,13 @@ export class Streams {
     completedHeader.set(hd.data());
 
     if (stream.closing()) {
-      return this.sender.send(new Uint8Array([completedHeader.value()]));
+      await this.sender.send(new Uint8Array([completedHeader.value()]));
+      return;
     }
 
     let cResult = await stream.close();
 
-    this.sender.send(new Uint8Array([completedHeader.value()]));
+    await this.sender.send(new Uint8Array([completedHeader.value()]));
 
     return cResult;
   }

@@ -30,19 +30,14 @@ export class ConnectionRequestLifecycle {
    * Starts the request and its acceptance timeout.
    *
    * @param {function(): object} requestFactory Allocates the stream request.
-   * @returns {object|null} Request object, or null when startup failed.
+   * @returns {object} Request object.
+   * @throws {Error} When request allocation fails.
    */
   start(requestFactory) {
     this.clearTimeout();
     this.failed = false;
 
-    try {
-      this.request = requestFactory();
-    } catch (e) {
-      this.fail("Request failed", "Unable to start connection request: " + e);
-
-      return null;
-    }
+    this.request = requestFactory();
 
     if (
       this.request &&

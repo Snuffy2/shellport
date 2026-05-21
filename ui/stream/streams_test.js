@@ -93,6 +93,44 @@ describe("Streams", () => {
     ]);
   });
 
+  it("propagates completed acknowledgement send failures", async () => {
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.reject(new Error("ack send failed"));
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {},
+      },
+    );
+    const streamID = 2;
+    const closeHeader = new header.Header(header.CLOSE);
+
+    closeHeader.set(streamID);
+    st.streams[streamID].run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        close() {
+          return Promise.resolve("closed");
+        },
+        completed() {},
+      }),
+      st.sender,
+    );
+
+    await assert.rejects(() => st.handleClose(closeHeader), /ack send failed/);
+  });
+
   it("drains late stream data after local close starts", async () => {
     const st = new streams.Streams(
       {

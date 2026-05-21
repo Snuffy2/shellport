@@ -124,4 +124,36 @@ describe("ConnectionRequestLifecycle", () => {
 
     assert.strictEqual(lifecycle.request, null);
   });
+
+  it("handles rejected initial sends as terminal request failures", async () => {
+    const resolved = [];
+    let closed = 0;
+    const lifecycle = new ConnectionRequestLifecycle(
+      {
+        resolve(step) {
+          resolved.push(step);
+        },
+      },
+      (title, message) => ({ title, message }),
+    );
+
+    lifecycle.start(() => ({
+      result: Promise.reject(new Error("send failed")),
+      stream: {
+        close() {
+          closed++;
+        },
+      },
+    }));
+    await Promise.resolve();
+
+    assert.strictEqual(closed, 1);
+    assert.strictEqual(lifecycle.request, null);
+    assert.deepStrictEqual(resolved, [
+      {
+        title: "Request failed",
+        message: "Unable to send connection request: Error: send failed",
+      },
+    ]);
+  });
 });
