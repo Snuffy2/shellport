@@ -159,12 +159,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 
       <label class="field">
         Encoding
-        <input
-          v-model="localState.meta.Encoding"
-          type="text"
-          autocomplete="off"
-          placeholder="utf-8"
-        />
+        <select v-model="localState.meta.Encoding" :disabled="encodingLocked">
+          <option
+            v-for="option in encodingOptions"
+            :key="option"
+            :value="option"
+          >
+            {{ option }}
+          </option>
+        </select>
       </label>
 
       <label v-if="localState.type === 'Mosh'" class="field">
@@ -254,8 +257,10 @@ import {
   authenticationOptionsForType,
   buildPresetConfigFromEditorState,
   cloneEditorState,
+  encodingOptionsForType,
   privateKeyFileLabel,
   requiresAdminKey,
+  typeLocksEncoding,
 } from "../preset_management.js";
 
 export default {
@@ -317,6 +322,12 @@ export default {
     authenticationOptions() {
       return authenticationOptionsForType(this.localState.type);
     },
+    encodingOptions() {
+      return encodingOptionsForType(this.localState.type);
+    },
+    encodingLocked() {
+      return typeLocksEncoding(this.localState.type);
+    },
     usesAuthentication() {
       return ["SSH", "Mosh", "ET"].includes(this.localState.type);
     },
@@ -339,6 +350,7 @@ export default {
   watch: {
     "localState.type"() {
       this.normalizeAuthentication();
+      this.normalizeEncoding();
     },
     "localState.meta.Authentication"() {
       this.normalizeAuthentication();
@@ -358,6 +370,11 @@ export default {
         )
       ) {
         this.localState.meta.Authentication = this.authenticationOptions[0];
+      }
+    },
+    normalizeEncoding() {
+      if (!this.encodingOptions.includes(this.localState.meta.Encoding)) {
+        this.localState.meta.Encoding = "utf-8";
       }
     },
     async runProtected(action) {

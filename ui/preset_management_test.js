@@ -12,7 +12,9 @@ import {
   canManagePresets,
   cloneEditorState,
   clearHiddenPasswordIDs,
+  encodingOptionsForType,
   privateKeyFileLabel,
+  typeLocksEncoding,
   requiresAdminKey,
 } from "./preset_management.js";
 
@@ -30,6 +32,28 @@ describe("preset management policy", () => {
 });
 
 describe("preset editor state", () => {
+  test("SSH and Telnet expose full encoding choices", () => {
+    expect(encodingOptionsForType("SSH")).toContain("utf-8");
+    expect(encodingOptionsForType("SSH")).toContain("shift-jis");
+    expect(encodingOptionsForType("Telnet")).toEqual(
+      encodingOptionsForType("SSH"),
+    );
+    expect(typeLocksEncoding("SSH")).toBe(false);
+  });
+
+  test("Mosh and ET lock encoding to utf-8", () => {
+    for (const type of ["Mosh", "ET"]) {
+      const state = buildEditorState(null, {
+        type,
+        meta: { Encoding: "Shift-JIS" },
+      });
+
+      expect(encodingOptionsForType(type)).toEqual(["utf-8"]);
+      expect(typeLocksEncoding(type)).toBe(true);
+      expect(state.meta.Encoding).toBe("utf-8");
+    }
+  });
+
   test("private key selector labels file references by filename", () => {
     expect(
       privateKeyFileLabel("file:///config/private_keys/atlantis.key"),

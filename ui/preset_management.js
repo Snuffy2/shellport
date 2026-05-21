@@ -1,6 +1,8 @@
 // Copyright (C) 2026 Snuffy2
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { charsetPresets } from "./commands/common.js";
+
 const editableMetaKeys = new Set([
   "Authentication",
   "ET Command",
@@ -39,6 +41,25 @@ function normalizeAuthenticationForType(type, authentication) {
   }
 
   return options[0];
+}
+
+export function encodingOptionsForType(type) {
+  if (type === "Mosh" || type === "ET") {
+    return ["utf-8"];
+  }
+  return charsetPresets;
+}
+
+export function typeLocksEncoding(type) {
+  return encodingOptionsForType(type).length === 1;
+}
+
+function normalizeEncodingForType(type, encoding) {
+  const options = encodingOptionsForType(type);
+  if (options.includes(encoding)) {
+    return encoding;
+  }
+  return "utf-8";
 }
 
 function privateKeyModeForValue(value) {
@@ -98,13 +119,16 @@ export function buildEditorState(preset, defaults = {}) {
         ...(defaults.meta || {}),
       };
 
+  const type = presetValue(preset, "type", defaults.type || "SSH");
+
   delete meta.Fingerprint;
   delete meta.Password;
   delete meta["Encrypted Password"];
   meta.Authentication = normalizeAuthenticationForType(
-    presetValue(preset, "type", defaults.type || "SSH"),
+    type,
     meta.Authentication || "",
   );
+  meta.Encoding = normalizeEncodingForType(type, meta.Encoding || "utf-8");
 
   const privateKey = meta["Private Key"] || "";
   const hasSavedPassword =
@@ -119,7 +143,7 @@ export function buildEditorState(preset, defaults = {}) {
       "title",
       defaults.title || defaults.host || "New preset",
     ),
-    type: presetValue(preset, "type", defaults.type || "SSH"),
+    type,
     host: presetValue(preset, "host", defaults.host || meta.Host || ""),
     tabColor: presetValue(preset, "tabColor", defaults.tab_color || ""),
     meta,
@@ -155,6 +179,10 @@ export function cloneEditorState(state) {
 export function buildPresetConfigFromEditorState(state) {
   const meta = { ...state.meta };
   const usesAuthentication = typeUsesAuthentication(state.type);
+  meta.Encoding = normalizeEncodingForType(
+    state.type,
+    meta.Encoding || "utf-8",
+  );
   const authentication = normalizeAuthenticationForType(
     state.type,
     usesAuthentication ? meta.Authentication || "" : "",
