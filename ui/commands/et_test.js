@@ -32,6 +32,62 @@ describe("ET Command", () => {
     return rd;
   }
 
+  it("keeps the initial prompt free of connection help text", () => {
+    const wizard = new et.Command().wizard(
+      new command.Info(new et.Command()),
+      null,
+      null,
+      [],
+      null,
+      null,
+      {
+        get(type) {
+          assert.strictEqual(type, "ET");
+
+          return {};
+        },
+      },
+      null,
+    );
+    const fields = wizard.stepInitialPrompt().data().inputs;
+    const authentication = fields.find(
+      (field) => field.name === "Authentication",
+    );
+    const encoding = fields.find((field) => field.name === "Encoding");
+    const etServerPort = fields.find(
+      (field) => field.name === "ET Server Port",
+    );
+
+    assert.strictEqual(authentication.description, "");
+    assert.strictEqual(encoding.description, "");
+    assert.strictEqual(etServerPort.description, "");
+  });
+
+  it("does not expose the fixed ET command field in the initial prompt", () => {
+    const wizard = new et.Command().wizard(
+      new command.Info(new et.Command()),
+      null,
+      null,
+      [],
+      null,
+      null,
+      {
+        get(type) {
+          assert.strictEqual(type, "ET");
+
+          return {};
+        },
+      },
+      null,
+    );
+    const fields = wizard.stepInitialPrompt().data().inputs;
+
+    assert.strictEqual(
+      fields.some((field) => field.name === "ET Command"),
+      false,
+    );
+  });
+
   it("uses the ET command id", () => {
     assert.strictEqual(new et.Command().id(), 0x03);
   });
@@ -84,7 +140,7 @@ describe("ET Command", () => {
     );
   });
 
-  it("validates ET server port and command fields", () => {
+  it("validates the ET server port field", () => {
     const wizard = new et.Command().wizard(
       null,
       presets.emptyPreset(),
@@ -103,7 +159,6 @@ describe("ET Command", () => {
     );
     const fields = wizard.stepInitialPrompt().data().inputs;
     const port = fields.find((field) => field.name === "ET Server Port");
-    const commandField = fields.find((field) => field.name === "ET Command");
 
     assert.strictEqual(
       port.verify("2022"),
@@ -111,8 +166,6 @@ describe("ET Command", () => {
     );
     assert.throws(() => port.verify("0"), /between 1 and 65535/);
     assert.throws(() => port.verify("abc"), /numeric/);
-    assert.strictEqual(commandField.verify("et"), "Will run et");
-    assert.throws(() => commandField.verify("et --flag"), /fixed/);
   });
 
   it("builds new remote requests without preset-only metadata", () => {
@@ -169,7 +222,6 @@ describe("ET Command", () => {
       authentication: "Private Key",
       encoding: "utf-8",
       "et server port": "2022",
-      "et command": "et",
     });
 
     expected.set(user, 0);
@@ -185,7 +237,7 @@ describe("ET Command", () => {
     assert.deepStrictEqual(initialSends[0], expected);
   });
 
-  it("normalizes preset ET command values in the wizard", () => {
+  it("omits preset ET command values from the wizard", () => {
     const wizard = new et.Command().wizard(
       null,
       new presets.Preset({
@@ -219,9 +271,7 @@ describe("ET Command", () => {
     const fields = wizard.stepInitialPrompt().data().inputs;
     const commandField = fields.find((field) => field.name === "ET Command");
 
-    assert.strictEqual(commandField.value, "et");
-    assert.strictEqual(commandField.readonly, true);
-    assert.strictEqual(commandField.verify(commandField.value), "Will run et");
+    assert.strictEqual(commandField, undefined);
   });
 
   it("normalizes invalid preset ET server port values in the wizard", () => {

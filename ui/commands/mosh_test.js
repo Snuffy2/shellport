@@ -39,6 +39,33 @@ describe("Mosh Command", () => {
     return rd;
   }
 
+  it("keeps the initial prompt free of connection help text", () => {
+    const wizard = new mosh.Command().wizard(
+      new command.Info(new mosh.Command()),
+      null,
+      null,
+      [],
+      null,
+      null,
+      {
+        get(type) {
+          assert.strictEqual(type, "Mosh");
+
+          return {};
+        },
+      },
+      null,
+    );
+    const fields = wizard.stepInitialPrompt().data().inputs;
+    const authentication = fields.find(
+      (field) => field.name === "Authentication",
+    );
+    const encoding = fields.find((field) => field.name === "Encoding");
+
+    assert.strictEqual(authentication.description, "");
+    assert.strictEqual(encoding.description, "");
+  });
+
   it("uses the Mosh command id", () => {
     assert.strictEqual(new mosh.Command().id(), 0x02);
   });

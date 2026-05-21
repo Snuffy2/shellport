@@ -11,6 +11,33 @@ import * as ssh from "./ssh.js";
 import * as strings from "./string.js";
 
 describe("SSH Command", () => {
+  it("keeps the initial prompt free of connection help text", () => {
+    const wizard = new ssh.Command().wizard(
+      new command.Info(new ssh.Command()),
+      null,
+      null,
+      [],
+      null,
+      null,
+      {
+        get(type) {
+          assert.strictEqual(type, "SSH");
+
+          return {};
+        },
+      },
+      null,
+    );
+    const fields = wizard.stepInitialPrompt().data().inputs;
+    const authentication = fields.find(
+      (field) => field.name === "Authentication",
+    );
+    const encoding = fields.find((field) => field.name === "Encoding");
+
+    assert.strictEqual(authentication.description, "");
+    assert.strictEqual(encoding.description, "");
+  });
+
   it("encodes terminal resize dimensions", async () => {
     let commandHandler = null;
     let streamSends = [];
