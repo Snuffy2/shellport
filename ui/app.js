@@ -59,6 +59,7 @@ const mainTemplate = `
   :restricted-to-presets="presetData.restricted"
   :preset-config-writable="presetData.writable"
   :save-preset-fingerprint="savePresetFingerprint"
+  :refresh-preset-config="refreshPresetConfig"
   :view-port="viewPort"
   @title-change="updatePageTitle"
   @navigate-to="changeURLHash"
@@ -404,6 +405,39 @@ function startApp(rootEl) {
         return headers;
       },
       /**
+       * Replaces the cached preset list while preserving current preset policy.
+       *
+       * @param {Array<object>} updatedPresets Raw preset configs from backend.
+       * @returns {void}
+       */
+      replacePresetData(updatedPresets) {
+        this.presetData = {
+          presets: markRaw(new Presets(updatedPresets)),
+          restricted: this.presetData.restricted,
+          writable: this.presetData.writable,
+        };
+      },
+      /**
+       * Reloads preset configuration from the backend.
+       *
+       * @returns {Promise<Array<object>>} Updated preset config list.
+       */
+      async refreshPresetConfig() {
+        const headers = await this.presetConfigHeaders();
+        const getResponse = await xhr.get(presetConfigInterface, headers);
+        if (getResponse.status !== 200) {
+          throw new Error(
+            "Preset config refresh failed: " + getResponse.status,
+          );
+        }
+
+        const body = JSON.parse(getResponse.responseText);
+        const updatedPresets = body.presets ? body.presets : [];
+        this.replacePresetData(updatedPresets);
+
+        return updatedPresets;
+      },
+      /**
        * Saves an accepted SSH/Mosh fingerprint into one preset.
        *
        * @param {string} presetID Stable preset ID.
@@ -439,11 +473,7 @@ function startApp(rootEl) {
 
         const body = JSON.parse(putResponse.responseText);
         const updatedPresets = body.presets ? body.presets : [];
-        this.presetData = {
-          presets: markRaw(new Presets(updatedPresets)),
-          restricted: this.presetData.restricted,
-          writable: this.presetData.writable,
-        };
+        this.replacePresetData(updatedPresets);
 
         return updatedPresets;
       },

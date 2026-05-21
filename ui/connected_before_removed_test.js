@@ -41,4 +41,25 @@ describe("connected-before removal", () => {
 
     expect(source).not.toContain("<h3>Presets</h3>");
   });
+
+  test("preset panel exposes a refresh action wired to reload backend presets", () => {
+    const appSource = readProjectFile("ui/app.js");
+    const homeSource = readProjectFile("ui/home.vue");
+    const connectSource = readProjectFile("ui/widgets/connect.vue");
+    const connectKnownSource = readProjectFile("ui/widgets/connect_known.vue");
+
+    expect(appSource).toContain(':refresh-preset-config="refreshPresetConfig"');
+    expect(appSource).toContain("replacePresetData(updatedPresets)");
+    expect(appSource).toContain("async refreshPresetConfig()");
+    expect(appSource).toContain("xhr.get(presetConfigInterface");
+    expect(homeSource).toContain(
+      ':refreshing-presets="connector.refreshingPresets"',
+    );
+    expect(homeSource).toContain('@refresh-presets="refreshPresets"');
+    expect(homeSource).toContain("replacePresets(updatedPresets)");
+    expect(connectSource).toContain(':refreshing-presets="refreshingPresets"');
+    expect(connectSource).toContain('@refresh-presets="refreshPresets"');
+    expect(connectKnownSource).toContain('@click="refreshPresets"');
+    expect(connectKnownSource).toContain("Refresh presets");
+  });
 });

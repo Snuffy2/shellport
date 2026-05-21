@@ -27,7 +27,9 @@ SPDX-License-Identifier: AGPL-3.0-only
         v-if="tab === 'known' && !inputting"
         :presets="presets"
         :restricted-to-presets="restrictedToPresets"
+        :refreshing-presets="refreshingPresets"
         @select-preset="selectPreset"
+        @refresh-presets="refreshPresets"
       ></connect-known>
 
       <connect-new
@@ -57,10 +59,12 @@ import "./connect.css";
  * @prop {boolean}  restrictedToPresets - Hides "New remote" when true.
  * @prop {Array}    connectors          - Available connector types (SSH, Telnet…).
  * @prop {boolean}  busy                - When true, overlays the panel to block interaction.
+ * @prop {boolean}  refreshingPresets   - When true, disables the preset refresh action.
  *
  * @emits display           - Forwarded from the window widget; payload: `{boolean}`.
  * @emits connector-select  - User chose a new connector type. Payload: connector object.
  * @emits preset-select     - User selected a preset. Payload: preset object.
+ * @emits refresh-presets   - User requested backend preset reload.
  */
 
 import Window from "./window.vue";
@@ -100,8 +104,12 @@ export default {
       type: Boolean,
       default: false,
     },
+    refreshingPresets: {
+      type: Boolean,
+      default: false,
+    },
   },
-  emits: ["display", "connector-select", "preset-select"],
+  emits: ["display", "connector-select", "preset-select", "refresh-presets"],
   /**
    * @returns {{tab: string, canSelect: boolean}}
    *   `tab` — active panel: `"known"` or `"new"`.
@@ -158,6 +166,19 @@ export default {
       }
 
       this.$emit("preset-select", preset);
+    },
+    /**
+     * Emits `refresh-presets` when the preset panel refresh button is clicked.
+     *
+     * @emits refresh-presets
+     * @returns {void}
+     */
+    refreshPresets() {
+      if (this.inputting) {
+        return;
+      }
+
+      this.$emit("refresh-presets");
     },
   },
 };
