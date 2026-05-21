@@ -16,7 +16,7 @@
 }
 
 #connector-title > h2 {
-  color: #e9a;
+  color: var(--shellport-royal-blue);
   font-size: 1.3em;
   font-weight: bold;
   margin: 3px 0;
@@ -54,7 +54,7 @@
 #connector-proccess-message > h2 {
   font-weight: normal;
   margin: 10px 0;
-  color: #e9a;
+  color: var(--shellport-royal-blue);
   font-size: 1.2em;
 }
 
@@ -70,11 +70,11 @@
   }
 
   50% {
-    outline: 2px solid #e9a;
+    outline: 2px solid var(--shellport-royal-blue);
   }
 
   60% {
-    border-color: #e9a;
+    border-color: var(--shellport-royal-blue);
     outline: none;
   }
 }

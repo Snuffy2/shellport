@@ -231,7 +231,7 @@
 
 #home-hd-plus.working {
   color: #fff;
-  background: #a56;
+  background: var(--shellport-royal-blue);
   animation-name: home-hd-plus-icon-flash;
   animation-duration: 10s;
   animation-iteration-count: infinite;
@@ -388,7 +388,7 @@
 }
 
 #home-content p a {
-  color: #e9a;
+  color: #fff;
 }
 
 #home-content hr {

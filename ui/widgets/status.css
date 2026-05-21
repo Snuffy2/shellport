@@ -40,14 +40,14 @@
 
 #conn-status h1 {
   padding: 15px 15px 10px 15px;
-  background: #a56;
+  background: var(--shellport-royal-blue);
 }
 
 #conn-status-info {
   padding: 0 15px 15px 15px;
   font-size: 0.9em;
   line-height: 1.5;
-  background: #a56;
+  background: var(--shellport-royal-blue);
 }
 
 #conn-status.green:before {

@@ -33,9 +33,9 @@
 }
 
 #connect-switch.red {
-  border-color: #a56;
+  border-color: var(--shellport-royal-blue);
 }
 
 #connect-switch.red li.active {
-  border-color: #a56;
+  border-color: var(--shellport-royal-blue);
 }
