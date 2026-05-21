@@ -14,6 +14,7 @@ const distDir = path.join(repoRoot, ".tmp", "dist");
 const backendTarget = "http://127.0.0.1:8182";
 const publicDir = path.join(uiRoot, "public");
 const defaultSourceURL = "https://github.com/Snuffy2/shellport";
+const versionFilePath = path.join(repoRoot, ".shellport-version");
 
 /**
  * Resolve and validate the source URL embedded into the frontend.
@@ -52,26 +53,60 @@ const sourceURL = resolveSourceURL();
  * Resolve the version embedded into the frontend.
  *
  * @param {NodeJS.ProcessEnv} env Environment variables.
+ * @param {{
+ *   execFileSync?: typeof execFileSync,
+ *   readFileSync?: typeof fs.readFileSync,
+ *   versionFilePath?: string,
+ * }} options Optional test seams for version sources.
  * @returns {string} Existing environment version, Git description, or dev.
  */
-export function resolveVersion(env = process.env) {
+export function resolveVersion(env = process.env, options = {}) {
+  const cleanVersion = (value) => {
+    const version = value.trim();
+
+    return version.length > 0 ? version : null;
+  };
+
   if (env.SHELLPORT_VERSION) {
-    return env.SHELLPORT_VERSION;
+    const version = cleanVersion(env.SHELLPORT_VERSION);
+    if (version) {
+      return version;
+    }
   }
 
+  const runGit = options.execFileSync ?? execFileSync;
   try {
-    return execFileSync(
-      "git",
-      ["describe", "--always", "--dirty=*", "--tag"],
-      {
-        cwd: repoRoot,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      },
-    ).trim();
+    const version = cleanVersion(
+      runGit(
+        "git",
+        ["describe", "--always", "--dirty=*", "--tag"],
+        {
+          cwd: repoRoot,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      ),
+    );
+    if (version) {
+      return version;
+    }
   } catch {
-    return "dev";
+    // Fall through to the source-tree version file used by archive deploys.
   }
+
+  const readVersionFile = options.readFileSync ?? fs.readFileSync;
+  try {
+    const version = cleanVersion(
+      readVersionFile(options.versionFilePath ?? versionFilePath, "utf8"),
+    );
+    if (version) {
+      return version;
+    }
+  } catch {
+    // Fall through to the development fallback.
+  }
+
+  return "dev";
 }
 
 const version = resolveVersion();

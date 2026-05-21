@@ -102,6 +102,41 @@ describe("vite config cleanup guards", () => {
     );
   });
 
+  test("version resolver falls back to a source-tree version file", () => {
+    const missingGit = () => {
+      throw new Error("git unavailable");
+    };
+    const readVersionFile = (filePath) => {
+      expect(filePath).toBe("/tmp/shellport-version");
+
+      return "c3a41fa\n";
+    };
+
+    expect(
+      resolveVersion(
+        {},
+        {
+          execFileSync: missingGit,
+          readFileSync: readVersionFile,
+          versionFilePath: "/tmp/shellport-version",
+        },
+      ),
+    ).toBe("c3a41fa");
+  });
+
+  test("version resolver uses dev when no version source is available", () => {
+    const missingSource = () => {
+      throw new Error("missing");
+    };
+
+    expect(
+      resolveVersion(
+        {},
+        { execFileSync: missingSource, readFileSync: missingSource },
+      ),
+    ).toBe("dev");
+  });
+
   test("home screen binds the source link to the configured frontend value", () => {
     const connectVue = readSource(connectVuePath);
     const homeVue = readSource(homeVuePath);
