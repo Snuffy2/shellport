@@ -1,0 +1,11 @@
+inheritance: true
+reviews:
+  pre_merge_checks:
+    docstrings:
+      mode: off
+issue_enrichment:
+  auto_enrich:
+    enabled: true
+  labeling:
+    labeling_instructions: []
+    auto_apply_labels: true
