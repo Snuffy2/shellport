@@ -40,6 +40,7 @@ RUN set -ex && \
 
 # Build the final image for running
 FROM debian:trixie-slim
+ARG ET_APT_GPG_SHA256=bcc8b1fb4caa1ba935a2f30f0a51866f607d6f5efe77d8d9e70a87f5919e8b3a
 ARG SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0"
 ENV SHELLPORT_DIALTIMEOUT=10 \
@@ -57,14 +58,24 @@ COPY --from=builder /shellport /
 COPY docker-entrypoint.sh /shellport.sh
 RUN set -ex && \
     apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl openssh-client tzdata && \
     install -d -m 0755 /etc/apt/keyrings && \
     curl -fsSL https://github.com/MisterTea/debian-et/raw/master/et.gpg -o /etc/apt/keyrings/et.gpg && \
+    printf '%s\n' "$ET_APT_GPG_SHA256  /etc/apt/keyrings/et.gpg" | sha256sum -c - && \
     printf '%s\n' \
         'deb [signed-by=/etc/apt/keyrings/et.gpg] https://mistertea.github.io/debian-et/debian-source/ trixie main' \
         > /etc/apt/sources.list.d/et.list && \
+    printf '%s\n' \
+        'Package: et' \
+        'Pin: origin mistertea.github.io' \
+        'Pin-Priority: 1001' \
+        '' \
+        'Package: *' \
+        'Pin: origin mistertea.github.io' \
+        'Pin-Priority: -1' \
+        > /etc/apt/preferences.d/et.pref && \
     apt-get update && \
-    apt-get install -y --no-install-recommends et openssh-client tzdata && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends et && \
     printf '%s\n' \
         'ShellPort source code' \
         '' \
@@ -73,7 +84,9 @@ RUN set -ex && \
         '' \
         'Bundled Eternal Terminal (ET) client' \
         '' \
-        'The ET client binary in this image is installed from:' \
+        'Repository signing key SHA-256:' \
+        "$ET_APT_GPG_SHA256" \
+        'Package repository:' \
         'https://mistertea.github.io/debian-et/debian-source/ trixie main' \
         'Upstream source:' \
         'https://github.com/MisterTea/EternalTerminal' \
