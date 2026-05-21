@@ -196,6 +196,9 @@ export function buildPresetConfigFromEditorState(state) {
   delete meta.Fingerprint;
   delete meta.Password;
   delete meta["Encrypted Password"];
+  if (meta.User === "") {
+    delete meta.User;
+  }
   if (authentication.length > 0) {
     meta.Authentication = authentication;
   } else {
@@ -231,6 +234,8 @@ export function buildPresetConfigFromEditorState(state) {
   }
   if (state.host.length > 0) {
     meta.Host = state.host;
+  } else {
+    delete meta.Host;
   }
 
   return {
@@ -268,10 +273,11 @@ export function buildPresetConfigFromWizardFields(type, fields) {
   const host = normalized.host || "";
   const authentication = normalized.authentication || "";
   const credential = normalized.credential || "";
-  const meta = {
-    Host: host,
-  };
+  const meta = {};
 
+  if (host) {
+    meta.Host = host;
+  }
   if (normalized.user) {
     meta.User = normalized.user;
   }

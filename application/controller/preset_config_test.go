@@ -297,6 +297,29 @@ func TestPresetConfigPutRejectsDuplicateIDs(t *testing.T) {
 	}
 }
 
+func TestPresetConfigPutDoesNotMigratePrivateKeyBeforeValidation(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "shellport.conf.json")
+	writePresetAPIConfig(t, configPath, []map[string]any{})
+	controller := newAdminTestPresetConfig(t, configPath)
+	body := []byte(fmt.Sprintf(
+		`{"presets":[{"title":"Atlantis","type":"SSH","host":"atlantis.home","meta":{"User":"pi","Authentication":"Private Key","Private Key":%q,"Encrypted Password":"invalid"}}]}`,
+		"INLINE PRIVATE KEY DATA",
+	))
+	request := httptest.NewRequest(http.MethodPut, "/shellport/config/presets", bytes.NewReader(body))
+	authorizePresetConfigRequest(controller, request)
+	authorizeAdminRequest(controller, request)
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Put(&writer, request, log.Ditch{}); err == nil {
+		t.Fatal("Put returned nil error, want validation error")
+	}
+	if _, err := os.Stat(filepath.Join(configDir, "private_keys")); !os.IsNotExist(err) {
+		t.Fatalf("private_keys directory stat error = %v, want not exist", err)
+	}
+}
+
 func TestPresetConfigPutAllowsAdminWhenBothKeysAreBlank(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, nil)

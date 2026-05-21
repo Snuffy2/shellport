@@ -64,6 +64,8 @@ func (p presetConfig) Get(
 	if _, err := p.requireAuth(r); err != nil {
 		return err
 	}
+	p.lockPresetUpdates()
+	defer p.unlockPresetUpdates()
 	presets, err := p.migrateCurrentPresetPrivateKeys()
 	if err != nil {
 		return NewError(http.StatusInternalServerError, err.Error())
@@ -173,13 +175,6 @@ func (p presetConfig) Put(
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
 	}
-	normalized, _, err = configuration.MigratePresetPrivateKeysToFiles(
-		p.commonCfg.SourceFile,
-		normalized,
-	)
-	if err != nil {
-		return NewError(http.StatusInternalServerError, err.Error())
-	}
 	normalized, _, err = configuration.ApplyPresetSecrets(normalized)
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
@@ -187,6 +182,13 @@ func (p presetConfig) Put(
 	normalized, err = p.commands.Reconfigure(normalized)
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
+	}
+	normalized, _, err = configuration.MigratePresetPrivateKeysToFiles(
+		p.commonCfg.SourceFile,
+		normalized,
+	)
+	if err != nil {
+		return NewError(http.StatusInternalServerError, err.Error())
 	}
 	if err := configuration.ReplaceFilePresetsWithRuntime(
 		p.commonCfg.SourceFile,
@@ -216,6 +218,9 @@ func (p presetConfig) unlockPresetUpdates() {
 
 func (p presetConfig) migrateCurrentPresetPrivateKeys() ([]configuration.Preset, error) {
 	current := p.commonCfg.CurrentPresets()
+	if !p.commonCfg.PresetConfigWritable() {
+		return current, nil
+	}
 	presets, changed, err := configuration.MigratePresetPrivateKeysToFiles(
 		p.commonCfg.SourceFile,
 		current,

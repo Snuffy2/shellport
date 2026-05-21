@@ -177,12 +177,15 @@ func normalizeStartupPresets(
 			return configuration.Configuration{}, err
 		}
 	}
-	presets, privateKeysChanged, err := configuration.MigratePresetPrivateKeysToFiles(
-		c.SourceFile,
-		presets,
-	)
-	if err != nil {
-		return configuration.Configuration{}, err
+	privateKeysChanged := false
+	if configuration.PresetConfigWritable(c.SourceFile) {
+		presets, privateKeysChanged, err = configuration.MigratePresetPrivateKeysToFiles(
+			c.SourceFile,
+			presets,
+		)
+		if err != nil {
+			return configuration.Configuration{}, err
+		}
 	}
 	c.Presets = presets
 

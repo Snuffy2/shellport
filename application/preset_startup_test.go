@@ -433,6 +433,58 @@ func TestNormalizeStartupPresetIDsAllowsReadOnlyFileBackedIDs(t *testing.T) {
 	}
 }
 
+func TestNormalizeStartupPresetsAllowsReadOnlyInlinePrivateKey(t *testing.T) {
+	configDir := filepath.Join(t.TempDir(), "readonly")
+	if err := os.Mkdir(configDir, 0o700); err != nil {
+		t.Fatalf("os.Mkdir returned error: %v", err)
+	}
+	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configData := map[string]any{
+		"Servers": []map[string]any{
+			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
+		},
+		"Presets": []map[string]any{
+			{
+				"ID":    "preset-atlantis",
+				"Title": "Atlantis",
+				"Type":  "SSH",
+				"Host":  "atlantis.home",
+				"Meta": map[string]string{
+					"Authentication": "Private Key",
+					"Private Key":    "INLINE PRIVATE KEY DATA",
+				},
+			},
+		},
+	}
+	content, err := json.MarshalIndent(configData, "", "  ")
+	if err != nil {
+		t.Fatalf("json.MarshalIndent returned error: %v", err)
+	}
+	if err := os.WriteFile(configPath, content, 0o400); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+	if err := os.Chmod(configDir, 0o500); err != nil {
+		t.Fatalf("os.Chmod returned error: %v", err)
+	}
+	defer os.Chmod(configDir, 0o700)
+	defer os.Chmod(configPath, 0o600)
+
+	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("CustomFile returned error: %v", err)
+	}
+	normalized, err := normalizeStartupPresets(cfg, commands.New())
+	if err != nil {
+		t.Fatalf("normalizeStartupPresets returned error: %v", err)
+	}
+	if normalized.Presets[0].Meta["Private Key"] != "INLINE PRIVATE KEY DATA" {
+		t.Fatal("normalized preset did not preserve inline private key")
+	}
+	if _, err := os.Stat(filepath.Join(configDir, "private_keys")); !os.IsNotExist(err) {
+		t.Fatalf("private_keys directory stat error = %v, want not exist", err)
+	}
+}
+
 func TestNormalizeStartupPresetsMigratesPlaintextPrivateKeysToFiles(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "shellport.conf.json")

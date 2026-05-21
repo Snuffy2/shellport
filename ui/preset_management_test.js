@@ -277,6 +277,30 @@ describe("preset editor state", () => {
     expect(config.meta["Private Key"]).toBeUndefined();
   });
 
+  test("buildPresetConfigFromEditorState drops cleared host and user metadata", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-atlantis",
+        title: "Atlantis",
+        type: "SSH",
+        host: "atlantis.home:22",
+        meta: {
+          Host: "atlantis.home:22",
+          User: "pi",
+          Authentication: "None",
+        },
+      }),
+    );
+    state.host = "";
+    state.meta.User = "";
+
+    const config = buildPresetConfigFromEditorState(state);
+
+    expect(config.host).toBe("");
+    expect(config.meta.Host).toBeUndefined();
+    expect(config.meta.User).toBeUndefined();
+  });
+
   test("buildPresetConfigFromEditorState omits password when auth changes away from password", () => {
     const state = buildEditorState(
       new Preset({
@@ -496,5 +520,17 @@ describe("preset editor state", () => {
         Encoding: "utf-8",
       },
     });
+  });
+
+  test("buildPresetConfigFromWizardFields omits blank host metadata", () => {
+    const config = buildPresetConfigFromWizardFields("Telnet", {
+      host: "",
+      encoding: "utf-8",
+    });
+
+    expect(config.host).toBe("");
+    expect(config.title).toBe("New preset");
+    expect(config.meta.Host).toBeUndefined();
+    expect(config.meta.Encoding).toBe("utf-8");
   });
 });
