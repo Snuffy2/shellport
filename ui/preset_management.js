@@ -113,6 +113,7 @@ function editableMetaFromPreset(preset) {
 }
 
 export function buildEditorState(preset, defaults = {}) {
+  const isNewPreset = !preset;
   const meta = preset
     ? editableMetaFromPreset(preset)
     : {
@@ -124,9 +125,11 @@ export function buildEditorState(preset, defaults = {}) {
   delete meta.Fingerprint;
   delete meta.Password;
   delete meta["Encrypted Password"];
+  const defaultAuthentication =
+    isNewPreset && typeUsesAuthentication(type) ? "Private Key" : "";
   meta.Authentication = normalizeAuthenticationForType(
     type,
-    meta.Authentication || "",
+    meta.Authentication || defaultAuthentication,
   );
   meta.Encoding = normalizeEncodingForType(type, meta.Encoding || "utf-8");
 
@@ -151,7 +154,9 @@ export function buildEditorState(preset, defaults = {}) {
     savePassword: hasSavedPassword,
     hasSavedPassword,
     privateKey,
-    savePrivateKey: privateKey.length > 0,
+    savePrivateKey:
+      privateKey.length > 0 ||
+      (isNewPreset && meta.Authentication === "Private Key"),
     privateKeyMode: privateKeyModeForValue(privateKey),
     privateKeyFile:
       privateKey.startsWith("file://") ||

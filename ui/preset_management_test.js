@@ -97,6 +97,34 @@ describe("preset editor state", () => {
     expect(state.privateKeyMode).toBe("paste");
   });
 
+  test("defaults new key-capable presets to private key saving", () => {
+    for (const type of ["SSH", "Mosh", "ET"]) {
+      const state = buildEditorState(null, { type });
+
+      expect(state.meta.Authentication).toBe("Private Key");
+      expect(state.savePrivateKey).toBe(true);
+      expect(state.privateKeyMode).toBe("existing");
+    }
+  });
+
+  test("keeps existing preset authentication defaults unchanged", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-atlantis",
+        title: "Atlantis",
+        type: "SSH",
+        host: "atlantis.home:22",
+        meta: {
+          Authentication: "Password",
+          User: "pi",
+        },
+      }),
+    );
+
+    expect(state.meta.Authentication).toBe("Password");
+    expect(state.savePrivateKey).toBe(false);
+  });
+
   test("file-backed private keys default to existing key mode", () => {
     const state = buildEditorState(null, {
       type: "SSH",
