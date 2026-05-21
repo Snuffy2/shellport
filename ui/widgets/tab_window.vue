@@ -72,8 +72,18 @@ export default {
   },
   emits: ["display", "current", "retap", "close"],
   watch: {
-    tabs(newV) {
-      if (newV.length > 0) {
+    "tabs.length": {
+      handler(newLength) {
+        if (newLength > 0) {
+          return;
+        }
+
+        this.$emit("display", false);
+      },
+      immediate: true,
+    },
+    display(newDisplay) {
+      if (!newDisplay || this.tabs.length > 0) {
         return;
       }
 

@@ -846,6 +846,10 @@ export default {
 
       this.tab.tabs.splice(index, 1);
       this.tab.current = isLast ? this.tab.tabs.length - 1 : index;
+
+      if (this.tab.tabs.length === 0) {
+        this.windows.tabs = false;
+      }
     },
     /**
      * Switches the active session tab to `to`.
