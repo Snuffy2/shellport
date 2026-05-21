@@ -22,7 +22,7 @@ RUN npm ci
 # Build the application binary
 FROM golang:1.26-trixie AS builder
 WORKDIR /src
-ARG SHELLPORT_VERSION=dev
+ARG SHELLPORT_VERSION=
 ARG SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport
 COPY go.mod go.sum ./
 RUN go mod download
