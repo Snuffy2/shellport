@@ -274,7 +274,7 @@ body {
 .icon.icon-warning1::after {
   content: "!";
   font-weight: bold;
-  background: var(--shellport-royal-blue);
+  background: #e11;
   padding: 3px 13px;
 }
 

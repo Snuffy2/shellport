@@ -90,16 +90,16 @@
 }
 
 #conn-status.red:before {
-  background: var(--shellport-royal-blue);
+  background: #a33;
 }
 
 #conn-status.red h1 {
   color: #fff;
-  background: var(--shellport-royal-blue);
+  background: #a33;
 }
 
 #conn-status.red #conn-status-info {
-  background: var(--shellport-royal-blue);
+  background: #a33;
 }
 
 .conn-status-chart {

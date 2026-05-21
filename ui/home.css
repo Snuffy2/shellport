@@ -176,8 +176,8 @@
 }
 
 #home-hd-delay-icon.red {
-  color: var(--shellport-royal-blue);
-  text-shadow: 0 0 3px var(--shellport-royal-blue);
+  color: #e11;
+  text-shadow: 0 0 3px #e11;
 }
 
 #home-hd-delay-icon.flash {
@@ -291,7 +291,7 @@
 }
 
 #home-hd-tabs-tabs > li.error::after {
-  background: var(--shellport-royal-blue);
+  background: #d55;
   height: 2px;
 }
 
