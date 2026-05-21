@@ -430,7 +430,18 @@ export default {
       }
       const reader = new FileReader();
       reader.onload = () => {
+        this.error = "";
         this.localState.privateKey = String(reader.result || "");
+      };
+      reader.onerror = () => {
+        this.localState.privateKey = "";
+        this.error =
+          "Unable to read private key file: " +
+          (reader.error ? reader.error.message : "unknown file read error");
+      };
+      reader.onabort = () => {
+        this.localState.privateKey = "";
+        this.error = "Private key file import was cancelled";
       };
       reader.readAsText(fileInput.files[0], "utf-8");
     },

@@ -45,6 +45,17 @@ describe("preset management UI wiring", () => {
     expect(source).toContain('type="color"');
   });
 
+  test("preset editor clears imported private key on file read failure", () => {
+    const source = readProjectFile("ui/widgets/preset_editor.vue");
+
+    expect(source).toContain("importPrivateKeyFile(event)");
+    expect(source).toContain("reader.onload");
+    expect(source).toContain("reader.onerror");
+    expect(source).toContain("reader.onabort");
+    expect(source).toContain('this.localState.privateKey = ""');
+    expect(source).toContain("this.error");
+  });
+
   test("home updates full preset list for save and delete", () => {
     const source = readProjectFile("ui/home.vue");
 

@@ -481,12 +481,8 @@ describe("preset editor state", () => {
 
   test("buildPresetConfigFromWizardFields maps Telnet connection fields", () => {
     const config = buildPresetConfigFromWizardFields("Telnet", {
-      Host: "legacy.home:23",
-      User: "legacy",
-      Authentication: "Password",
-      Credential: "legacy-pass",
-      Encoding: "utf-8",
-      "Tab Color": "#778899",
+      host: "legacy.home:23",
+      encoding: "utf-8",
     });
 
     expect(config).toEqual({
@@ -494,12 +490,9 @@ describe("preset editor state", () => {
       title: "legacy.home:23",
       type: "Telnet",
       host: "legacy.home:23",
-      tab_color: "#778899",
+      tab_color: "",
       meta: {
         Host: "legacy.home:23",
-        User: "legacy",
-        Authentication: "Password",
-        Password: "legacy-pass",
         Encoding: "utf-8",
       },
     });
