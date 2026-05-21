@@ -290,10 +290,7 @@ export class Stream {
     }
 
     if (this.isShuttingDown) {
-      throw new Exception(
-        "Cannot initialize a stream that is about to shutdown",
-        false,
-      );
+      return;
     }
 
     this.command.initialize(hd);

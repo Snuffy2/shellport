@@ -5,6 +5,7 @@
 package command
 
 import (
+	"bytes"
 	"io"
 	"sync"
 	"testing"
@@ -16,13 +17,14 @@ import (
 func TestHandlerHandleCloseInactiveStreamIsIgnored(t *testing.T) {
 	lock := sync.Mutex{}
 	bufferPool := NewBufferPool(4096)
+	output := bytes.NewBuffer(make([]byte, 0, 1))
 	h := newHandler(
 		Configuration{},
 		&Commands{},
 		rw.NewFetchReader(func() ([]byte, error) {
 			return nil, io.EOF
 		}),
-		io.Discard,
+		output,
 		&lock,
 		0,
 		0,
@@ -35,5 +37,10 @@ func TestHandlerHandleCloseInactiveStreamIsIgnored(t *testing.T) {
 
 	if err := h.handleClose(hd, 1, log.NewDitch()); err != nil {
 		t.Fatalf("inactive close returned error: %v", err)
+	}
+
+	expected := []byte{byte(HeaderCompleted | 1)}
+	if !bytes.Equal(output.Bytes(), expected) {
+		t.Fatalf("expected completed frame %v, got %v", expected, output.Bytes())
 	}
 }

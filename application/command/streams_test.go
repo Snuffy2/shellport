@@ -270,6 +270,11 @@ func TestStreamCloseIsIdempotent(t *testing.T) {
 		t.Fatalf("expected released stream close to be ignored, got %v", closeErr)
 	}
 
+	expected = append(expected, byte(HeaderCompleted|streamID))
+	if !bytes.Equal(output.Bytes(), expected) {
+		t.Fatalf("expected completion frames %v, got %v", expected, output.Bytes())
+	}
+
 	if machine.releaseCalls != 1 {
 		t.Fatalf(
 			"expected Release to be called once, got %d",
