@@ -6,8 +6,8 @@
 # stage. Node is copied from the dependency stage so frontend dependencies stay
 # cacheable without installing Node through apt inside the Go image.
 #
-# The runtime stage is Alpine and contains only the compiled `/shellport` binary
-# and a small entrypoint wrapper for optional Docker TLS environment variables.
+# The runtime stage is Debian Trixie slim and installs the packaged ET client
+# from Eternal Terminal's Debian repository instead of compiling ET from source.
 # Source availability is provided by an in-image source notice, the app's source
 # link, and the OCI source metadata label rather than by copying source files
 # into the image. Release builds pass an immutable commit archive URL as
@@ -38,22 +38,10 @@ RUN set -ex && \
     SHELLPORT_SOURCE_URL="$SHELLPORT_SOURCE_URL" SHELLPORT_VERSION="$SHELLPORT_VERSION" npm run build && \
     mv ./shellport /
 
-# Build the ET client
-FROM alpine:3.23 AS et-builder
-ARG ET_COMMIT=7f566c0f3504e32554d98e71e573976255af91fb
-WORKDIR /src
-RUN set -ex && \
-    apk add --no-cache build-base cmake git pkgconf openssl-dev zlib-dev libsodium-dev protobuf-dev protobuf libunwind-dev libutempter-dev && \
-    git clone --recurse-submodules --depth 1 --branch et-v6.2.11 https://github.com/MisterTea/EternalTerminal.git /src/EternalTerminal && \
-    test "$(git -C /src/EternalTerminal rev-parse HEAD)" = "$ET_COMMIT" && \
-    cmake -S /src/EternalTerminal -B /src/EternalTerminal/build -DCMAKE_BUILD_TYPE=Release -DDISABLE_VCPKG=ON -DBUILD_TESTING=OFF -DDISABLE_SENTRY=ON -DDISABLE_TELEMETRY=ON && \
-    cmake --build /src/EternalTerminal/build --target et --parallel "$(nproc)" && \
-    install -Dm755 /src/EternalTerminal/build/et /out/et
-
 # Build the final image for running
-FROM alpine:3.23
+FROM debian:trixie-slim
+ARG ET_APT_GPG_SHA256=bcc8b1fb4caa1ba935a2f30f0a51866f607d6f5efe77d8d9e70a87f5919e8b3a
 ARG SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport
-ARG ET_COMMIT=7f566c0f3504e32554d98e71e573976255af91fb
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0"
 ENV SHELLPORT_DIALTIMEOUT=10 \
     SHELLPORT_DEBUG= \
@@ -66,10 +54,28 @@ ENV SHELLPORT_DIALTIMEOUT=10 \
     SHELLPORT_HEARTBEATTIMEOUT=0 \
     SHELLPORT_READDELAY=0 \
     SHELLPORT_WRITEDELAY=0
-COPY --from=et-builder /out/et /usr/local/bin/et
 COPY --from=builder /shellport /
 COPY docker-entrypoint.sh /shellport.sh
 RUN set -ex && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl openssh-client tzdata && \
+    install -d -m 0755 /etc/apt/keyrings && \
+    curl -fsSL https://github.com/MisterTea/debian-et/raw/master/et.gpg -o /etc/apt/keyrings/et.gpg && \
+    printf '%s\n' "$ET_APT_GPG_SHA256  /etc/apt/keyrings/et.gpg" | sha256sum -c - && \
+    printf '%s\n' \
+        'deb [signed-by=/etc/apt/keyrings/et.gpg] https://mistertea.github.io/debian-et/debian-source/ trixie main' \
+        > /etc/apt/sources.list.d/et.list && \
+    printf '%s\n' \
+        'Package: et' \
+        'Pin: origin mistertea.github.io' \
+        'Pin-Priority: 1001' \
+        '' \
+        'Package: *' \
+        'Pin: origin mistertea.github.io' \
+        'Pin-Priority: -1' \
+        > /etc/apt/preferences.d/et.pref && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends et && \
     printf '%s\n' \
         'ShellPort source code' \
         '' \
@@ -78,13 +84,17 @@ RUN set -ex && \
         '' \
         'Bundled Eternal Terminal (ET) client' \
         '' \
-        'The ET client binary in this image is built from:' \
-        "https://github.com/MisterTea/EternalTerminal/tree/${ET_COMMIT}" \
+        'Repository signing key SHA-256:' \
+        "$ET_APT_GPG_SHA256" \
+        'Package repository:' \
+        'https://mistertea.github.io/debian-et/debian-source/ trixie main' \
+        'Upstream source:' \
+        'https://github.com/MisterTea/EternalTerminal' \
         'License: Apache-2.0' \
         > /SOURCE.md && \
-    apk add --no-cache abseil-cpp-vlog-config-internal libgcc libprotobuf libstdc++ libunwind libsodium openssh-client openssl tzdata zlib && \
-    adduser -D shellport && \
-    chmod +x /usr/local/bin/et && \
+    apt-get purge -y --auto-remove curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    useradd --system --create-home --shell /usr/sbin/nologin shellport && \
     chmod +x /shellport && \
     chmod +x /shellport.sh
 USER shellport

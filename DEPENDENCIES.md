@@ -53,6 +53,6 @@ Major dependencies include:
 - `github.com/creack/pty`, Licensed under MIT license
 - `golang.org/x/net/proxy` [View license](https://github.com/golang/net/blob/master/LICENSE)
 - `golang.org/x/crypto`, [View license](https://github.com/golang/crypto/blob/master/LICENSE)
-- [Eternal Terminal](https://github.com/MisterTea/EternalTerminal), bundled in
-  the Docker image as the local `et` client from commit
-  `7f566c0f3504e32554d98e71e573976255af91fb`, Licensed under Apache-2.0
+- [Eternal Terminal](https://github.com/MisterTea/EternalTerminal), installed in
+  the Docker image as the local `et` client from the upstream Debian package
+  repository, Licensed under Apache-2.0
