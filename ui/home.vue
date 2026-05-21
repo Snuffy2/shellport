@@ -551,7 +551,7 @@ export default {
               stream,
               self.controls,
               self.connector.historyRec,
-              presets.emptyPreset(),
+              null,
               null,
               false,
               () => {},

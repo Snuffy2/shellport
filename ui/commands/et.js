@@ -100,10 +100,11 @@ export class ET {
         common.strToUint8Array(this.config.etCommand || DEFAULT_ET_COMMAND),
       ),
       etCommandBuf = etCommand.buffer(),
-      presetID = new strings.String(
-        common.strToUint8Array(this.config.presetID || ""),
-      ),
-      presetIDBuf = presetID.buffer();
+      presetIDBuf = this.config.presetID
+        ? new strings.String(
+            common.strToUint8Array(this.config.presetID),
+          ).buffer()
+        : new Uint8Array(0);
 
     let data = new Uint8Array(
       userBuf.length +
@@ -122,14 +123,16 @@ export class ET {
       etCommandBuf,
       userBuf.length + addrBuf.length + 1 + etServerPortBuf.length,
     );
-    data.set(
-      presetIDBuf,
-      userBuf.length +
-        addrBuf.length +
-        1 +
-        etServerPortBuf.length +
-        etCommandBuf.length,
-    );
+    if (presetIDBuf.length > 0) {
+      data.set(
+        presetIDBuf,
+        userBuf.length +
+          addrBuf.length +
+          1 +
+          etServerPortBuf.length +
+          etCommandBuf.length,
+      );
+    }
 
     initialSender.send(data);
   }
@@ -384,22 +387,6 @@ const initialFieldDef = {
       }
 
       return "Will run " + d;
-    },
-  },
-  Notice: {
-    name: "Notice",
-    description: "",
-    type: "textdata",
-    value:
-      "ET session is handled by the backend. Traffic will be decrypted " +
-      "on the backend server and then transmit back to your client.",
-    example: "",
-    readonly: false,
-    suggestions() {
-      return [];
-    },
-    verify() {
-      return "";
     },
   },
   Password: {
@@ -912,7 +899,6 @@ class Wizard {
             { name: "Encoding" },
             { name: "ET Server Port" },
             { name: "ET Command" },
-            { name: "Notice" },
           ],
           self.preset,
           () => {},

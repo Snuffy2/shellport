@@ -71,6 +71,18 @@ describe("SSH Command", () => {
       { save() {} },
     );
     const prompt = wizard.stepInitialPrompt().data();
+    const parsedHost = address.parseHostPort("example.com:22", 22);
+    const expectedUser = new strings.String(
+      common.strToUint8Array("alice"),
+    ).buffer();
+    const expectedAddr = new address.Address(
+      parsedHost.type,
+      parsedHost.address,
+      parsedHost.port,
+    ).buffer();
+    const expected = new Uint8Array(
+      expectedUser.length + expectedAddr.length + 1,
+    );
 
     prompt.respond({
       user: "alice",
@@ -81,6 +93,10 @@ describe("SSH Command", () => {
 
     assert.ok(commandHandler);
     assert.strictEqual(initialSends.length, 1);
+    expected.set(expectedUser, 0);
+    expected.set(expectedAddr, expectedUser.length);
+    expected[expectedUser.length + expectedAddr.length] = 0x01;
+    assert.deepStrictEqual(initialSends[0], expected);
 
     await commandHandler.sendResize(40, 120);
 

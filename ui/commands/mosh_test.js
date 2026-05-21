@@ -171,6 +171,68 @@ describe("Mosh Command", () => {
     );
   });
 
+  it("builds new remote requests without preset-only metadata", () => {
+    let commandHandler = null;
+    let initialSends = [];
+    const streams = {
+      request(_commandId, builder) {
+        commandHandler = builder({ close() {} });
+
+        commandHandler.run({
+          send(payload) {
+            initialSends.push(Uint8Array.from(payload));
+          },
+        });
+      },
+    };
+    const controls = {
+      get(type) {
+        assert.strictEqual(type, "Mosh");
+
+        return {};
+      },
+    };
+    const wizard = new mosh.Command().wizard(
+      new command.Info(new mosh.Command()),
+      null,
+      null,
+      [],
+      streams,
+      { resolve() {} },
+      controls,
+      { save() {} },
+    );
+    const parsedHost = address.parseHostPort("example.com:22", 22);
+    const user = new strings.String(new TextEncoder().encode("alice")).buffer();
+    const addr = new address.Address(
+      parsedHost.type,
+      parsedHost.address,
+      parsedHost.port,
+    ).buffer();
+    const moshServer = new strings.String(
+      new TextEncoder().encode("mosh-server"),
+    ).buffer();
+    const expected = new Uint8Array(
+      user.length + addr.length + 1 + moshServer.length,
+    );
+
+    wizard.stepInitialPrompt().data().respond({
+      user: "alice",
+      host: "example.com:22",
+      authentication: "Password",
+      encoding: "utf-8",
+      "mosh server": "mosh-server",
+    });
+
+    expected.set(user, 0);
+    expected.set(addr, user.length);
+    expected[user.length + addr.length] = 0x01;
+    expected.set(moshServer, user.length + addr.length + 1);
+
+    assert.ok(commandHandler);
+    assert.deepStrictEqual(initialSends[0], expected);
+  });
+
   it("maps unsupported proxy initialization failures to a clear message", () => {
     let commandHandler = null;
     let resolvedStep = null;
@@ -291,10 +353,6 @@ describe("Mosh Command", () => {
     assert.deepStrictEqual(
       (await strings.String.read(rd)).data(),
       new TextEncoder().encode("mosh-server"),
-    );
-    assert.deepStrictEqual(
-      (await strings.String.read(rd)).data(),
-      new TextEncoder().encode(""),
     );
   });
 });

@@ -109,10 +109,13 @@ class SSH {
       ),
       addrBuf = addr.buffer(),
       authMethod = new Uint8Array([this.config.auth]);
-    const presetID = new strings.String(
-        common.strToUint8Array(this.config.presetID || ""),
-      ),
-      presetIDBuf = presetID.buffer();
+    let presetIDBuf = new Uint8Array(0);
+
+    if (this.config.presetID) {
+      presetIDBuf = new strings.String(
+        common.strToUint8Array(this.config.presetID),
+      ).buffer();
+    }
 
     let data = new Uint8Array(
       userBuf.length + addrBuf.length + 1 + presetIDBuf.length,
@@ -121,7 +124,9 @@ class SSH {
     data.set(userBuf, 0);
     data.set(addrBuf, userBuf.length);
     data.set(authMethod, userBuf.length + addrBuf.length);
-    data.set(presetIDBuf, userBuf.length + addrBuf.length + 1);
+    if (presetIDBuf.length > 0) {
+      data.set(presetIDBuf, userBuf.length + addrBuf.length + 1);
+    }
 
     initialSender.send(data);
   }
@@ -336,22 +341,6 @@ const initialFieldDef = {
       }
 
       throw new Error('The character encoding "' + d + '" is not supported');
-    },
-  },
-  Notice: {
-    name: "Notice",
-    description: "",
-    type: "textdata",
-    value:
-      "SSH session is handled by the backend. Traffic will be decrypted " +
-      "on the backend server and then transmit back to your client.",
-    example: "",
-    readonly: false,
-    suggestions(_input) {
-      return [];
-    },
-    verify(_d) {
-      return "";
     },
   },
   Password: {
@@ -831,7 +820,7 @@ class Wizard {
    *
    * @private
    * @returns {object} A NEXT_PROMPT step with Host, User, Authentication,
-   *   Encoding, and Notice fields.
+   *   and Encoding fields.
    */
   stepInitialPrompt() {
     let self = this;
@@ -877,7 +866,6 @@ class Wizard {
           { name: "User" },
           { name: "Authentication" },
           { name: "Encoding" },
-          { name: "Notice" },
         ],
         self.preset,
         (_r) => {},
