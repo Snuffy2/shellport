@@ -49,6 +49,11 @@
   resize: vertical;
 }
 
+#preset-editor input[type="color"] {
+  height: 42px;
+  padding: 4px;
+}
+
 #preset-editor .preset-editor-actions {
   align-items: center;
   flex-direction: row;

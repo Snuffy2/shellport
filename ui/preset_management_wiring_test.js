@@ -38,6 +38,13 @@ describe("preset management UI wiring", () => {
     expect(source).toContain(':delete-preset="presetDeleteHandler"');
   });
 
+  test("preset editor uses color selector for tab color", () => {
+    const source = readProjectFile("ui/widgets/preset_editor.vue");
+
+    expect(source).toContain("Tab color");
+    expect(source).toContain('type="color"');
+  });
+
   test("home updates full preset list for save and delete", () => {
     const source = readProjectFile("ui/home.vue");
 

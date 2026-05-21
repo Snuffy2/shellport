@@ -35,12 +35,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
       <label class="field">
         Tab color
-        <input
-          v-model="localState.tabColor"
-          type="text"
-          autocomplete="off"
-          placeholder="#1f8acb"
-        />
+        <input v-model="localState.tabColor" type="color" autocomplete="off" />
       </label>
 
       <label v-if="usesUser" class="field">
