@@ -300,6 +300,7 @@ export class Stream {
     }
 
     if (this.isShuttingDown) {
+      this.isInitializing = false;
       return;
     }
 

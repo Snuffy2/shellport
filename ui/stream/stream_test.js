@@ -42,6 +42,10 @@ describe("Stream", () => {
 
     st.close();
     st.initialize(initialHeader);
+
+    assert.strictEqual(st.initializing(), false);
+    assert.strictEqual(st.closing(), true);
+
     st.completed();
 
     assert.strictEqual(initialized, 0);
