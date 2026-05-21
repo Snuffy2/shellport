@@ -1383,6 +1383,31 @@ func TestPresetConfigPutCanDeleteHiddenPassword(t *testing.T) {
 	}
 }
 
+func TestParsePresetIDSetAcceptsJSONArrayWithCommaIDs(t *testing.T) {
+	idSet := parsePresetIDSet(`["preset-atlantis","preset,a,b"]`)
+
+	if _, ok := idSet["preset-atlantis"]; !ok {
+		t.Fatal("preset-atlantis missing from parsed ID set")
+	}
+	if _, ok := idSet["preset,a,b"]; !ok {
+		t.Fatal("comma-containing preset ID missing from parsed ID set")
+	}
+	if _, ok := idSet["preset"]; ok {
+		t.Fatal("JSON preset ID was split as CSV")
+	}
+}
+
+func TestParsePresetIDSetKeepsLegacyCSVSupport(t *testing.T) {
+	idSet := parsePresetIDSet("preset-atlantis, preset-columbia")
+
+	if _, ok := idSet["preset-atlantis"]; !ok {
+		t.Fatal("preset-atlantis missing from parsed legacy ID set")
+	}
+	if _, ok := idSet["preset-columbia"]; !ok {
+		t.Fatal("preset-columbia missing from parsed legacy ID set")
+	}
+}
+
 func TestPresetConfigPutPreservesPlaintextPasswordWhenEncryptedAlsoPresentWithoutKey(t *testing.T) {
 	t.Setenv(configuration.PresetSecretKeyEnv, "")
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")

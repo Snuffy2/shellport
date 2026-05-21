@@ -260,6 +260,23 @@ describe("preset editor state", () => {
     );
   });
 
+  test("buildPresetConfigFromEditorState omits empty existing private key reference", () => {
+    const state = buildEditorState(null, {
+      type: "SSH",
+      host: "atlantis.home:22",
+      meta: {
+        Authentication: "Private Key",
+      },
+    });
+    state.privateKeyMode = "existing";
+    state.privateKeyFile = "";
+    state.savePrivateKey = true;
+
+    const config = buildPresetConfigFromEditorState(state);
+
+    expect(config.meta["Private Key"]).toBeUndefined();
+  });
+
   test("buildPresetConfigFromEditorState omits password when auth changes away from password", () => {
     const state = buildEditorState(
       new Preset({

@@ -216,7 +216,11 @@ export function buildPresetConfigFromEditorState(state) {
     state.savePrivateKey
   ) {
     if (state.privateKeyMode === "existing") {
-      meta["Private Key"] = state.privateKeyFile;
+      if (state.privateKeyFile.length > 0) {
+        meta["Private Key"] = state.privateKeyFile;
+      } else {
+        delete meta["Private Key"];
+      }
     } else if (state.privateKey.length > 0) {
       meta["Private Key"] = state.privateKey;
     } else {

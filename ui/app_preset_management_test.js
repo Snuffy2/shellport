@@ -118,7 +118,7 @@ describe("app preset management wiring", () => {
       'headers["X-Preserve-Hidden-Preset-Passwords"] = "yes";',
     );
     expect(source).toContain('headers["X-Clear-Hidden-Preset-Passwords"]');
-    expect(source).toContain('clearPasswordIDs.join(",")');
+    expect(source).toContain("JSON.stringify(clearPasswordIDs)");
   });
 });
 
@@ -168,11 +168,12 @@ describe("savePresetConfigRequest", () => {
       updatedPresets: [{ id: "preset-1" }],
       options: {
         adminKey: "admin-pass",
-        clearPasswordIDs: ["preset-1", "preset-2"],
+        clearPasswordIDs: ["preset-1", "preset,2"],
       },
       presetData: {
         management: {
           can_manage: true,
+          requires_admin_key: true,
         },
       },
       presetConfigPassphrase: "shared-key",
@@ -188,7 +189,7 @@ describe("savePresetConfigRequest", () => {
       expect.objectContaining({
         "Content-Type": "application/json",
         "X-Preserve-Hidden-Preset-Passwords": "yes",
-        "X-Clear-Hidden-Preset-Passwords": "preset-1,preset-2",
+        "X-Clear-Hidden-Preset-Passwords": '["preset-1","preset,2"]',
       }),
       JSON.stringify({ presets: [{ id: "preset-1" }] }),
     );
@@ -219,6 +220,7 @@ describe("savePresetConfigRequest", () => {
       presetData: {
         management: {
           can_manage: true,
+          requires_admin_key: true,
         },
       },
       presetConfigPassphrase: "shared-key",
@@ -234,6 +236,37 @@ describe("savePresetConfigRequest", () => {
       privateKeyFiles: [],
       presets: [{ id: "preset-1" }],
     });
+  });
+
+  test("uses shared key instead of cached admin key when admin key is not required", async () => {
+    const headerBuilder = vi.fn(async (passphrase) => {
+      expect(passphrase).toBe("shared-key");
+      return {
+        "Content-Type": "application/json",
+      };
+    });
+    const xhrPut = vi.fn().mockResolvedValueOnce({
+      status: 200,
+      responseText: JSON.stringify({ presets: [{ id: "preset-1" }] }),
+    });
+
+    await savePresetConfigRequest({
+      updatedPresets: [{ id: "preset-1" }],
+      options: {},
+      presetData: {
+        management: {
+          can_manage: true,
+          requires_admin_key: false,
+        },
+      },
+      presetConfigPassphrase: "shared-key",
+      presetAdminPassphrase: "stale-admin",
+      presetConfigHeadersForPassphrase: headerBuilder,
+      xhrPut,
+      presetConfigInterface: "/shellport/config/presets",
+    });
+
+    expect(headerBuilder).toHaveBeenCalledTimes(1);
   });
 
   test("throws when full-list save returns non-200", async () => {
@@ -258,5 +291,30 @@ describe("savePresetConfigRequest", () => {
         presetConfigInterface: "/shellport/config/presets",
       }),
     ).rejects.toThrow("Preset config write failed: 500");
+  });
+
+  test("attaches response status to full-list save errors", async () => {
+    const headerBuilder = vi.fn(async () => ({}));
+    const xhrPut = vi.fn().mockResolvedValueOnce({
+      status: 403,
+      responseText: JSON.stringify({ presets: [] }),
+    });
+
+    await expect(
+      savePresetConfigRequest({
+        updatedPresets: [],
+        presetData: {
+          management: {
+            can_manage: true,
+            requires_admin_key: true,
+          },
+        },
+        presetConfigPassphrase: "shared-key",
+        presetAdminPassphrase: "cached-admin",
+        presetConfigHeadersForPassphrase: headerBuilder,
+        xhrPut,
+        presetConfigInterface: "/shellport/config/presets",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });

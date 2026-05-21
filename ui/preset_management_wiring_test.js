@@ -52,6 +52,11 @@ describe("preset management UI wiring", () => {
     expect(source).toContain("savePresetFromEditor(payload)");
     expect(source).toContain("deletePresetFromEditor(payload)");
     expect(source).toContain("clearHiddenPasswordIDs");
+    expect(source).toContain("presetConfigs: this.clonePresetConfigs");
+    expect(source).toContain("this.presetConfigs = this.clonePresetConfigs");
+    expect(source).toContain(
+      "return this.clonePresetConfigs(this.presetConfigs)",
+    );
   });
 
   test("home only passes save-as callback when preset management is available", () => {

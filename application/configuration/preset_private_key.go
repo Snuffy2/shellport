@@ -170,14 +170,17 @@ func writePresetPrivateKeyFile(path string, value string) error {
 		return err
 	}
 	if _, writeErr := f.WriteString(value); writeErr != nil {
-		f.Close()
+		_ = f.Close()
+		_ = os.Remove(path)
 		return writeErr
 	}
 	if syncErr := f.Sync(); syncErr != nil {
-		f.Close()
+		_ = f.Close()
+		_ = os.Remove(path)
 		return syncErr
 	}
 	if closeErr := f.Close(); closeErr != nil {
+		_ = os.Remove(path)
 		return closeErr
 	}
 	return os.Chmod(path, 0o600)

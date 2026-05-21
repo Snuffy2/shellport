@@ -450,6 +450,23 @@ func samePresetMetaExceptFingerprint(
 
 func parsePresetIDSet(raw string) map[string]struct{} {
 	idSet := make(map[string]struct{})
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return idSet
+	}
+	if strings.HasPrefix(raw, "[") {
+		var presetIDs []string
+		if err := json.Unmarshal([]byte(raw), &presetIDs); err == nil {
+			for _, presetID := range presetIDs {
+				presetID = strings.TrimSpace(presetID)
+				if presetID == "" {
+					continue
+				}
+				idSet[presetID] = struct{}{}
+			}
+			return idSet
+		}
+	}
 	for _, presetID := range strings.Split(raw, ",") {
 		presetID = strings.TrimSpace(presetID)
 		if presetID == "" {

@@ -82,10 +82,11 @@ export async function savePresetConfigRequest({
     typeof options.adminKey === "string" && options.adminKey.length > 0
       ? options.adminKey
       : null;
+  const adminKeyRequired = presetData.management?.requires_admin_key === true;
   const passphrase =
     providedAdminKey !== null
       ? providedAdminKey
-      : presetAdminPassphrase.length > 0
+      : adminKeyRequired && presetAdminPassphrase.length > 0
         ? presetAdminPassphrase
         : presetConfigPassphrase;
   const clearPasswordIDs = Array.isArray(options.clearPasswordIDs)
@@ -94,7 +95,8 @@ export async function savePresetConfigRequest({
   const headers = await presetConfigHeadersForPassphrase(passphrase);
   headers["X-Preserve-Hidden-Preset-Passwords"] = "yes";
   if (clearPasswordIDs.length > 0) {
-    headers["X-Clear-Hidden-Preset-Passwords"] = clearPasswordIDs.join(",");
+    headers["X-Clear-Hidden-Preset-Passwords"] =
+      JSON.stringify(clearPasswordIDs);
   }
 
   const putResponse = await xhrPut(
@@ -103,7 +105,9 @@ export async function savePresetConfigRequest({
     JSON.stringify({ presets: updatedPresets }),
   );
   if (putResponse.status !== 200) {
-    throw new Error("Preset config write failed: " + putResponse.status);
+    const err = new Error("Preset config write failed: " + putResponse.status);
+    err.status = putResponse.status;
+    throw err;
   }
 
   const body = JSON.parse(putResponse.responseText);
@@ -533,17 +537,25 @@ function startApp(rootEl) {
        * @returns {Promise<Array<object>>} Updated preset config list.
        */
       async savePresetConfig(updatedPresets, options = {}) {
-        const result = await savePresetConfigRequest({
-          updatedPresets,
-          options,
-          presetData: this.presetData,
-          presetConfigPassphrase: this.presetConfigPassphrase,
-          presetAdminPassphrase: this.presetAdminPassphrase,
-          presetConfigHeadersForPassphrase: (passphrase) =>
-            this.presetConfigHeadersForPassphrase(passphrase),
-          xhrPut: xhr.put,
-          presetConfigInterface,
-        });
+        let result;
+        try {
+          result = await savePresetConfigRequest({
+            updatedPresets,
+            options,
+            presetData: this.presetData,
+            presetConfigPassphrase: this.presetConfigPassphrase,
+            presetAdminPassphrase: this.presetAdminPassphrase,
+            presetConfigHeadersForPassphrase: (passphrase) =>
+              this.presetConfigHeadersForPassphrase(passphrase),
+            xhrPut: xhr.put,
+            presetConfigInterface,
+          });
+        } catch (e) {
+          if (e && e.status === 403) {
+            this.presetAdminPassphrase = "";
+          }
+          throw e;
+        }
 
         if (typeof result.adminKey === "string" && result.adminKey.length > 0) {
           this.presetAdminPassphrase = result.adminKey;

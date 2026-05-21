@@ -336,6 +336,7 @@ export default {
         refreshingPresets: false,
       },
       presets: markRaw(this.commands.mergePresets(this.presetData)),
+      presetConfigs: this.clonePresetConfigs(this.presetData.toConfig()),
       presetEditor: null,
       tab: {
         current: -1,
@@ -696,12 +697,19 @@ export default {
      * @returns {void}
      */
     replacePresets(updatedPresets) {
+      this.presetConfigs = this.clonePresetConfigs(updatedPresets);
       this.presets = markRaw(
         this.commands.mergePresets(new presets.Presets(updatedPresets)),
       );
     },
+    clonePresetConfigs(configs) {
+      return configs.map((preset) => ({
+        ...preset,
+        meta: { ...(preset.meta || {}) },
+      }));
+    },
     rawPresetConfigs() {
-      return this.presetData.toConfig();
+      return this.clonePresetConfigs(this.presetConfigs);
     },
     openPresetEditor(preset) {
       if (!this.canManagePresets) {
