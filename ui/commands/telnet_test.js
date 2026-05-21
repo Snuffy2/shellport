@@ -8,6 +8,31 @@ import * as command from "./commands.js";
 import * as telnet from "./telnet.js";
 
 describe("Telnet Command", () => {
+  it("keeps the initial prompt free of connection help text", () => {
+    const wizard = new telnet.Command().wizard(
+      new command.Info(new telnet.Command()),
+      null,
+      null,
+      [],
+      null,
+      null,
+      {
+        get(type) {
+          assert.strictEqual(type, "Telnet");
+
+          return {};
+        },
+      },
+      null,
+    );
+    const fields = wizard.stepInitialPrompt().data().inputs;
+    const host = fields.find((field) => field.name === "Host");
+    const encoding = fields.find((field) => field.name === "Encoding");
+
+    assert.strictEqual(host.description, "");
+    assert.strictEqual(encoding.description, "");
+  });
+
   it("does not expose a terminal resize API", async () => {
     let commandHandler = null;
     let initialSends = [];

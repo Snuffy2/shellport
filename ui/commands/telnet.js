@@ -192,10 +192,7 @@ class Telnet {
 const initialFieldDef = {
   Host: {
     name: "Host",
-    description:
-      "Looking for server to connect&quest; Checkout " +
-      '<a href="http://www.telnet.org/htm/places.htm" target="blank">' +
-      "telnet.org</a> for public servers.",
+    description: "",
     type: "text",
     value: "",
     example: "telnet.example.com:23",
@@ -229,7 +226,7 @@ const initialFieldDef = {
   },
   Encoding: {
     name: "Encoding",
-    description: "The character encoding of the server",
+    description: "",
     type: "select",
     value: "utf-8",
     example: common.charsetPresets.join(","),

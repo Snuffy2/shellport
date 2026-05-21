@@ -324,7 +324,7 @@ const initialFieldDef = {
   },
   Encoding: {
     name: "Encoding",
-    description: "The character encoding of the server",
+    description: "",
     type: "select",
     value: "utf-8",
     example: common.charsetPresets.join(","),
@@ -436,10 +436,7 @@ const initialFieldDef = {
   },
   Authentication: {
     name: "Authentication",
-    description:
-      "Please make sure the authentication method that you selected is " +
-      "supported by the server, otherwise it will be ignored and likely " +
-      "cause the login to fail",
+    description: "",
     type: "radio",
     value: "",
     example: "Password,Private Key,None",

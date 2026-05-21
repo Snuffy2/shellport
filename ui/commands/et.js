@@ -333,7 +333,7 @@ const initialFieldDef = {
   },
   Encoding: {
     name: "Encoding",
-    description: "The character encoding of the server",
+    description: "",
     type: "select",
     value: "utf-8",
     example: "utf-8",
@@ -351,7 +351,7 @@ const initialFieldDef = {
   },
   "ET Server Port": {
     name: "ET Server Port",
-    description: "Remote etserver TCP port",
+    description: "",
     type: "text",
     value: DEFAULT_ET_SERVER_PORT,
     example: DEFAULT_ET_SERVER_PORT,
@@ -370,24 +370,6 @@ const initialFieldDef = {
 
       const port = Number.parseInt(d, 10);
       return "Will connect to etserver port " + port;
-    },
-  },
-  "ET Command": {
-    name: "ET Command",
-    description: "Local ET client command path",
-    type: "text",
-    value: DEFAULT_ET_COMMAND,
-    example: DEFAULT_ET_COMMAND,
-    readonly: true,
-    suggestions() {
-      return [];
-    },
-    verify(d) {
-      if (d !== DEFAULT_ET_COMMAND) {
-        throw new Error("ET Command is fixed by the ShellPort backend");
-      }
-
-      return "Will run " + d;
     },
   },
   Password: {
@@ -482,10 +464,7 @@ const initialFieldDef = {
   },
   Authentication: {
     name: "Authentication",
-    description:
-      "Please make sure the authentication method that you selected is " +
-      "supported by the server, otherwise it will be ignored and likely " +
-      "cause the login to fail",
+    description: "",
     type: "radio",
     value: "",
     example: "Private Key",
@@ -578,10 +557,6 @@ function normalizeETPresetFields(fields) {
       !validETServerPort(fields[i].value)
     ) {
       fields[i].value = DEFAULT_ET_SERVER_PORT;
-    }
-
-    if (fields[i].name === "ET Command") {
-      fields[i].value = DEFAULT_ET_COMMAND;
     }
   }
 
@@ -871,7 +846,7 @@ class Wizard {
               host: r.host,
               charset: r.encoding,
               etServerPort: r["et server port"],
-              etCommand: r["et command"],
+              etCommand: DEFAULT_ET_COMMAND,
               tabColor: self.preset ? self.preset.tabColor() : "",
               fingerprint: self.preset
                 ? self.preset.metaDefault("Fingerprint", "")
@@ -911,7 +886,6 @@ class Wizard {
             { name: "Authentication" },
             { name: "Encoding" },
             { name: "ET Server Port" },
-            { name: "ET Command" },
           ],
           self.preset,
           () => {},
@@ -1254,7 +1228,9 @@ export class Command {
       initialFieldDef["Authentication"].verify(auth);
       initialFieldDef["Encoding"].verify(charset);
       initialFieldDef["ET Server Port"].verify(etServerPort);
-      initialFieldDef["ET Command"].verify(etCommand);
+      if (etCommand !== DEFAULT_ET_COMMAND) {
+        throw new Error("ET Command is fixed by the ShellPort backend");
+      }
     } catch (e) {
       throw new Exception(
         'Given launcher "' + launcher + '" was malformed ' + e,
