@@ -29,6 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-only
         :state="presetEditor.state"
         :policy="presetManagementPolicy"
         :admin-key-cached="adminKeyCached"
+        :private-key-files="privateKeyFiles"
         :save-preset="presetSaveHandler"
         :delete-preset="presetDeleteHandler"
         @cancel="cancelPresetEditor"
@@ -151,6 +152,10 @@ export default {
     adminKeyCached: {
       type: Boolean,
       default: false,
+    },
+    privateKeyFiles: {
+      type: Array,
+      default: () => [],
     },
   },
   emits: [

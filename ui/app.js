@@ -62,7 +62,7 @@ const updateIndicatorMaxDisplayTime = 3000;
  * @param {function(string, Object.<string, string>, string): Promise<{status:number,responseText:string}>} args.xhrPut
  *   HTTP PUT function.
  * @param {string} args.presetConfigInterface Endpoint for preset config writes.
- * @returns {Promise<{presets:Array<object>,adminKey:string|null}>} Updated presets and key candidate.
+ * @returns {Promise<{presets:Array<object>,adminKey:string|null,privateKeyFiles:Array<string>}>} Updated presets and key candidate.
  */
 export async function savePresetConfigRequest({
   updatedPresets,
@@ -111,6 +111,7 @@ export async function savePresetConfigRequest({
   return {
     presets: body.presets ? body.presets : [],
     adminKey: providedAdminKey,
+    privateKeyFiles: body.private_key_files ? body.private_key_files : [],
   };
 }
 
@@ -128,6 +129,7 @@ const mainTemplate = `
   :restricted-to-presets="presetData.restricted"
   :preset-config-writable="presetData.writable"
   :preset-management-policy="presetData.management"
+  :preset-private-key-files="presetData.privateKeyFiles"
   :save-preset-config="savePresetConfig"
   :admin-key-required="presetAdminKeyRequired"
   :save-preset-fingerprint="savePresetFingerprint"
@@ -238,6 +240,7 @@ function startApp(rootEl) {
             requires_admin_key: false,
             blocked_by_preset_restriction: false,
           },
+          privateKeyFiles: [],
         },
         presetConfigPassphrase: "",
         presetAdminPassphrase: "",
@@ -464,6 +467,9 @@ function startApp(rootEl) {
           restricted: authResult.onlyAllowPresetRemotes,
           writable: authData.preset_config_writable === true,
           management: presetManagement,
+          privateKeyFiles: authData.private_key_files
+            ? authData.private_key_files
+            : [],
         };
         this.presetConfigPassphrase = passphrase;
         this.socket = markRaw(
@@ -542,7 +548,7 @@ function startApp(rootEl) {
         if (typeof result.adminKey === "string" && result.adminKey.length > 0) {
           this.presetAdminPassphrase = result.adminKey;
         }
-        this.replacePresetData(result.presets);
+        this.replacePresetData(result.presets, result.privateKeyFiles);
 
         return result.presets;
       },
@@ -552,12 +558,16 @@ function startApp(rootEl) {
        * @param {Array<object>} updatedPresets Raw preset configs from backend.
        * @returns {void}
        */
-      replacePresetData(updatedPresets) {
+      replacePresetData(updatedPresets, privateKeyFiles = null) {
         this.presetData = {
           presets: markRaw(new Presets(updatedPresets)),
           restricted: this.presetData.restricted,
           writable: this.presetData.writable,
           management: this.presetData.management,
+          privateKeyFiles:
+            privateKeyFiles === null
+              ? this.presetData.privateKeyFiles
+              : privateKeyFiles,
         };
       },
       /**
@@ -576,7 +586,10 @@ function startApp(rootEl) {
 
         const body = JSON.parse(getResponse.responseText);
         const updatedPresets = body.presets ? body.presets : [];
-        this.replacePresetData(updatedPresets);
+        this.replacePresetData(
+          updatedPresets,
+          body.private_key_files ? body.private_key_files : [],
+        );
 
         return updatedPresets;
       },

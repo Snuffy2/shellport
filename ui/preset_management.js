@@ -41,6 +41,16 @@ function normalizeAuthenticationForType(type, authentication) {
   return options[0];
 }
 
+function privateKeyModeForValue(value) {
+  if (value.startsWith("file://") || value.startsWith("environment://")) {
+    return "existing";
+  }
+  if (value.length > 0) {
+    return "paste";
+  }
+  return "existing";
+}
+
 export function canManagePresets(policy) {
   return !!policy && policy.can_manage === true;
 }
@@ -109,6 +119,12 @@ export function buildEditorState(preset, defaults = {}) {
     hasSavedPassword,
     privateKey,
     savePrivateKey: privateKey.length > 0,
+    privateKeyMode: privateKeyModeForValue(privateKey),
+    privateKeyFile:
+      privateKey.startsWith("file://") ||
+      privateKey.startsWith("environment://")
+        ? privateKey
+        : "",
     confirmDelete: false,
     error: "",
   };
@@ -155,10 +171,15 @@ export function buildPresetConfigFromEditorState(state) {
   if (
     usesAuthentication &&
     authentication === "Private Key" &&
-    state.savePrivateKey &&
-    state.privateKey.length > 0
+    state.savePrivateKey
   ) {
-    meta["Private Key"] = state.privateKey;
+    if (state.privateKeyMode === "existing") {
+      meta["Private Key"] = state.privateKeyFile;
+    } else if (state.privateKey.length > 0) {
+      meta["Private Key"] = state.privateKey;
+    } else {
+      delete meta["Private Key"];
+    }
   } else {
     delete meta["Private Key"];
   }

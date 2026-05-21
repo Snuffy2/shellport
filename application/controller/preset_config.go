@@ -35,7 +35,8 @@ type presetConfig struct {
 
 // presetConfigResponse is the JSON envelope returned by preset config APIs.
 type presetConfigResponse struct {
-	Presets []socketRemotePreset `json:"presets"`
+	Presets         []socketRemotePreset `json:"presets"`
+	PrivateKeyFiles []string             `json:"private_key_files"`
 }
 
 // presetConfigRequest is the JSON envelope accepted by preset config APIs.
@@ -63,7 +64,11 @@ func (p presetConfig) Get(
 	if _, err := p.requireAuth(r); err != nil {
 		return err
 	}
-	return p.writePresets(w, p.commonCfg.CurrentPresets())
+	presets, err := p.migrateCurrentPresetPrivateKeys()
+	if err != nil {
+		return NewError(http.StatusInternalServerError, err.Error())
+	}
+	return p.writePresets(w, presets)
 }
 
 // Put replaces the full preset list, adding missing IDs and persisting the file.
@@ -168,6 +173,13 @@ func (p presetConfig) Put(
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
 	}
+	normalized, _, err = configuration.MigratePresetPrivateKeysToFiles(
+		p.commonCfg.SourceFile,
+		normalized,
+	)
+	if err != nil {
+		return NewError(http.StatusInternalServerError, err.Error())
+	}
 	normalized, _, err = configuration.ApplyPresetSecrets(normalized)
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
@@ -200,6 +212,21 @@ func (p presetConfig) unlockPresetUpdates() {
 	if p.commonCfg.PresetRepository != nil {
 		p.commonCfg.PresetRepository.UnlockUpdates()
 	}
+}
+
+func (p presetConfig) migrateCurrentPresetPrivateKeys() ([]configuration.Preset, error) {
+	current := p.commonCfg.CurrentPresets()
+	presets, changed, err := configuration.MigratePresetPrivateKeysToFiles(
+		p.commonCfg.SourceFile,
+		current,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if changed && p.commonCfg.PresetRepository != nil {
+		p.commonCfg.PresetRepository.Replace(presets)
+	}
+	return presets, nil
 }
 
 func presetConfigRequestPresets(
@@ -529,6 +556,15 @@ func (p presetConfig) writePresets(
 	w.Header().Add("Pragma", "no-store")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	return json.NewEncoder(w).Encode(presetConfigResponse{
-		Presets: newSocketAccessConfiguration(presets, "", "", false).Presets,
+		Presets:         newSocketAccessConfiguration(presets, "", "", false).Presets,
+		PrivateKeyFiles: p.privateKeyFiles(),
 	})
+}
+
+func (p presetConfig) privateKeyFiles() []string {
+	files, err := configuration.ListPresetPrivateKeyFiles(p.commonCfg.SourceFile)
+	if err != nil {
+		return []string{}
+	}
+	return files
 }

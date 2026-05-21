@@ -62,3 +62,46 @@ func presetPasswordCredential(
 	}
 	return "", false
 }
+
+func presetPrivateKeyCredential(
+	cfg command.Configuration,
+	presetType string,
+	presetID string,
+	user string,
+	host string,
+) (string, bool) {
+	if presetID == "" {
+		return "", false
+	}
+	presets := cfg.Presets
+	if cfg.PresetRepository != nil {
+		presets = cfg.PresetRepository.List()
+	}
+	for _, preset := range presets {
+		if preset.ID != presetID {
+			continue
+		}
+		if preset.Type != presetType {
+			continue
+		}
+		if preset.Host != host {
+			continue
+		}
+		if preset.Meta["User"] != user {
+			continue
+		}
+		if preset.Meta["Authentication"] != "Private Key" {
+			continue
+		}
+		credential := preset.Meta[configuration.PresetMetaPrivateKey]
+		if credential == "" {
+			return "", false
+		}
+		parsed, err := configuration.String(credential).Parse()
+		if err != nil {
+			return "", false
+		}
+		return parsed, true
+	}
+	return "", false
+}

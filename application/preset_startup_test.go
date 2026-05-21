@@ -432,3 +432,167 @@ func TestNormalizeStartupPresetIDsAllowsReadOnlyFileBackedIDs(t *testing.T) {
 		t.Fatalf("persisted ID = %q, want empty", reloaded.Presets[0].ID)
 	}
 }
+
+func TestNormalizeStartupPresetsMigratesPlaintextPrivateKeysToFiles(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configData := map[string]any{
+		"Servers": []map[string]any{
+			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
+		},
+		"Presets": []map[string]any{
+			{
+				"ID":    "preset-atlantis",
+				"Title": "Atlantis Main",
+				"Type":  "SSH",
+				"Host":  "atlantis.home",
+				"Meta": map[string]string{
+					"Authentication": "Private Key",
+					"Private Key":    "INLINE PRIVATE KEY DATA",
+				},
+			},
+			{
+				"ID":    "preset-literal",
+				"Title": "Literal Key",
+				"Type":  "Mosh",
+				"Host":  "literal.home",
+				"Meta": map[string]string{
+					"Authentication": "Private Key",
+					"Private Key":    "literal://LITERAL PRIVATE KEY DATA",
+				},
+			},
+		},
+	}
+	content, err := json.MarshalIndent(configData, "", "  ")
+	if err != nil {
+		t.Fatalf("json.MarshalIndent returned error: %v", err)
+	}
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("CustomFile returned error: %v", err)
+	}
+	normalized, err := normalizeStartupPresets(cfg, commands.New())
+	if err != nil {
+		t.Fatalf("normalizeStartupPresets returned error: %v", err)
+	}
+
+	resolvedConfigDir, err := filepath.EvalSymlinks(configDir)
+	if err != nil {
+		t.Fatalf("filepath.EvalSymlinks returned error: %v", err)
+	}
+	keyDir := filepath.Join(resolvedConfigDir, "private_keys")
+	for _, tc := range []struct {
+		name string
+		file string
+		want string
+	}{
+		{name: "inline", file: "atlantis-main.key", want: "INLINE PRIVATE KEY DATA"},
+		{name: "literal", file: "literal-key.key", want: "LITERAL PRIVATE KEY DATA"},
+	} {
+		keyPath := filepath.Join(keyDir, tc.file)
+		data, err := os.ReadFile(keyPath)
+		if err != nil {
+			t.Fatalf("%s key os.ReadFile returned error: %v", tc.name, err)
+		}
+		if string(data) != tc.want {
+			t.Fatalf("%s key data = %q, want %q", tc.name, string(data), tc.want)
+		}
+		info, err := os.Stat(keyPath)
+		if err != nil {
+			t.Fatalf("%s key os.Stat returned error: %v", tc.name, err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s key mode = %o, want 0600", tc.name, info.Mode().Perm())
+		}
+	}
+	if normalized.Presets[0].Meta["Private Key"] != "file://"+filepath.Join(keyDir, "atlantis-main.key") {
+		t.Fatal("normalized inline preset did not use migrated private key file")
+	}
+	if normalized.Presets[1].Meta["Private Key"] != "file://"+filepath.Join(keyDir, "literal-key.key") {
+		t.Fatal("normalized literal preset did not use migrated private key file")
+	}
+
+	var raw struct {
+		Presets []struct {
+			Meta map[string]configuration.String
+		}
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile config returned error: %v", err)
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if raw.Presets[0].Meta["Private Key"] != configuration.String("file://"+filepath.Join(keyDir, "atlantis-main.key")) {
+		t.Fatalf("raw inline private key = %q", raw.Presets[0].Meta["Private Key"])
+	}
+	if raw.Presets[1].Meta["Private Key"] != configuration.String("file://"+filepath.Join(keyDir, "literal-key.key")) {
+		t.Fatalf("raw literal private key = %q", raw.Presets[1].Meta["Private Key"])
+	}
+}
+
+func TestNormalizeStartupPresetsPreservesEnvironmentPrivateKeys(t *testing.T) {
+	t.Setenv("SHELLPORT_TEST_PRIVATE_KEY", "ENV PRIVATE KEY DATA")
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configData := map[string]any{
+		"Servers": []map[string]any{
+			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
+		},
+		"Presets": []map[string]any{
+			{
+				"ID":    "preset-env",
+				"Title": "Env Key",
+				"Type":  "SSH",
+				"Host":  "env.home",
+				"Meta": map[string]string{
+					"Authentication": "Private Key",
+					"Private Key":    "environment://SHELLPORT_TEST_PRIVATE_KEY",
+				},
+			},
+		},
+	}
+	content, err := json.MarshalIndent(configData, "", "  ")
+	if err != nil {
+		t.Fatalf("json.MarshalIndent returned error: %v", err)
+	}
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("CustomFile returned error: %v", err)
+	}
+	normalized, err := normalizeStartupPresets(cfg, commands.New())
+	if err != nil {
+		t.Fatalf("normalizeStartupPresets returned error: %v", err)
+	}
+	if normalized.Presets[0].Meta["Private Key"] != "environment://SHELLPORT_TEST_PRIVATE_KEY" {
+		t.Fatal("normalized env preset did not keep environment private key reference")
+	}
+	if _, err := os.Stat(filepath.Join(configDir, "private_keys")); !os.IsNotExist(err) {
+		t.Fatalf("private_keys directory stat error = %v, want not exist", err)
+	}
+
+	var raw struct {
+		Presets []struct {
+			Meta map[string]configuration.String
+		}
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile config returned error: %v", err)
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal returned error: %v", err)
+	}
+	if raw.Presets[0].Meta["Private Key"] != "environment://SHELLPORT_TEST_PRIVATE_KEY" {
+		t.Fatalf("raw private key = %q", raw.Presets[0].Meta["Private Key"])
+	}
+}

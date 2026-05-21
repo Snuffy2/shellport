@@ -60,6 +60,23 @@ describe("preset editor state", () => {
 
     expect(state.savePassword).toBe(false);
     expect(state.savePrivateKey).toBe(true);
+    expect(state.privateKeyMode).toBe("paste");
+  });
+
+  test("file-backed private keys default to existing key mode", () => {
+    const state = buildEditorState(null, {
+      type: "SSH",
+      meta: {
+        Authentication: "Private Key",
+        "Private Key": "file:///config/private_keys/atlantis.key",
+      },
+    });
+
+    expect(state.savePrivateKey).toBe(true);
+    expect(state.privateKeyMode).toBe("existing");
+    expect(state.privateKeyFile).toBe(
+      "file:///config/private_keys/atlantis.key",
+    );
   });
 
   test("cloneEditorState works when structuredClone is unavailable", () => {
@@ -162,6 +179,23 @@ describe("preset editor state", () => {
     const config = buildPresetConfigFromEditorState(state);
 
     expect(config.meta["Private Key"]).toBeUndefined();
+  });
+
+  test("buildPresetConfigFromEditorState stores existing private key reference", () => {
+    const state = buildEditorState(null, {
+      type: "SSH",
+      host: "atlantis.home:22",
+      meta: {
+        Authentication: "Private Key",
+        "Private Key": "file:///config/private_keys/atlantis.key",
+      },
+    });
+
+    const config = buildPresetConfigFromEditorState(state);
+
+    expect(config.meta["Private Key"]).toBe(
+      "file:///config/private_keys/atlantis.key",
+    );
   });
 
   test("buildPresetConfigFromEditorState omits password when auth changes away from password", () => {

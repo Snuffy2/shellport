@@ -416,6 +416,20 @@ func (d *sshClient) buildAuthMethod(
 		return func(b []byte) []ssh.AuthMethod {
 			return []ssh.AuthMethod{
 				ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
+					if credential, ok := presetPrivateKeyCredential(
+						d.cfg,
+						"SSH",
+						presetID,
+						user,
+						host,
+					); ok {
+						signer, signerErr := ssh.ParsePrivateKey([]byte(credential))
+						if signerErr != nil {
+							return nil, signerErr
+						}
+						return []ssh.Signer{signer}, nil
+					}
+
 					d.enableRemoteReadTimeoutRetry()
 					defer d.disableRemoteReadTimeoutRetry()
 

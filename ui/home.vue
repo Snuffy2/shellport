@@ -86,6 +86,7 @@ SPDX-License-Identifier: AGPL-3.0-only
       :can-manage-presets="canManagePresets"
       :preset-editor="presetEditor"
       :preset-management-policy="presetManagementPolicy"
+      :private-key-files="presetPrivateKeyFiles"
       :admin-key-cached="adminKeyCached"
       :preset-save-handler="savePresetFromEditor"
       :preset-delete-handler="deletePresetFromEditor"
@@ -303,6 +304,10 @@ export default {
     refreshPresetConfig: {
       type: Function,
       default: () => null,
+    },
+    presetPrivateKeyFiles: {
+      type: Array,
+      default: () => [],
     },
   },
   emits: [

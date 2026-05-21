@@ -658,15 +658,29 @@ func (d *etClient) validateProxySupport() error {
 
 func (d *etClient) buildAuthMethod(
 	methodType byte,
-	_ string,
-	_ string,
-	_ string,
+	presetID string,
+	user string,
+	host string,
 ) (sshAuthMethodBuilder, error) {
 	switch methodType {
 	case SSHAuthMethodPrivateKey:
 		return func(b []byte) []ssh.AuthMethod {
 			return []ssh.AuthMethod{
 				ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
+					if credential, ok := presetPrivateKeyCredential(
+						d.cfg,
+						"ET",
+						presetID,
+						user,
+						host,
+					); ok {
+						signer, signerErr := ssh.ParsePrivateKey([]byte(credential))
+						if signerErr != nil {
+							return nil, signerErr
+						}
+						return []ssh.Signer{signer}, nil
+					}
+
 					privateKeyBytes, privateKeyErr := d.requestPrivateKey(b)
 					if privateKeyErr != nil {
 						return nil, privateKeyErr

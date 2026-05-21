@@ -60,6 +60,7 @@ type socketAccessConfiguration struct {
 	ServerMessage        string                 `json:"server_message"`
 	PresetConfigWritable bool                   `json:"preset_config_writable"`
 	PresetManagement     presetManagementPolicy `json:"preset_management"`
+	PrivateKeyFiles      []string               `json:"private_key_files"`
 }
 
 type presetManagementPolicy struct {
@@ -113,6 +114,7 @@ func newSocketAccessConfiguration(
 		ServerMessage:        parseServerMessage(html.EscapeString(serverMessage)),
 		PresetConfigWritable: policy.Writable,
 		PresetManagement:     policy,
+		PrivateKeyFiles:      []string{},
 	}
 }
 
@@ -190,12 +192,15 @@ func newSocketVerification(
 		timeout: strconv.FormatFloat(
 			srvCfg.ReadTimeout.Seconds(), 'g', 2, 64),
 		configRspBody: buildAccessConfigRespondBody(
-			newSocketAccessConfiguration(
-				commCfg.Presets,
-				srvCfg.ServerTitle,
-				srvCfg.ServerMessage,
-				false,
-				newPresetManagementPolicy(commCfg, authRoleUser),
+			socketAccessConfigurationWithPrivateKeyFiles(
+				newSocketAccessConfiguration(
+					commCfg.Presets,
+					srvCfg.ServerTitle,
+					srvCfg.ServerMessage,
+					false,
+					newPresetManagementPolicy(commCfg, authRoleUser),
+				),
+				commCfg,
 			),
 		),
 	}
@@ -281,14 +286,30 @@ func (s socketVerification) setServerConfigRespond(
 	}
 	hd.Set("Content-Type", "application/json; charset=utf-8")
 	w.Write(buildAccessConfigRespondBody(
-		newSocketAccessConfiguration(
-			s.commonCfg.CurrentPresets(),
-			s.serverCfg.ServerTitle,
-			s.serverCfg.ServerMessage,
-			false,
-			newPresetManagementPolicy(s.commonCfg, role),
+		socketAccessConfigurationWithPrivateKeyFiles(
+			newSocketAccessConfiguration(
+				s.commonCfg.CurrentPresets(),
+				s.serverCfg.ServerTitle,
+				s.serverCfg.ServerMessage,
+				false,
+				newPresetManagementPolicy(s.commonCfg, role),
+			),
+			s.commonCfg,
 		),
 	))
+}
+
+func socketAccessConfigurationWithPrivateKeyFiles(
+	accessConfig socketAccessConfiguration,
+	commonCfg configuration.Common,
+) socketAccessConfiguration {
+	files, err := configuration.ListPresetPrivateKeyFiles(commonCfg.SourceFile)
+	if err != nil {
+		accessConfig.PrivateKeyFiles = []string{}
+		return accessConfig
+	}
+	accessConfig.PrivateKeyFiles = files
+	return accessConfig
 }
 
 // Get handles HTTP GET requests for the socket verification endpoint. When no

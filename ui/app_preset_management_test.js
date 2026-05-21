@@ -194,6 +194,7 @@ describe("savePresetConfigRequest", () => {
     );
     expect(result).toEqual({
       adminKey: "admin-pass",
+      privateKeyFiles: [],
       presets: [{ id: "preset-1" }],
     });
   });
@@ -230,6 +231,7 @@ describe("savePresetConfigRequest", () => {
     expect(xhrPut).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       adminKey: null,
+      privateKeyFiles: [],
       presets: [{ id: "preset-1" }],
     });
   });

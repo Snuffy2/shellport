@@ -82,7 +82,82 @@ SPDX-License-Identifier: AGPL-3.0-only
         Save private key
       </label>
 
-      <label v-if="usesPrivateKey && localState.savePrivateKey" class="field">
+      <div v-if="usesPrivateKey && localState.savePrivateKey" class="field">
+        Private key source
+        <label class="field horizontal">
+          <input
+            v-model="localState.privateKeyMode"
+            type="radio"
+            value="existing"
+          />
+          Existing server key
+        </label>
+        <label class="field horizontal">
+          <input
+            v-model="localState.privateKeyMode"
+            type="radio"
+            value="upload"
+          />
+          Upload local key
+        </label>
+        <label class="field horizontal">
+          <input
+            v-model="localState.privateKeyMode"
+            type="radio"
+            value="paste"
+          />
+          Paste key
+        </label>
+      </div>
+
+      <label
+        v-if="
+          usesPrivateKey &&
+          localState.savePrivateKey &&
+          localState.privateKeyMode === 'existing'
+        "
+        class="field"
+      >
+        Server key
+        <select v-model="localState.privateKeyFile">
+          <option value="">Select a private key</option>
+          <option
+            v-if="showCurrentPrivateKeyReference"
+            :value="localState.privateKeyFile"
+          >
+            {{ localState.privateKeyFile }}
+          </option>
+          <option
+            v-for="keyFile in privateKeyFiles"
+            :key="keyFile"
+            :value="keyFile"
+          >
+            {{ keyFile }}
+          </option>
+        </select>
+      </label>
+
+      <label
+        v-if="
+          usesPrivateKey &&
+          localState.savePrivateKey &&
+          localState.privateKeyMode === 'upload'
+        "
+        class="field"
+      >
+        Private key file
+        <input type="file" autocomplete="off" @change="importPrivateKeyFile" />
+      </label>
+
+      <label
+        v-if="
+          usesPrivateKey &&
+          localState.savePrivateKey &&
+          (localState.privateKeyMode === 'upload' ||
+            localState.privateKeyMode === 'paste')
+        "
+        class="field"
+      >
         Private Key
         <textarea v-model="localState.privateKey" autocomplete="off"></textarea>
       </label>
@@ -216,6 +291,10 @@ export default {
       type: Function,
       required: true,
     },
+    privateKeyFiles: {
+      type: Array,
+      default: () => [],
+    },
   },
   emits: ["cancel"],
   data() {
@@ -236,6 +315,12 @@ export default {
     };
   },
   computed: {
+    showCurrentPrivateKeyReference() {
+      return (
+        this.localState.privateKeyFile.length > 0 &&
+        !this.privateKeyFiles.includes(this.localState.privateKeyFile)
+      );
+    },
     authenticationOptions() {
       return authenticationOptionsForType(this.localState.type);
     },
@@ -326,6 +411,17 @@ export default {
           adminKey,
         }),
       );
+    },
+    importPrivateKeyFile(event) {
+      const fileInput = event.target;
+      if (!fileInput.files || fileInput.files.length <= 0) {
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.localState.privateKey = String(reader.result || "");
+      };
+      reader.readAsText(fileInput.files[0], "utf-8");
     },
     submitAdminKey() {
       const action = this.pendingAction;
