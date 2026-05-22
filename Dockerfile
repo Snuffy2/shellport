@@ -47,7 +47,7 @@ COPY --from=builder /shellport /
 COPY docker-entrypoint.sh /shellport.sh
 RUN set -ex && \
     apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gosu openssh-client tzdata && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl openssh-client tzdata && \
     install -d -m 0755 /etc/apt/keyrings && \
     curl -fsSL https://github.com/MisterTea/debian-et/raw/master/et.gpg -o /etc/apt/keyrings/et.gpg && \
     printf '%s\n' "$ET_APT_GPG_SHA256  /etc/apt/keyrings/et.gpg" | sha256sum -c - && \
@@ -83,8 +83,7 @@ RUN set -ex && \
         > /SOURCE.md && \
     apt-get purge -y --auto-remove curl && \
     rm -rf /var/lib/apt/lists/* && \
-    useradd --uid 1000 --create-home --shell /usr/sbin/nologin shellport && \
-    install -d -m 0755 -o shellport -g shellport /config && \
+    install -d -m 1777 /config && \
     chmod +x /shellport && \
     chmod +x /shellport.sh
 EXPOSE 8182
