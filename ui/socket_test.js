@@ -68,6 +68,7 @@ function buildConnection() {
   return {
     reader: {
       close: vi.fn(),
+      closeWithReason: vi.fn(),
     },
     sender: {
       close: vi.fn(() => Promise.resolve()),
@@ -117,6 +118,11 @@ describe("Socket", () => {
     expect(callbacks.connected).not.toHaveBeenCalled();
     expect(callbacks.failed).not.toHaveBeenCalled();
     expect(conn.ws.close).toHaveBeenCalledTimes(1);
+    expect(conn.sender.close).toHaveBeenCalledTimes(1);
+    expect(conn.reader.close).not.toHaveBeenCalled();
+    expect(conn.reader.closeWithReason).toHaveBeenCalledWith(
+      "Socket open cancelled",
+    );
   });
 
   it("does not let stale flow-control failures clear a newer stream", async () => {
@@ -189,6 +195,11 @@ describe("Socket", () => {
     assert.strictEqual(socket.streamHandler, null);
     assert.strictEqual(streamMocks.state.instances[0].served, false);
     expect(conn.ws.close).toHaveBeenCalled();
+    expect(conn.sender.close).toHaveBeenCalled();
+    expect(conn.reader.close).not.toHaveBeenCalled();
+    expect(conn.reader.closeWithReason).toHaveBeenCalledWith(
+      "Socket open cancelled",
+    );
   });
 
   it("does not reuse a stream handler that is already clearing", async () => {

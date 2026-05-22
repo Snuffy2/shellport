@@ -17,11 +17,13 @@
  * @param {string} method - HTTP method (e.g. `"GET"`, `"OPTIONS"`).
  * @param {string} url - Target URL.
  * @param {Object.<string, string>} headers - Map of request header name → value.
+ * @param {string|null} body - Optional request body.
+ * @param {number} timeout - Optional request timeout in milliseconds.
  * @returns {Promise<XMLHttpRequest>} Resolves with the finished XHR instance,
  *   giving callers access to status, response text, and headers.
  * @throws Will reject if the request encounters a network error or times out.
  */
-function send(method, url, headers, body = null) {
+function send(method, url, headers, body = null, timeout = 0) {
   return new Promise((res, rej) => {
     let authReq = new XMLHttpRequest();
 
@@ -42,6 +44,7 @@ function send(method, url, headers, body = null) {
     });
 
     authReq.open(method, url, true);
+    authReq.timeout = timeout;
 
     for (let h in headers) {
       authReq.setRequestHeader(h, headers[h]);
@@ -80,8 +83,9 @@ export function put(url, headers, body) {
  *
  * @param {string} url - Target URL.
  * @param {Object.<string, string>} headers - Additional request headers.
+ * @param {number} timeout - Optional request timeout in milliseconds.
  * @returns {Promise<XMLHttpRequest>} Resolves with the completed XHR instance.
  */
-export function options(url, headers) {
-  return send("OPTIONS", url, headers);
+export function options(url, headers, timeout = 0) {
+  return send("OPTIONS", url, headers, null, timeout);
 }

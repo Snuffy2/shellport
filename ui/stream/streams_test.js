@@ -46,6 +46,99 @@ describe("Streams", () => {
     assert.deepStrictEqual(sent, [[1, 2]]);
   });
 
+  it("waits for command close before completing streams during clear", async () => {
+    const events = [];
+    const closeGate = new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {},
+      },
+    );
+    const streamID = 6;
+
+    st.streams[streamID].run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        async close() {
+          await closeGate;
+          events.push("close");
+        },
+        completed() {
+          events.push("completed");
+        },
+      }),
+      st.sender,
+    );
+
+    await st.clear(null);
+
+    assert.deepStrictEqual(events, ["close", "completed"]);
+  });
+
+  it("does not complete streams whose command close fails during clear", async () => {
+    const events = [];
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {},
+      },
+    );
+    const streamID = 7;
+
+    st.streams[streamID].run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        close() {
+          events.push("close");
+          return Promise.reject(new Error("close failed"));
+        },
+        completed() {
+          events.push("completed");
+        },
+      }),
+      st.sender,
+    );
+
+    await st.clear(null);
+
+    assert.deepStrictEqual(events, ["close"]);
+  });
+
   it("acknowledges a late remote close after local close starts", async () => {
     const sent = [];
     const st = new streams.Streams(
@@ -129,6 +222,49 @@ describe("Streams", () => {
     );
 
     await assert.rejects(() => st.handleClose(closeHeader), /ack send failed/);
+  });
+
+  it("does not acknowledge remote close when command close fails", async () => {
+    const sent = [];
+    const expectedError = new Error("command close failed");
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send(data) {
+          sent.push(Array.from(data));
+
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {},
+      },
+    );
+    const streamID = 5;
+    const closeHeader = new header.Header(header.CLOSE);
+
+    closeHeader.set(streamID);
+    st.streams[streamID].run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        close() {
+          return Promise.reject(expectedError);
+        },
+        completed() {},
+      }),
+      st.sender,
+    );
+
+    await assert.rejects(() => st.handleClose(closeHeader), expectedError);
+    assert.deepStrictEqual(sent, []);
   });
 
   it("drains late stream data after local close starts", async () => {

@@ -52,4 +52,30 @@ describe("Stream", () => {
     assert.strictEqual(completed, 1);
     assert.deepStrictEqual(sent, [[header.CLOSE | 3]]);
   });
+
+  it("returns command close failures to callers", async () => {
+    const expectedError = new Error("close failed");
+    const st = new Stream(4);
+
+    st.run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        close() {
+          return Promise.reject(expectedError);
+        },
+        completed() {},
+      }),
+      {
+        send() {
+          return Promise.resolve();
+        },
+      },
+    );
+
+    await assert.rejects(() => st.close(), expectedError);
+  });
 });

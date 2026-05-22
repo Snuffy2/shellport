@@ -22,6 +22,38 @@ export const ECHO_FAILED = streams.ECHO_FAILED;
 const maxSenderDelay = 200;
 /** @type {number} Minimum adaptive sender delay in milliseconds. */
 const minSenderDelay = 30;
+/** @type {number} Maximum keep-alive OPTIONS timeout in milliseconds. */
+const maxKeepAliveTimeout = 10000;
+/** @type {number} Minimum keep-alive OPTIONS timeout in milliseconds. */
+const minKeepAliveTimeout = 1000;
+
+async function cleanupDialConnection(conn, reason) {
+  if (!conn) {
+    return;
+  }
+
+  if (conn.ws) {
+    conn.ws.close();
+  }
+
+  if (conn.sender) {
+    try {
+      await conn.sender.close();
+    } catch (e) {
+      process.env.NODE_ENV === "development" && console.trace(e);
+    }
+  }
+
+  if (conn.reader) {
+    try {
+      conn.reader.closeWithReason
+        ? conn.reader.closeWithReason(reason)
+        : conn.reader.close();
+    } catch (e) {
+      process.env.NODE_ENV === "development" && console.trace(e);
+    }
+  }
+}
 
 /**
  * Manages WebSocket connection setup and the AES-GCM encrypted framing layer.
@@ -90,10 +122,15 @@ class Dial {
           return reject(e);
         };
 
+      const keepAliveTimeout = Math.max(
+        Math.min(self.timeout / 2, maxKeepAliveTimeout),
+        minKeepAliveTimeout,
+      );
+
       if (!self.keepAliveTicker) {
         self.keepAliveTicker = setInterval(
           () => {
-            xhr.options(address.keepAlive, {}).catch((e) => {
+            xhr.options(address.keepAlive, {}, keepAliveTimeout).catch((e) => {
               process.env.NODE_ENV === "development" && console.trace(e);
             });
           },
@@ -160,9 +197,11 @@ class Dial {
    */
   async dial(callbacks) {
     let ws = await this.connect(this.address, this.timeout);
+    let rd = null,
+      sd = null;
 
     try {
-      let rd = new reader.Reader(new reader.Multiple(() => {}), (data) => {
+      rd = new reader.Reader(new reader.Multiple(() => {}), (data) => {
         return new Promise((resolve) => {
           let bufferReader = new FileReader();
 
@@ -203,29 +242,29 @@ class Dial {
         },
         getSdDataConvert = () => {
           return sdDataConvert;
-        },
-        sd = new sender.Sender(
-          async (rawData) => {
-            try {
-              let data = await getSdDataConvert()(rawData);
+        };
+      sd = new sender.Sender(
+        async (rawData) => {
+          try {
+            let data = await getSdDataConvert()(rawData);
 
-              ws.send(data.buffer);
-              callbacks.outbound(data);
-            } catch (e) {
-              ws.close();
-              rd.closeWithReason(e);
+            ws.send(data.buffer);
+            callbacks.outbound(data);
+          } catch (e) {
+            ws.close();
+            rd.closeWithReason(e);
 
-              if (process.env.NODE_ENV === "development") {
-                console.error(e);
-              }
-
-              throw e;
+            if (process.env.NODE_ENV === "development") {
+              console.error(e);
             }
-          },
-          4096 - 64, // Server has a 4096 bytes receive buffer, can be no greater,
-          minSenderDelay, // 30ms input delay
-          10, // max 10 buffered requests
-        );
+
+            throw e;
+          }
+        },
+        4096 - 64, // Server has a 4096 bytes receive buffer, can be no greater,
+        minSenderDelay, // 30ms input delay
+        10, // max 10 buffered requests
+      );
 
       let senderNonce = crypt.generateNonce();
       await sd.send(senderNonce);
@@ -282,6 +321,16 @@ class Dial {
       };
     } catch (e) {
       ws.close();
+      if (sd !== null) {
+        try {
+          await sd.close();
+        } catch (closeErr) {
+          process.env.NODE_ENV === "development" && console.trace(closeErr);
+        }
+      }
+      if (rd !== null) {
+        rd.closeWithReason(e);
+      }
       throw e;
     }
   }
@@ -437,7 +486,7 @@ export class Socket {
       });
 
       if (openSerial !== this.openSerial) {
-        conn.ws.close();
+        await cleanupDialConnection(conn, "Socket open cancelled");
 
         throw new Error("Socket open cancelled");
       }
@@ -481,7 +530,7 @@ export class Socket {
         openSerial !== this.openSerial ||
         this.streamHandler !== streamHandler
       ) {
-        conn.ws.close();
+        await cleanupDialConnection(conn, "Socket open cancelled");
 
         throw new Error("Socket open cancelled");
       }

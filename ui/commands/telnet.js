@@ -174,8 +174,8 @@ class Telnet {
    * Close the command
    *
    */
-  close() {
-    this.sendClose();
+  async close() {
+    await this.sendClose();
 
     return this.events.fire("close");
   }

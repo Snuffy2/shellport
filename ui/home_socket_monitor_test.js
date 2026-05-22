@@ -82,7 +82,9 @@ describe("home socket monitoring", () => {
   test("socket keep-alive failures do not become unhandled rejections", () => {
     const source = readProjectFile("ui/socket.js");
 
-    expect(source).toContain("xhr.options(address.keepAlive, {}).catch");
+    expect(source).toContain(
+      "xhr.options(address.keepAlive, {}, keepAliveTimeout).catch",
+    );
   });
 
   test("socket flow-control send failures clear the active stream", () => {

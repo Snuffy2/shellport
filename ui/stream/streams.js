@@ -148,16 +148,19 @@ export class Streams {
         continue;
       }
 
+      let closeErr = null;
       try {
-        this.streams[i].close();
+        await this.streams[i].close();
       } catch (e) {
-        // Do nothing
+        closeErr = e;
       }
 
-      try {
-        this.streams[i].completed();
-      } catch (e) {
-        //Do nothing
+      if (closeErr === null) {
+        try {
+          this.streams[i].completed();
+        } catch (e) {
+          //Do nothing
+        }
       }
     }
 
