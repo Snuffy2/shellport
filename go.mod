@@ -12,7 +12,7 @@ require (
 	github.com/natefinch/atomic v1.0.1
 	github.com/unixshells/mosh-go v0.5.2
 	golang.org/x/crypto v0.52.0
-	golang.org/x/net v0.54.0
+	golang.org/x/net v0.55.0
 )
 
 require (
