@@ -70,7 +70,7 @@ describe("preset management UI wiring", () => {
     expect(source).not.toContain(
       "const config = buildPresetConfigFromEditorState(this.localState);",
     );
-    expect(source).toContain("return this.runProtected((adminKey) =>");
+    expect(source).toContain("return this.runProtected((adminPassword) =>");
     expect(source).toContain(
       "config: buildPresetConfigFromEditorState(this.localState),",
     );

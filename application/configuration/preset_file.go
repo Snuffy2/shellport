@@ -435,12 +435,12 @@ func writeCommonInputFileDocument(
 	if raw == nil {
 		raw = map[string]json.RawMessage{}
 	}
-	if _, ok := raw["AdminKey"]; ok || doc.input.AdminKey != "" {
-		adminKey, marshalAdminKeyErr := json.Marshal(doc.input.AdminKey)
-		if marshalAdminKeyErr != nil {
-			return marshalAdminKeyErr
+	if _, ok := raw["AdminPassword"]; ok || doc.input.AdminPassword != "" {
+		adminPassword, marshalAdminPasswordErr := json.Marshal(doc.input.AdminPassword)
+		if marshalAdminPasswordErr != nil {
+			return marshalAdminPasswordErr
 		}
-		raw["AdminKey"] = adminKey
+		raw["AdminPassword"] = adminPassword
 	}
 	presets, marshalErr := marshalPresetInputsPreservingRaw(
 		doc.input.Presets,

@@ -99,14 +99,18 @@ describe("app preset management wiring", () => {
       ':preset-management-policy="presetData.management"',
     );
     expect(source).toContain(':save-preset-config="savePresetConfig"');
-    expect(source).toContain(':admin-key-required="presetAdminKeyRequired"');
+    expect(source).toContain(
+      ':admin-password-required="presetAdminPasswordRequired"',
+    );
   });
 
-  test("keeps AdminKey in page memory only", () => {
+  test("keeps admin password in page memory only", () => {
     const source = readSource();
 
     expect(source).toContain('presetAdminPassphrase: ""');
-    expect(source).toContain("this.presetAdminPassphrase = result.adminKey;");
+    expect(source).toContain(
+      "this.presetAdminPassphrase = result.adminPassword;",
+    );
     expect(source).not.toContain("localStorage");
     expect(source).not.toContain("sessionStorage");
   });
@@ -167,14 +171,14 @@ describe("savePresetConfigRequest", () => {
     const result = await savePresetConfigRequest({
       updatedPresets: [{ id: "preset-1" }],
       options: {
-        adminKey: "admin-pass",
+        adminPassword: "admin-pass",
         clearPasswordIDs: ["preset-1", "preset,2"],
         clearPrivateKeyIDs: ["preset-3"],
       },
       presetData: {
         management: {
           can_manage: true,
-          requires_admin_key: true,
+          requires_admin_password: true,
         },
       },
       presetConfigPassphrase: "shared-key",
@@ -196,13 +200,13 @@ describe("savePresetConfigRequest", () => {
       JSON.stringify({ presets: [{ id: "preset-1" }] }),
     );
     expect(result).toEqual({
-      adminKey: "admin-pass",
+      adminPassword: "admin-pass",
       privateKeyFiles: [],
       presets: [{ id: "preset-1" }],
     });
   });
 
-  test("uses cached admin key when payload admin key is blank", async () => {
+  test("uses cached admin password when payload admin password is blank", async () => {
     const headerBuilder = vi.fn(async (passphrase) => {
       expect(passphrase).toBe("cached-admin");
       return {
@@ -217,12 +221,12 @@ describe("savePresetConfigRequest", () => {
     const result = await savePresetConfigRequest({
       updatedPresets: [{ id: "preset-1" }],
       options: {
-        adminKey: "",
+        adminPassword: "",
       },
       presetData: {
         management: {
           can_manage: true,
-          requires_admin_key: true,
+          requires_admin_password: true,
         },
       },
       presetConfigPassphrase: "shared-key",
@@ -234,13 +238,13 @@ describe("savePresetConfigRequest", () => {
 
     expect(xhrPut).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
-      adminKey: null,
+      adminPassword: null,
       privateKeyFiles: [],
       presets: [{ id: "preset-1" }],
     });
   });
 
-  test("uses shared key instead of cached admin key when admin key is not required", async () => {
+  test("uses user password instead of cached admin password when admin password is not required", async () => {
     const headerBuilder = vi.fn(async (passphrase) => {
       expect(passphrase).toBe("shared-key");
       return {
@@ -258,7 +262,7 @@ describe("savePresetConfigRequest", () => {
       presetData: {
         management: {
           can_manage: true,
-          requires_admin_key: false,
+          requires_admin_password: false,
         },
       },
       presetConfigPassphrase: "shared-key",
@@ -334,7 +338,7 @@ describe("savePresetConfigRequest", () => {
         presetData: {
           management: {
             can_manage: true,
-            requires_admin_key: true,
+            requires_admin_password: true,
           },
         },
         presetConfigPassphrase: "shared-key",

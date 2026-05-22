@@ -22,11 +22,11 @@ type Common struct {
 	SourceFile string
 	// HostName is the public hostname used in generated links and TLS validation.
 	HostName string
-	// SharedKey is the pre-shared secret required for client authentication;
+	// UserPassword is the password required for client authentication;
 	// an empty value disables authentication.
-	SharedKey string
-	// AdminKey is the pre-shared secret that grants admin-level access.
-	AdminKey string
+	UserPassword string
+	// AdminPassword is the password that grants admin-level access.
+	AdminPassword string
 	// Dialer is the function used to open outbound network connections,
 	// optionally via SOCKS5 or with access-control restrictions.
 	Dialer network.Dial

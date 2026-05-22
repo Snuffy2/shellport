@@ -1,7 +1,7 @@
 {
   "HostName": "",
-  "SharedKey": "WEB_ACCESS_PASSWORD",
-  "AdminKey": "",
+  "UserPassword": "WEB_ACCESS_PASSWORD",
+  "AdminPassword": "",
   "DialTimeout": 5,
   "Socks5": "",
   "Socks5User": "",

@@ -21,8 +21,8 @@ const (
 	fileTypeName          = "File"
 	defaultConfigContent  = `{
   "HostName": "",
-  "SharedKey": "",
-  "AdminKey": "",
+  "UserPassword": "",
+  "AdminPassword": "",
   "DialTimeout": 5,
   "Socks5": "",
   "Socks5User": "",

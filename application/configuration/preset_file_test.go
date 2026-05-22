@@ -60,8 +60,8 @@ func TestLoadFileRecordsSourceFile(t *testing.T) {
 	}
 }
 
-func TestLoadFileDoesNotReadAdminKeyFromEnvironment(t *testing.T) {
-	t.Setenv("ADMIN_KEY", "env-admin-key")
+func TestLoadFileDoesNotReadAdminPasswordFromEnvironment(t *testing.T) {
+	t.Setenv("ADMIN_PASSWORD", "env-admin-password")
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetConfig(t, configPath, []map[string]any{
 		{"ID": "preset-existing", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
@@ -71,8 +71,8 @@ func TestLoadFileDoesNotReadAdminKeyFromEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadFile returned error: %v", err)
 	}
-	if cfg.AdminKey != "" {
-		t.Fatalf("AdminKey = %q, want empty", cfg.AdminKey)
+	if cfg.AdminPassword != "" {
+		t.Fatalf("AdminPassword = %q, want empty", cfg.AdminPassword)
 	}
 }
 

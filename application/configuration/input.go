@@ -131,11 +131,11 @@ type commonInput struct {
 	// Host name
 	HostName string
 
-	// Shared key, empty to enable public access
-	SharedKey string
+	// User password, empty to enable public access
+	UserPassword string
 
-	// AdminKey controls admin-level preset API access.
-	AdminKey string
+	// AdminPassword controls admin-level preset API access.
+	AdminPassword string
 
 	// DialTimeout, default 5s
 	DialTimeout int
@@ -181,9 +181,9 @@ func (f commonInput) concretize() (Configuration, error) {
 		return Configuration{}, err
 	}
 	return Configuration{
-		HostName:  f.HostName,
-		SharedKey: f.SharedKey,
-		AdminKey:  f.AdminKey,
+		HostName:      f.HostName,
+		UserPassword:  f.UserPassword,
+		AdminPassword: f.AdminPassword,
 		DialTimeout: time.Duration(setZeroUintToDefault(
 			f.DialTimeout,
 			5,

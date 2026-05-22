@@ -18,7 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-only
                 error: passphraseErr.length > 0 || error.length > 0,
               }"
             >
-              SharedKey
+              User password
 
               <input
                 v-model="passphrase"
@@ -35,7 +35,7 @@ SPDX-License-Identifier: AGPL-3.0-only
                 v-if="passphraseErr.length <= 0 && error.length <= 0"
                 class="message"
               >
-                The configured SharedKey is required in order to use this
+                The configured user password is required in order to use this
                 <a href="https://github.com/Snuffy2/shellport">ShellPort</a>
                 instance
               </div>
@@ -59,9 +59,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script>
 /**
  * @file auth.vue
- * @description Authentication wall component. Renders a SharedKey form that
- * is shown when the ShellPort backend requires a SharedKey before allowing
- * access. Emits an `"auth"` event with the SharedKey on valid submission and
+ * @description Authentication wall component. Renders a user password form that
+ * is shown when the ShellPort backend requires a user password before allowing
+ * access. Emits an `"auth"` event with the user password on valid submission and
  * reflects server-returned errors through the `error` prop.
  */
 export default {
@@ -118,7 +118,7 @@ export default {
   mounted() {},
   methods: {
     /**
-     * Validates the SharedKey field and emits an `"auth"` event to the parent.
+     * Validates the user password field and emits an `"auth"` event to the parent.
      *
      * Guards against empty submissions and duplicate in-flight requests via the
      * `submitting` flag. Clears `passphraseErr` before emitting.
@@ -127,7 +127,7 @@ export default {
      */
     auth() {
       if (this.passphrase.length <= 0) {
-        this.passphraseErr = "SharedKey cannot be empty";
+        this.passphraseErr = "User password cannot be empty";
 
         return;
       }

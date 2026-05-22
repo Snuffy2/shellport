@@ -120,11 +120,11 @@ func TestCreateDefaultConfigFileWritesLoadableConfig(t *testing.T) {
 	if cfg.SourceFile != configPath {
 		t.Fatalf("SourceFile = %q, want %q", cfg.SourceFile, configPath)
 	}
-	if cfg.SharedKey != "" {
-		t.Fatalf("SharedKey = %q, want empty", cfg.SharedKey)
+	if cfg.UserPassword != "" {
+		t.Fatalf("UserPassword = %q, want empty", cfg.UserPassword)
 	}
-	if cfg.AdminKey != "" {
-		t.Fatalf("AdminKey = %q, want empty", cfg.AdminKey)
+	if cfg.AdminPassword != "" {
+		t.Fatalf("AdminPassword = %q, want empty", cfg.AdminPassword)
 	}
 	if len(cfg.Servers) != 1 {
 		t.Fatalf("server count = %d, want 1", len(cfg.Servers))

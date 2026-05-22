@@ -174,7 +174,7 @@ func (p presetConfig) Put(
 	} else if role < authRoleAdmin {
 		return NewError(
 			http.StatusForbidden,
-			"Full preset updates require AdminKey authentication",
+			"Full preset updates require AdminPassword authentication",
 		)
 	} else if p.commonCfg.OnlyAllowPresetRemotes {
 		return NewError(
@@ -657,7 +657,7 @@ func (p presetConfig) writePresets(
 }
 
 func (p presetConfig) privateKeyFiles(policy presetManagementPolicy) []string {
-	if !policy.CanManage || policy.RequiresAdminKey {
+	if !policy.CanManage || policy.RequiresAdminPassword {
 		return []string{}
 	}
 	files, err := configuration.ListPresetPrivateKeyFiles(p.commonCfg.SourceFile)

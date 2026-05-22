@@ -6,7 +6,7 @@ Docker image loads `/config/shellport.conf.json`.
 If that file does not exist, ShellPort creates it with a minimal writable
 configuration, then loads it. The generated file listens on `0.0.0.0:8182` and
 starts with no presets so operators can add presets from the UI immediately.
-`SharedKey` and `AdminKey` are left empty in the generated file; edit the config
+`UserPassword` and `AdminPassword` are left empty in the generated file; edit the config
 file later to add authentication, admin protection, or other advanced settings.
 
 Use `SHELLPORT_CONFIG` to override the configuration file path:
@@ -30,10 +30,10 @@ as a starting point for your own configuration.
 
   // Web interface access password. Set to empty to allow public access to the
   // web interface (bypass the Authenticate page)
-  "SharedKey": "WEB_ACCESS_PASSWORD",
+  "UserPassword": "WEB_ACCESS_PASSWORD",
 
-  // Optional admin key for admin-only preset config API writes.
-  "AdminKey": "",
+  // Optional admin password for admin-only preset config API writes.
+  "AdminPassword": "",
 
   // Remote dial timeout. This limits how long of time the backend can spend
   // to connect to a remote host. The max timeout will be determined by
@@ -318,10 +318,10 @@ rejected.
 When authentication is required, `PUT` uses the same time-windowed `X-Key`
 authentication format as `/shellport/socket/verify`. The UI supports preset
 create, edit, and delete when the active configuration is file-backed and
-`OnlyAllowPresetRemotes` is false. If `AdminKey` is configured, the UI prompts
+`OnlyAllowPresetRemotes` is false. If `AdminPassword` is configured, the UI prompts
 for it on the first protected write and caches it in browser memory until the
-page reloads. If `AdminKey` is blank, authenticated users are admin users for
-preset management. If both `SharedKey` and `AdminKey` are blank, anonymous
+page reloads. If `AdminPassword` is blank, authenticated users are admin users for
+preset management. If both `UserPassword` and `AdminPassword` are blank, anonymous
 visitors can manage presets.
 
 The preset editor never displays hidden saved passwords. It receives a boolean
@@ -333,13 +333,13 @@ preset's `Fingerprint` metadata.
 
 Key behavior:
 
-- `SharedKey` and `AdminKey` both set: `SharedKey` is normal UI access,
-  `AdminKey` is admin access for protected preset create, edit, and delete.
-- `SharedKey` blank and `AdminKey` set: all visitors are users without
-  authentication; admin actions require `AdminKey`.
-- `SharedKey` set and `AdminKey` blank: anyone who authenticates with
-  `SharedKey` has admin access.
-- `SharedKey` and `AdminKey` both blank: all visitors have admin access without
+- `UserPassword` and `AdminPassword` both set: `UserPassword` is normal UI access,
+  `AdminPassword` is admin access for protected preset create, edit, and delete.
+- `UserPassword` blank and `AdminPassword` set: all visitors are users without
+  authentication; admin actions require `AdminPassword`.
+- `UserPassword` set and `AdminPassword` blank: anyone who authenticates with
+  `UserPassword` has admin access.
+- `UserPassword` and `AdminPassword` both blank: all visitors have admin access without
   authentication.
 
 ### ET Presets

@@ -49,10 +49,10 @@ func TestSocketAccessConfigurationIncludesPresetManagementPolicy(t *testing.T) {
 			wantBlockedByPreset: false,
 		},
 		{
-			name: "blank admin key writes immediately",
+			name: "blank admin password writes immediately",
 			commonCfg: configuration.Common{
-				SourceFile: writableSourceFile,
-				AdminKey:   "",
+				SourceFile:    writableSourceFile,
+				AdminPassword: "",
 			},
 			role:                authRoleAdmin,
 			wantWritable:        true,
@@ -61,10 +61,10 @@ func TestSocketAccessConfigurationIncludesPresetManagementPolicy(t *testing.T) {
 			wantBlockedByPreset: false,
 		},
 		{
-			name: "admin key prompt required for user role",
+			name: "admin password prompt required for user role",
 			commonCfg: configuration.Common{
-				SourceFile: writableSourceFile,
-				AdminKey:   "admin-secret",
+				SourceFile:    writableSourceFile,
+				AdminPassword: "admin-secret",
 			},
 			role:                authRoleUser,
 			wantWritable:        true,
@@ -76,7 +76,7 @@ func TestSocketAccessConfigurationIncludesPresetManagementPolicy(t *testing.T) {
 			name: "preset restriction blocks management",
 			commonCfg: configuration.Common{
 				SourceFile:             writableSourceFile,
-				AdminKey:               "",
+				AdminPassword:          "",
 				OnlyAllowPresetRemotes: true,
 			},
 			role:                authRoleAdmin,
@@ -96,10 +96,10 @@ func TestSocketAccessConfigurationIncludesPresetManagementPolicy(t *testing.T) {
 			if policy.CanManage != tt.wantCanManage {
 				t.Fatalf("CanManage = %v, want %v", policy.CanManage, tt.wantCanManage)
 			}
-			if policy.RequiresAdminKey != tt.wantRequiresAdmin {
+			if policy.RequiresAdminPassword != tt.wantRequiresAdmin {
 				t.Fatalf(
-					"RequiresAdminKey = %v, want %v",
-					policy.RequiresAdminKey,
+					"RequiresAdminPassword = %v, want %v",
+					policy.RequiresAdminPassword,
 					tt.wantRequiresAdmin,
 				)
 			}
@@ -137,8 +137,8 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 		"",
 		true,
 		newPresetManagementPolicy(configuration.Common{
-			SourceFile: configPath,
-			AdminKey:   "admin-secret",
+			SourceFile:    configPath,
+			AdminPassword: "admin-secret",
 		}, authRoleAdmin),
 	)
 
@@ -198,8 +198,8 @@ func TestSocketAccessConfigurationHidesPrivateKeyFileUntilManageAllowed(t *testi
 		"",
 		false,
 		newPresetManagementPolicy(configuration.Common{
-			SourceFile: configPath,
-			AdminKey:   "admin-secret",
+			SourceFile:    configPath,
+			AdminPassword: "admin-secret",
 		}, authRoleUser),
 	)
 	if cfg.Presets[0].PrivateKeyFile != "" {
@@ -218,8 +218,8 @@ func TestSocketAccessConfigurationHidesPrivateKeyFileUntilManageAllowed(t *testi
 		"",
 		false,
 		newPresetManagementPolicy(configuration.Common{
-			SourceFile: configPath,
-			AdminKey:   "admin-secret",
+			SourceFile:    configPath,
+			AdminPassword: "admin-secret",
 		}, authRoleAdmin),
 	)
 	if cfg.Presets[0].PrivateKeyFile != "file:///config/private_keys/atlantis.key" {
@@ -314,13 +314,13 @@ func TestSocketAccessConfigurationListsPrivateKeyFilesOnlyWhenManageable(
 		"",
 		false,
 		newPresetManagementPolicy(configuration.Common{
-			SourceFile: configPath,
-			AdminKey:   "admin-secret",
+			SourceFile:    configPath,
+			AdminPassword: "admin-secret",
 		}, authRoleUser),
 	)
 	cfg = socketAccessConfigurationWithPrivateKeyFiles(cfg, configuration.Common{
-		SourceFile: configPath,
-		AdminKey:   "admin-secret",
+		SourceFile:    configPath,
+		AdminPassword: "admin-secret",
 	})
 	if len(cfg.PrivateKeyFiles) != 0 {
 		t.Fatalf("admin prompt policy PrivateKeyFiles count = %d, want 0", len(cfg.PrivateKeyFiles))

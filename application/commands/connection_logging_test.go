@@ -43,7 +43,7 @@ func TestDebugConnectionAttemptLogsSanitizedConnectionDetails(t *testing.T) {
 		}
 	}
 
-	for _, secret := range []string{"PRIVATE KEY", "password=", "shared_key", "SHELLPORT_PRESET_SECRET_KEY"} {
+	for _, secret := range []string{"PRIVATE KEY", "password=", "user_password", "SHELLPORT_PRESET_SECRET_KEY"} {
 		if strings.Contains(got, secret) {
 			t.Fatalf("expected log output %q not to contain secret marker %q", got, secret)
 		}
@@ -332,7 +332,7 @@ var errTestConnectionLogging = testConnectionLoggingError{}
 func assertNoSecretMarkers(t *testing.T, got string) {
 	t.Helper()
 
-	for _, secret := range []string{"PRIVATE KEY", "password=", "shared_key", "SHELLPORT_PRESET_SECRET_KEY"} {
+	for _, secret := range []string{"PRIVATE KEY", "password=", "user_password", "SHELLPORT_PRESET_SECRET_KEY"} {
 		if strings.Contains(got, secret) {
 			t.Fatalf("expected log output %q not to contain secret marker %q", got, secret)
 		}
