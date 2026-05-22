@@ -181,6 +181,8 @@ export function build(ctx) {
     connected() {
       isClosed = false;
 
+      ctx.resetConnectionMonitorReconnect();
+
       this.message = "??";
       this.classStyle = "working";
       this.windowClass = "";
@@ -271,6 +273,7 @@ export function build(ctx) {
       outboundHistory.expire();
 
       ctx.connector.inputting = false;
+      ctx.scheduleConnectionMonitorReconnect();
 
       if (e === null) {
         this.message = "";
@@ -300,6 +303,7 @@ export function build(ctx) {
       isClosed = true;
 
       ctx.connector.inputting = false;
+      ctx.scheduleConnectionMonitorReconnect();
 
       if (e.code) {
         this.message = "E" + e.code;

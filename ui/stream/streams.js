@@ -235,6 +235,10 @@ export class Streams {
    *
    */
   sendEcho() {
+    if (this.stop) {
+      return;
+    }
+
     let echoHeader = header.header(header.CONTROL),
       randomNum = new Uint8Array(common.getRands(8, 0, 255));
 
@@ -243,17 +247,22 @@ export class Streams {
     randomNum[0] = echoHeader.value();
     randomNum[1] = header.CONTROL_ECHO;
 
-    this.sender.send(randomNum).then(() => {
-      if (this.lastEchoTime !== null || this.lastEchoData !== null) {
-        this.lastEchoTime = null;
-        this.lastEchoData = null;
+    this.sender
+      .send(randomNum)
+      .then(() => {
+        if (this.lastEchoTime !== null || this.lastEchoData !== null) {
+          this.lastEchoTime = null;
+          this.lastEchoData = null;
 
-        this.config.echoUpdater(ECHO_FAILED);
-      }
+          this.config.echoUpdater(ECHO_FAILED);
+        }
 
-      this.lastEchoTime = new Date();
-      this.lastEchoData = randomNum.slice(2, randomNum.length);
-    });
+        this.lastEchoTime = new Date();
+        this.lastEchoData = randomNum.slice(2, randomNum.length);
+      })
+      .catch((e) => {
+        this.clear(e);
+      });
   }
 
   /**

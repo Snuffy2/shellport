@@ -336,6 +336,12 @@ export default {
         busy: false,
         refreshingPresets: false,
       },
+      monitor: {
+        retryTimer: null,
+        retryDelay: 1000,
+        maxRetryDelay: 30000,
+        unmounted: false,
+      },
       presets: markRaw(this.commands.mergePresets(this.presetData)),
       presetConfigs: this.clonePresetConfigs(this.presetData.toConfig()),
       presetEditor: null,
@@ -416,9 +422,13 @@ export default {
     }
 
     window.addEventListener("beforeunload", this.onBrowserClose);
+    window.addEventListener("online", this.onOnline);
   },
   beforeUnmount() {
+    this.monitor.unmounted = true;
     window.removeEventListener("beforeunload", this.onBrowserClose);
+    window.removeEventListener("online", this.onOnline);
+    this.clearConnectionMonitorReconnectTimer();
 
     if (this.ticker !== null) {
       clearInterval(this.ticker);
@@ -449,6 +459,20 @@ export default {
       const msg = "Some tabs are still open, are you sure you want to exit?";
       (e || window.event).returnValue = msg;
       return msg;
+    },
+    /**
+     * Retries the backend monitor immediately when the browser reports the
+     * network has come back online.
+     *
+     * @returns {void}
+     */
+    onOnline() {
+      if (this.monitor.unmounted) {
+        return;
+      }
+
+      this.clearConnectionMonitorReconnectTimer();
+      this.startConnectionMonitor();
     },
     /**
      * Called once per second by the component's `setInterval` ticker.
@@ -514,13 +538,61 @@ export default {
      * @returns {void}
      */
     startConnectionMonitor() {
-      if (this.connection === null) {
+      if (this.connection === null || this.monitor.unmounted) {
         return;
       }
 
       this.connection.get(this.socket).catch((e) => {
         process.env.NODE_ENV === "development" && console.trace(e);
+        this.scheduleConnectionMonitorReconnect();
       });
+    },
+    /**
+     * Clears a pending backend monitor reconnect timer.
+     *
+     * @returns {void}
+     */
+    clearConnectionMonitorReconnectTimer() {
+      if (this.monitor.retryTimer === null) {
+        return;
+      }
+
+      clearTimeout(this.monitor.retryTimer);
+      this.monitor.retryTimer = null;
+    },
+    /**
+     * Resets backend monitor reconnect backoff after the stream is healthy.
+     *
+     * @returns {void}
+     */
+    resetConnectionMonitorReconnect() {
+      this.clearConnectionMonitorReconnectTimer();
+      this.monitor.retryDelay = 1000;
+    },
+    /**
+     * Schedules a bounded-backoff retry to reopen the backend monitor stream.
+     *
+     * @returns {void}
+     */
+    scheduleConnectionMonitorReconnect() {
+      if (
+        this.connection === null ||
+        this.monitor.unmounted ||
+        this.monitor.retryTimer !== null
+      ) {
+        return;
+      }
+
+      const retryDelay = this.monitor.retryDelay;
+
+      this.monitor.retryDelay = Math.min(
+        this.monitor.retryDelay * 2,
+        this.monitor.maxRetryDelay,
+      );
+      this.monitor.retryTimer = setTimeout(() => {
+        this.monitor.retryTimer = null;
+        this.startConnectionMonitor();
+      }, retryDelay);
     },
     /**
      * Acquires the backend stream and calls `run` with it, calling `end` in all

@@ -187,4 +187,36 @@ describe("Streams", () => {
     assert.strictEqual(ticked, 0);
     assert.strictEqual(rd.remains(), 0);
   });
+
+  it("clears the stream when a heartbeat send fails", async () => {
+    const expectedError = new Error("heartbeat send failed");
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.reject(expectedError);
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    assert.strictEqual(clearedError, expectedError);
+  });
 });
