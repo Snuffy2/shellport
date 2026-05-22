@@ -26,6 +26,8 @@ const presetItem = {
   tab_color: "",
   meta: {},
   has_saved_password: false,
+  has_saved_private_key: false,
+  private_key_file: "",
 };
 
 /**
@@ -206,6 +208,24 @@ export class Preset {
    */
   hasSavedPassword() {
     return this.preset.has_saved_password;
+  }
+
+  /**
+   * Return whether this preset has a hidden saved private key.
+   *
+   * @returns {boolean}
+   */
+  hasSavedPrivateKey() {
+    return this.preset.has_saved_private_key;
+  }
+
+  /**
+   * Return the saved private key file reference, if one is available.
+   *
+   * @returns {string}
+   */
+  privateKeyFile() {
+    return this.preset.private_key_file;
   }
 
   /**

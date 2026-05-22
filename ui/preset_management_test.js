@@ -141,6 +141,51 @@ describe("preset editor state", () => {
     );
   });
 
+  test("redacted file-backed private keys default to saved existing key mode", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-atlantis",
+        title: "Atlantis",
+        type: "SSH",
+        host: "atlantis.home:22",
+        has_saved_private_key: true,
+        private_key_file: "file:///config/private_keys/atlantis.key",
+        meta: {
+          Authentication: "Private Key",
+          User: "pi",
+        },
+      }),
+    );
+
+    expect(state.savePrivateKey).toBe(true);
+    expect(state.privateKeyMode).toBe("existing");
+    expect(state.privateKeyFile).toBe(
+      "file:///config/private_keys/atlantis.key",
+    );
+    expect(state.privateKey).toBe("");
+  });
+
+  test("redacted inline private keys default to saved private key without exposing text", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-atlantis",
+        title: "Atlantis",
+        type: "SSH",
+        host: "atlantis.home:22",
+        has_saved_private_key: true,
+        meta: {
+          Authentication: "Private Key",
+          User: "pi",
+        },
+      }),
+    );
+
+    expect(state.savePrivateKey).toBe(true);
+    expect(state.privateKeyMode).toBe("existing");
+    expect(state.privateKeyFile).toBe("");
+    expect(state.privateKey).toBe("");
+  });
+
   test("cloneEditorState works when structuredClone is unavailable", () => {
     const originalStructuredClone = globalThis.structuredClone;
     try {

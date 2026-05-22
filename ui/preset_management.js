@@ -138,6 +138,18 @@ export function buildEditorState(preset, defaults = {}) {
     preset && typeof preset.hasSavedPassword === "function"
       ? preset.hasSavedPassword()
       : false;
+  const hasSavedPrivateKey =
+    preset && typeof preset.hasSavedPrivateKey === "function"
+      ? preset.hasSavedPrivateKey()
+      : false;
+  const savedPrivateKeyFile =
+    preset && typeof preset.privateKeyFile === "function"
+      ? preset.privateKeyFile()
+      : "";
+  const privateKeyFile =
+    privateKey.startsWith("file://") || privateKey.startsWith("environment://")
+      ? privateKey
+      : savedPrivateKeyFile;
 
   return {
     id: presetValue(preset, "id", defaults.id || ""),
@@ -156,13 +168,10 @@ export function buildEditorState(preset, defaults = {}) {
     privateKey,
     savePrivateKey:
       privateKey.length > 0 ||
+      hasSavedPrivateKey ||
       (isNewPreset && meta.Authentication === "Private Key"),
     privateKeyMode: privateKeyModeForValue(privateKey),
-    privateKeyFile:
-      privateKey.startsWith("file://") ||
-      privateKey.startsWith("environment://")
-        ? privateKey
-        : "",
+    privateKeyFile,
     confirmDelete: false,
     error: "",
   };

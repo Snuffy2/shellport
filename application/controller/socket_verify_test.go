@@ -146,6 +146,15 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 	if preset["has_saved_password"] != true {
 		t.Fatalf("has_saved_password = %v, want true", preset["has_saved_password"])
 	}
+	if preset["has_saved_private_key"] != true {
+		t.Fatalf("has_saved_private_key = %v, want true", preset["has_saved_private_key"])
+	}
+	if preset["private_key_file"] != "file:///config/private_keys/atlantis" {
+		t.Fatalf(
+			"private_key_file = %q, want file:///config/private_keys/atlantis",
+			preset["private_key_file"],
+		)
+	}
 	if _, ok := meta[configuration.PresetMetaPassword]; ok {
 		t.Fatal("plaintext password leaked into socket preset metadata")
 	}

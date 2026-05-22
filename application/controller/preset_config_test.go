@@ -233,6 +233,12 @@ func TestPresetConfigGetDoesNotMigratePrivateKeysForUserRole(t *testing.T) {
 	if _, ok := response.Presets[0].Meta["Private Key"]; ok {
 		t.Fatal("response exposed private key metadata")
 	}
+	if !response.Presets[0].HasSavedPrivateKey {
+		t.Fatal("HasSavedPrivateKey = false, want true")
+	}
+	if response.Presets[0].PrivateKeyFile != "" {
+		t.Fatalf("PrivateKeyFile = %q, want empty", response.Presets[0].PrivateKeyFile)
+	}
 	if len(response.PrivateKeyFiles) != 0 {
 		t.Fatalf("PrivateKeyFiles count = %d, want 0", len(response.PrivateKeyFiles))
 	}
