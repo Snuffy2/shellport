@@ -236,6 +236,43 @@ func TestSocketAccessConfigurationHidesPrivateKeyFileUntilManageAllowed(t *testi
 	}
 }
 
+func TestSocketAccessConfigurationHandlesFilePrivateKeyURIVariants(t *testing.T) {
+	preset := configuration.Preset{
+		ID:    "preset-atlantis",
+		Title: "Atlantis",
+		Type:  "SSH",
+		Host:  "atlantis.home:22",
+		Meta: map[string]string{
+			"Authentication":                   "Private Key",
+			configuration.PresetMetaPrivateKey: `FILE://C:\config\private_keys\atlantis.key`,
+		},
+	}
+
+	cfg := newSocketAccessConfiguration(
+		[]configuration.Preset{preset},
+		"",
+		"",
+		false,
+		presetManagementPolicy{
+			Writable:  true,
+			CanManage: true,
+		},
+	)
+
+	if cfg.Presets[0].PrivateKeyFile != `FILE://C:\config\private_keys\atlantis.key` {
+		t.Fatalf(
+			"PrivateKeyFile = %q, want original FILE URI",
+			cfg.Presets[0].PrivateKeyFile,
+		)
+	}
+	if cfg.Presets[0].PrivateKeyFilename != "atlantis.key" {
+		t.Fatalf(
+			"PrivateKeyFilename = %q, want atlantis.key",
+			cfg.Presets[0].PrivateKeyFilename,
+		)
+	}
+}
+
 func TestSocketAccessConfigurationListsPrivateKeyFilesOnlyWhenManageable(
 	t *testing.T,
 ) {

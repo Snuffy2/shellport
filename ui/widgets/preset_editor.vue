@@ -117,9 +117,25 @@ SPDX-License-Identifier: AGPL-3.0-only
         <select v-model="localState.privateKeyFile">
           <option value="">
             {{
-              localState.privateKeyFilename.length > 0
-                ? localState.privateKeyFilename
+              localState.privateKeyFilename.length > 0 &&
+              localState.privateKeyFile.length <= 0
+                ? "Current: " + localState.privateKeyFilename
                 : "Select a private key"
+            }}
+          </option>
+          <option
+            v-if="
+              localState.privateKeyFilename.length > 0 &&
+              localState.privateKeyFile.length > 0
+            "
+            disabled
+            value="__current_private_key_label__"
+          >
+            {{
+              "Current: " +
+              (localState.privateKeyFilename.length > 0
+                ? localState.privateKeyFilename
+                : privateKeyFileLabel(localState.privateKeyFile))
             }}
           </option>
           <option

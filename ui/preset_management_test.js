@@ -59,6 +59,9 @@ describe("preset editor state", () => {
     expect(
       privateKeyFileLabel("file:///config/private_keys/atlantis.key"),
     ).toBe("atlantis.key");
+    expect(
+      privateKeyFileLabel("FILE://C:\\config\\private_keys\\atlantis.key"),
+    ).toBe("atlantis.key");
     expect(privateKeyFileLabel("environment://SHELLPORT_TEST_KEY")).toBe(
       "environment://SHELLPORT_TEST_KEY",
     );

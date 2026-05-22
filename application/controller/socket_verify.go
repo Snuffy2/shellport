@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"html"
 	"net/http"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -184,18 +183,32 @@ func presetPrivateKeyFile(preset configuration.Preset, policy presetManagementPo
 		return ""
 	}
 	privateKey := preset.Meta[configuration.PresetMetaPrivateKey]
-	if strings.HasPrefix(privateKey, "file://") {
+	if privateKeyFilePath(privateKey) != "" {
 		return privateKey
 	}
 	return ""
 }
 
 func presetPrivateKeyFilename(preset configuration.Preset) string {
-	privateKey := preset.Meta[configuration.PresetMetaPrivateKey]
-	if strings.HasPrefix(privateKey, "file://") {
-		return path.Base(strings.TrimPrefix(privateKey, "file://"))
+	keyPath := privateKeyFilePath(preset.Meta[configuration.PresetMetaPrivateKey])
+	if keyPath == "" {
+		return ""
 	}
-	return ""
+	parts := strings.FieldsFunc(keyPath, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[len(parts)-1]
+}
+
+func privateKeyFilePath(privateKey string) string {
+	schemeIndex := strings.Index(privateKey, "://")
+	if schemeIndex < 0 || !strings.EqualFold(privateKey[:schemeIndex], "file") {
+		return ""
+	}
+	return privateKey[schemeIndex+3:]
 }
 
 // buildAccessConfigRespondBody serializes accessCfg to JSON. It panics if

@@ -63,7 +63,8 @@ function normalizeEncodingForType(type, encoding) {
 }
 
 function privateKeyModeForValue(value) {
-  if (value.startsWith("file://") || value.startsWith("environment://")) {
+  const scheme = uriScheme(value);
+  if (scheme === "file" || scheme === "environment") {
     return "existing";
   }
   if (value.length > 0) {
@@ -73,12 +74,17 @@ function privateKeyModeForValue(value) {
 }
 
 export function privateKeyFileLabel(value) {
-  if (!value.startsWith("file://")) {
+  if (uriScheme(value) !== "file") {
     return value;
   }
-  const path = value.slice("file://".length);
-  const parts = path.split("/").filter((part) => part.length > 0);
+  const path = value.slice(value.indexOf("://") + 3);
+  const parts = path.split(/[\\/]/).filter((part) => part.length > 0);
   return parts.length > 0 ? parts[parts.length - 1] : value;
+}
+
+function uriScheme(value) {
+  const schemeIndex = value.indexOf("://");
+  return schemeIndex < 0 ? "" : value.slice(0, schemeIndex).toLowerCase();
 }
 
 export function canManagePresets(policy) {
@@ -151,7 +157,7 @@ export function buildEditorState(preset, defaults = {}) {
       ? preset.privateKeyFilename()
       : "";
   const privateKeyFile =
-    privateKey.startsWith("file://") || privateKey.startsWith("environment://")
+    uriScheme(privateKey) === "file" || uriScheme(privateKey) === "environment"
       ? privateKey
       : savedPrivateKeyFile;
   const privateKeyFilename =
