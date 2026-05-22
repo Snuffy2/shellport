@@ -17,7 +17,8 @@ import (
 // fileTypeName is the loader name reported when configuration is loaded from a
 // JSON file.
 const (
-	defaultConfigFilePath = "/config/shellport.conf.json"
+	// DefaultConfigFilePath is the default Docker config file path.
+	DefaultConfigFilePath = "/config/shellport.conf.json"
 	fileTypeName          = "File"
 	defaultConfigContent  = `{
   "HostName": "",
@@ -135,7 +136,7 @@ func AutoCreateDefaultFile(filePath string) Loader {
 }
 
 func defaultFileSearchList() []string {
-	return []string{defaultConfigFilePath}
+	return []string{DefaultConfigFilePath}
 }
 
 func defaultFileFromSearchList(fallbackFileSearchList []string) Loader {

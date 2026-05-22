@@ -36,7 +36,7 @@ func main() {
 	} else {
 		configLoaders = append(configLoaders, configuration.DefaultFile())
 		configLoaders = append(configLoaders, configuration.AutoCreateDefaultFile(
-			"/config/shellport.conf.json",
+			configuration.DefaultConfigFilePath,
 		))
 	}
 	e := application.
