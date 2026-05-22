@@ -46,9 +46,17 @@ const streamMocks = vi.hoisted(() => {
   return { FakeStreams, state };
 });
 
+const xhrMocks = vi.hoisted(() => ({
+  options: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("./stream/streams.js", () => ({
   ECHO_FAILED: -1,
   Streams: streamMocks.FakeStreams,
+}));
+
+vi.mock("./xhr.js", () => ({
+  options: xhrMocks.options,
 }));
 
 const { Socket } = await import("./socket.js");
@@ -94,6 +102,7 @@ function buildCallbacks() {
 describe("Socket", () => {
   beforeEach(() => {
     streamMocks.state.instances = [];
+    xhrMocks.options.mockClear();
   });
 
   it("ignores and closes an in-flight dial after close", async () => {
@@ -159,6 +168,35 @@ describe("Socket", () => {
     assert.strictEqual(second.clearedWith, undefined);
   });
 
+  it("handles active flow-control clear failures", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const callbacks = buildCallbacks();
+    const conn = buildConnection();
+    const pauseFailure = deferred();
+    let dialCallbacks;
+
+    socket.dial.dial = vi.fn().mockImplementationOnce((callbacks) => {
+      dialCallbacks = callbacks;
+
+      return Promise.resolve(conn);
+    });
+
+    const streamHandler = await socket.get(callbacks);
+    streamHandler.sender.send = vi.fn(() => pauseFailure.promise);
+    streamHandler.clear = vi.fn(() =>
+      Promise.reject(new Error("clear failed")),
+    );
+
+    dialCallbacks.inbound({ size: 1024 * 32 });
+    dialCallbacks.inboundUnpacked(new Uint8Array(1));
+
+    pauseFailure.reject(new Error("pause failed"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(streamHandler.clear).toHaveBeenCalled();
+  });
+
   it("does not let a stale clear callback tear down a newer stream", async () => {
     const socket = new Socket({}, {}, 1000, 1000);
     const callbacks = buildCallbacks();
@@ -219,5 +257,56 @@ describe("Socket", () => {
 
     assert.notStrictEqual(first, second);
     assert.strictEqual(socket.streamHandler, second);
+  });
+
+  it("keeps overlapping dial keep-alive timers isolated", async () => {
+    vi.useFakeTimers();
+    const realWebSocket = globalThis.WebSocket;
+    const sockets = [];
+
+    class FakeWebSocket {
+      constructor() {
+        this.listeners = {};
+        sockets.push(this);
+      }
+
+      addEventListener(eventName, handler) {
+        this.listeners[eventName] = handler;
+      }
+
+      close() {
+        this.listeners.close({ code: 1000 });
+      }
+    }
+
+    globalThis.WebSocket = FakeWebSocket;
+
+    try {
+      const socket = new Socket({}, {}, 2000, 1000);
+      const firstConnect = socket.dial.connect(
+        { webSocket: "ws://first", keepAlive: "/keep" },
+        2000,
+      );
+      sockets[0].listeners.open({});
+      await firstConnect;
+
+      const secondConnect = socket.dial.connect(
+        { webSocket: "ws://second", keepAlive: "/keep" },
+        2000,
+      );
+      sockets[1].listeners.open({});
+      await secondConnect;
+
+      vi.advanceTimersByTime(1000);
+      assert.strictEqual(xhrMocks.options.mock.calls.length, 2);
+
+      sockets[0].close();
+      vi.advanceTimersByTime(1000);
+
+      assert.strictEqual(xhrMocks.options.mock.calls.length, 3);
+    } finally {
+      globalThis.WebSocket = realWebSocket;
+      vi.useRealTimers();
+    }
   });
 });

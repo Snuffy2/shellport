@@ -356,6 +356,36 @@ describe("Streams", () => {
     assert.strictEqual(clearedError, expectedError);
   });
 
+  it("handles clear callback failures after heartbeat send failures", async () => {
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.reject(new Error("heartbeat send failed"));
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {
+          throw new Error("clear callback failed");
+        },
+      },
+    );
+
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    assert.strictEqual(st.stop, true);
+  });
+
   it("clears the stream after repeated missed heartbeats", async () => {
     let clearedError = null;
     const st = new streams.Streams(
@@ -393,6 +423,44 @@ describe("Streams", () => {
     });
 
     assert.match(clearedError.message, /missed heartbeat responses/);
+  });
+
+  it("handles clear callback failures after missed heartbeats", async () => {
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {
+          throw new Error("clear callback failed");
+        },
+      },
+    );
+
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    assert.strictEqual(st.stop, true);
   });
 
   it("ignores stale echo responses without clearing the active heartbeat", async () => {

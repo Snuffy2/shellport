@@ -19,6 +19,10 @@ import * as stream from "./stream.js";
 
 export const ECHO_FAILED = -1;
 
+function traceUnhandledClearError(e) {
+  process.env.NODE_ENV === "development" && console.trace(e);
+}
+
 /**
  * Holds the result of a {@link Streams#request} call.
  *
@@ -265,7 +269,7 @@ export class Streams {
           if (this.missedEchoResponses >= this.maxMissedEchoResponses) {
             this.clear(
               new Exception("Streams missed heartbeat responses", false),
-            );
+            ).catch(traceUnhandledClearError);
             return;
           }
         }
@@ -274,7 +278,7 @@ export class Streams {
         this.lastEchoData = randomNum.slice(2, randomNum.length);
       })
       .catch((e) => {
-        this.clear(e);
+        this.clear(e).catch(traceUnhandledClearError);
       });
   }
 

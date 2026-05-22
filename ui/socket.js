@@ -78,7 +78,6 @@ class Dial {
     this.address = address;
     this.timeout = timeout;
     this.privateKey = privateKey;
-    this.keepAliveTicker = null;
   }
 
   /**
@@ -127,16 +126,14 @@ class Dial {
         minKeepAliveTimeout,
       );
 
-      if (!self.keepAliveTicker) {
-        self.keepAliveTicker = setInterval(
-          () => {
-            xhr.options(address.keepAlive, {}, keepAliveTimeout).catch((e) => {
-              process.env.NODE_ENV === "development" && console.trace(e);
-            });
-          },
-          Math.max(self.timeout / 2, 1000),
-        );
-      }
+      const keepAliveTicker = setInterval(
+        () => {
+          xhr.options(address.keepAlive, {}, keepAliveTimeout).catch((e) => {
+            process.env.NODE_ENV === "development" && console.trace(e);
+          });
+        },
+        Math.max(self.timeout / 2, 1000),
+      );
 
       ws.addEventListener("open", (_event) => {
         myRes(ws);
@@ -148,14 +145,12 @@ class Dial {
         };
 
         myRej(event);
-        clearInterval(self.keepAliveTicker);
-        self.keepAliveTicker = null;
+        clearInterval(keepAliveTicker);
       });
 
       ws.addEventListener("error", (_event) => {
         ws.close();
-        clearInterval(self.keepAliveTicker);
-        self.keepAliveTicker = null;
+        clearInterval(keepAliveTicker);
       });
     });
   }
@@ -444,7 +439,9 @@ export class Socket {
     const sendFlowControl = (streamHandler, send) => {
       send().catch((e) => {
         if (self.streamHandler === streamHandler) {
-          streamHandler.clear(e);
+          streamHandler.clear(e).catch((clearErr) => {
+            process.env.NODE_ENV === "development" && console.trace(clearErr);
+          });
         }
       });
     };
