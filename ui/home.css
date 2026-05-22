@@ -213,15 +213,15 @@
   }
 
   40% {
-    background: #4f3fc8;
+    background: var(--shellport-anim-mid-1);
   }
 
   60% {
-    background: #2b3f8c;
+    background: var(--shellport-anim-mid-2);
   }
 
   80% {
-    background: #3356c7;
+    background: var(--shellport-anim-mid-3);
   }
 
   100% {

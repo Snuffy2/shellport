@@ -181,8 +181,8 @@
 }
 
 #conn-status-traffic-chart-in-background {
-  --color-start: #0287a8;
-  --color-stop: #06e7b6;
+  --color-start: var(--shellport-chart-traffic-in-start);
+  --color-stop: var(--shellport-chart-traffic-in-stop);
 }
 
 #conn-status-traffic-chart-in > g {
@@ -190,8 +190,8 @@
 }
 
 #conn-status-traffic-chart-out-background {
-  --color-start: var(--shellport-logo-purple);
-  --color-stop: #3356c7;
+  --color-start: var(--shellport-chart-traffic-out-start);
+  --color-stop: var(--shellport-chart-traffic-out-stop);
 }
 
 #conn-status-traffic-chart-out > g {
