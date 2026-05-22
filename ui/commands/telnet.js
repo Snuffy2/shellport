@@ -279,6 +279,7 @@ class Wizard {
     subs,
     controls,
     _history,
+    saveAsPreset = null,
   ) {
     this.info = info;
     this.preset = preset;
@@ -288,6 +289,7 @@ class Wizard {
     this.keptSessions = keptSessions;
     this.step = subs;
     this.controls = controls.get("Telnet");
+    this.saveAsPreset = saveAsPreset;
     this.requestLifecycle = new ConnectionRequestLifecycle(
       this.step,
       (title, message) => this.stepErrorDone(title, message),
@@ -500,6 +502,19 @@ class Wizard {
    */
   stepInitialPrompt() {
     const self = this;
+    const canSaveAsPreset = !self.preset || self.preset.id() === "";
+    const actions = [];
+
+    if (canSaveAsPreset && self.saveAsPreset !== null) {
+      actions.push({
+        text: "Save as preset",
+        keepOpen: true,
+        validate: false,
+        respond(r) {
+          return self.saveAsPreset("Telnet", r);
+        },
+      });
+    }
 
     return command.prompt(
       "Telnet",
@@ -548,6 +563,7 @@ class Wizard {
         self.preset,
         (_r) => {},
       ),
+      actions,
     );
   }
 
@@ -717,6 +733,8 @@ export class Command {
     subs,
     controls,
     history,
+    _saveFingerprint = null,
+    saveAsPreset = null,
   ) {
     return new Wizard(
       info,
@@ -727,6 +745,7 @@ export class Command {
       subs,
       controls,
       history,
+      saveAsPreset,
     );
   }
 

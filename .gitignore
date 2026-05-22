@@ -46,4 +46,3 @@ application/controller/static_assets/**
 !application/controller/static_assets/.gitkeep
 shellport
 .worktrees/
-docs/

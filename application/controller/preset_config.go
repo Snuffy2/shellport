@@ -17,6 +17,7 @@ import (
 
 const (
 	preserveHiddenPresetPasswordsHeader = "X-Preserve-Hidden-Preset-Passwords"
+	clearHiddenPresetPasswordsHeader    = "X-Clear-Hidden-Preset-Passwords"
 	presetFingerprintIDHeader           = "X-Preset-Fingerprint-ID"
 	maxPresetConfigRequestBytes         = 256 * 1024
 	maxPresetConfigPresets              = 512
@@ -34,7 +35,8 @@ type presetConfig struct {
 
 // presetConfigResponse is the JSON envelope returned by preset config APIs.
 type presetConfigResponse struct {
-	Presets []socketRemotePreset `json:"presets"`
+	Presets         []socketRemotePreset `json:"presets"`
+	PrivateKeyFiles []string             `json:"private_key_files"`
 }
 
 // presetConfigRequest is the JSON envelope accepted by preset config APIs.
@@ -59,10 +61,21 @@ func (p presetConfig) Get(
 	r *http.Request,
 	l log.Logger,
 ) error {
-	if _, err := p.requireAuth(r); err != nil {
+	role, err := p.requireAuth(r)
+	if err != nil {
 		return err
 	}
-	return p.writePresets(w, p.commonCfg.CurrentPresets())
+	presets := p.commonCfg.CurrentPresets()
+	if role >= authRoleAdmin {
+		p.lockPresetUpdates()
+		defer p.unlockPresetUpdates()
+		var err error
+		presets, err = p.migrateCurrentPresetPrivateKeys()
+		if err != nil {
+			return NewError(http.StatusInternalServerError, err.Error())
+		}
+	}
+	return p.writePresets(w, presets, newPresetManagementPolicy(p.commonCfg, role))
 }
 
 // Put replaces the full preset list, adding missing IDs and persisting the file.
@@ -75,6 +88,7 @@ func (p presetConfig) Put(
 	if err != nil {
 		return err
 	}
+	targetPresetID := strings.TrimSpace(r.Header.Get(presetFingerprintIDHeader))
 	if !p.commonCfg.PresetConfigWritable() {
 		return NewError(
 			http.StatusConflict,
@@ -95,10 +109,18 @@ func (p presetConfig) Put(
 	defer p.unlockPresetUpdates()
 
 	currentPresets := p.commonCfg.CurrentPresets()
-	fingerprintOnly := r.Header.Get(preserveHiddenPresetPasswordsHeader) == "yes"
+	clearPresetIDs := parsePresetIDSet(r.Header.Get(clearHiddenPresetPasswordsHeader))
+	fingerprintOnly := r.Header.Get(preserveHiddenPresetPasswordsHeader) == "yes" && targetPresetID != ""
 	var presets []configuration.Preset
+	clearPresetIDsForPersistence := clearPresetIDs
 	if fingerprintOnly {
-		targetPresetID := strings.TrimSpace(r.Header.Get(presetFingerprintIDHeader))
+		if len(clearPresetIDs) > 0 {
+			return NewError(
+				http.StatusBadRequest,
+				"cannot clear hidden passwords on fingerprint-only preset save",
+			)
+		}
+		clearPresetIDsForPersistence = nil
 		var err error
 		if isCompactFingerprintRequest(request, targetPresetID) {
 			presets, err = applyCompactFingerprintUpdate(
@@ -114,30 +136,45 @@ func (p presetConfig) Put(
 				return NewError(http.StatusBadRequest, err.Error())
 			}
 			presets = presetConfigRequestPresets(request)
-			presets = preserveHiddenPresetPasswords(presets, currentPresets)
+			presets = preserveHiddenPresetPasswordsExcept(
+				presets,
+				currentPresets,
+				clearPresetIDs,
+			)
 		}
 		presets, err = p.commands.Reconfigure(presets)
 		if err != nil {
 			return NewError(http.StatusBadRequest, err.Error())
 		}
-		if err := validateFingerprintOnlyPresetUpdate(
-			presets,
-			currentPresets,
-			targetPresetID,
-		); err != nil {
-			return NewError(http.StatusBadRequest, err.Error())
+		if targetPresetID != "" {
+			if err := validateFingerprintOnlyPresetUpdate(
+				presets,
+				currentPresets,
+				targetPresetID,
+			); err != nil {
+				return NewError(http.StatusBadRequest, err.Error())
+			}
 		}
 	} else if role < authRoleAdmin {
 		return NewError(
 			http.StatusForbidden,
 			"Full preset updates require AdminKey authentication",
 		)
+	} else if p.commonCfg.OnlyAllowPresetRemotes {
+		return NewError(
+			http.StatusForbidden,
+			"Preset management is disabled when OnlyAllowPresetRemotes is enabled",
+		)
 	} else {
 		if err := validatePresetConfigRequest(request); err != nil {
 			return NewError(http.StatusBadRequest, err.Error())
 		}
 		presets = presetConfigRequestPresets(request)
-		presets = preserveHiddenPresetPasswords(presets, currentPresets)
+		presets = preserveHiddenPresetPasswordsExcept(
+			presets,
+			currentPresets,
+			clearPresetIDs,
+		)
 	}
 	normalized, _, err := configuration.EnsurePresetIDs(presets)
 	if err != nil {
@@ -151,17 +188,29 @@ func (p presetConfig) Put(
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
 	}
+	normalized, _, err = configuration.MigratePresetPrivateKeysToFiles(
+		p.commonCfg.SourceFile,
+		normalized,
+	)
+	if err != nil {
+		return NewError(http.StatusInternalServerError, err.Error())
+	}
 	if err := configuration.ReplaceFilePresetsWithRuntime(
 		p.commonCfg.SourceFile,
 		normalized,
 		currentPresets,
+		clearPresetIDsForPersistence,
 	); err != nil {
 		return NewError(http.StatusInternalServerError, err.Error())
 	}
 	if p.commonCfg.PresetRepository != nil {
 		p.commonCfg.PresetRepository.Replace(normalized)
 	}
-	return p.writePresets(w, normalized)
+	return p.writePresets(
+		w,
+		normalized,
+		newPresetManagementPolicy(p.commonCfg, role),
+	)
 }
 
 func (p presetConfig) lockPresetUpdates() {
@@ -174,6 +223,24 @@ func (p presetConfig) unlockPresetUpdates() {
 	if p.commonCfg.PresetRepository != nil {
 		p.commonCfg.PresetRepository.UnlockUpdates()
 	}
+}
+
+func (p presetConfig) migrateCurrentPresetPrivateKeys() ([]configuration.Preset, error) {
+	current := p.commonCfg.CurrentPresets()
+	if !p.commonCfg.PresetConfigWritable() {
+		return current, nil
+	}
+	presets, changed, err := configuration.MigratePresetPrivateKeysToFiles(
+		p.commonCfg.SourceFile,
+		current,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if changed && p.commonCfg.PresetRepository != nil {
+		p.commonCfg.PresetRepository.Replace(presets)
+	}
+	return presets, nil
 }
 
 func presetConfigRequestPresets(
@@ -395,9 +462,46 @@ func samePresetMetaExceptFingerprint(
 	return true
 }
 
+func parsePresetIDSet(raw string) map[string]struct{} {
+	idSet := make(map[string]struct{})
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return idSet
+	}
+	if strings.HasPrefix(raw, "[") {
+		var presetIDs []string
+		if err := json.Unmarshal([]byte(raw), &presetIDs); err == nil {
+			for _, presetID := range presetIDs {
+				presetID = strings.TrimSpace(presetID)
+				if presetID == "" {
+					continue
+				}
+				idSet[presetID] = struct{}{}
+			}
+			return idSet
+		}
+	}
+	for _, presetID := range strings.Split(raw, ",") {
+		presetID = strings.TrimSpace(presetID)
+		if presetID == "" {
+			continue
+		}
+		idSet[presetID] = struct{}{}
+	}
+	return idSet
+}
+
 func preserveHiddenPresetPasswords(
 	presets []configuration.Preset,
 	current []configuration.Preset,
+) []configuration.Preset {
+	return preserveHiddenPresetPasswordsExcept(presets, current, nil)
+}
+
+func preserveHiddenPresetPasswordsExcept(
+	presets []configuration.Preset,
+	current []configuration.Preset,
+	clearPresetIDs map[string]struct{},
 ) []configuration.Preset {
 	currentByID := make(map[string]configuration.Preset, len(current))
 	for _, preset := range current {
@@ -412,6 +516,9 @@ func preserveHiddenPresetPasswords(
 		}
 		if preset.Meta["Authentication"] != "Password" ||
 			currentPreset.Meta["Authentication"] != "Password" {
+			continue
+		}
+		if _, clear := clearPresetIDs[preset.ID]; clear {
 			continue
 		}
 		if hasPresetPasswordMeta(preset.Meta) {
@@ -475,11 +582,24 @@ func (p presetConfig) requireAuth(r *http.Request) (authRole, error) {
 func (p presetConfig) writePresets(
 	w *ResponseWriter,
 	presets []configuration.Preset,
+	policy presetManagementPolicy,
 ) error {
 	w.Header().Add("Cache-Control", "no-store")
 	w.Header().Add("Pragma", "no-store")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	return json.NewEncoder(w).Encode(presetConfigResponse{
-		Presets: newSocketAccessConfiguration(presets, "", "", false).Presets,
+		Presets:         newSocketAccessConfiguration(presets, "", "", false).Presets,
+		PrivateKeyFiles: p.privateKeyFiles(policy),
 	})
+}
+
+func (p presetConfig) privateKeyFiles(policy presetManagementPolicy) []string {
+	if !policy.CanManage || policy.RequiresAdminKey {
+		return []string{}
+	}
+	files, err := configuration.ListPresetPrivateKeyFiles(p.commonCfg.SourceFile)
+	if err != nil {
+		return []string{}
+	}
+	return files
 }

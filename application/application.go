@@ -117,6 +117,7 @@ func (a Application) run(
 	servers := make([]*server.Serving, 0, len(c.Servers))
 	s := server.New(a.logger)
 	commonCfg := c.Common()
+	warnIfPresetConfigNotWritable(commonCfg, a.logger)
 
 	defer func() {
 		for i := len(servers); i > 0; i-- {
@@ -176,6 +177,17 @@ func normalizeStartupPresets(
 			return configuration.Configuration{}, err
 		}
 	}
+	privateKeysChanged := false
+	if configuration.PresetConfigWritable(c.SourceFile) {
+		presets, privateKeysChanged, err = configuration.MigratePresetPrivateKeysToFiles(
+			c.SourceFile,
+			presets,
+		)
+		if err != nil {
+			return configuration.Configuration{}, err
+		}
+	}
+	c.Presets = presets
 
 	presets, err = commands.Reconfigure(c.Presets)
 	if err != nil {
@@ -189,7 +201,7 @@ func normalizeStartupPresets(
 		return configuration.Configuration{}, err
 	}
 	c.Presets = presets
-	if reconfigureChanged || secretsChanged {
+	if reconfigureChanged || secretsChanged || privateKeysChanged {
 		if !configuration.PresetConfigWritable(c.SourceFile) {
 			if secretsChanged && c.SourceFile != "" {
 				return configuration.Configuration{}, fmt.Errorf(
@@ -202,11 +214,27 @@ func normalizeStartupPresets(
 			c.SourceFile,
 			presets,
 			runtimePresets,
+			nil,
 		); err != nil {
 			return configuration.Configuration{}, err
 		}
 	}
 	return c, nil
+}
+
+// warnIfPresetConfigNotWritable logs when file-backed preset management cannot
+// persist changes.
+func warnIfPresetConfigNotWritable(
+	commonCfg configuration.Common,
+	logger log.Logger,
+) {
+	if commonCfg.SourceFile == "" || commonCfg.PresetConfigWritable() {
+		return
+	}
+	logger.Warning(
+		"Preset config file is not writable; UI preset create/edit/delete is disabled: %s",
+		commonCfg.SourceFile,
+	)
 }
 
 // Run executes the application loop. It prints the startup banner, redirects

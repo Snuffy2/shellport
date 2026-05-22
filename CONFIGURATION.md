@@ -322,23 +322,29 @@ Presets without an `id` are assigned one automatically. Duplicate preset IDs are
 rejected.
 
 When authentication is required, `PUT` uses the same time-windowed `X-Key`
-authentication format as `/shellport/socket/verify`. The current authentication
-UI accepts `SharedKey` only. `AdminKey` grants admin access for the preset
-config API, but there is not yet a separate UI prompt for entering it. Full
-preset-list replacement requires admin access. Fingerprint saves from the
-current UI require user access and are limited server-side to changing only the
-selected preset's `Fingerprint` metadata. When the active configuration was
-loaded from environment variables, writes are rejected because there is no JSON
-file to update.
+authentication format as `/shellport/socket/verify`. The UI supports preset
+create, edit, and delete when the active configuration is file-backed and
+`OnlyAllowPresetRemotes` is false. If `AdminKey` is configured, the UI prompts
+for it on the first protected write and caches it in browser memory until the
+page reloads. If `AdminKey` is blank, authenticated users are admin users for
+preset management. If both `SharedKey` and `AdminKey` are blank, anonymous
+visitors can manage presets.
+
+The preset editor never displays hidden saved passwords. It receives a boolean
+that a saved password exists and can keep or clear that password on save.
+Fingerprint editing is intentionally not part of the preset editor; users can
+save fingerprints from the connection-time fingerprint prompt. Fingerprint saves
+require user access and are limited server-side to changing only the selected
+preset's `Fingerprint` metadata. When the active configuration was loaded from
+environment variables, writes are rejected because there is no JSON file to
+update.
 
 Key behavior:
 
 - `SharedKey` and `AdminKey` both set: `SharedKey` is normal UI access,
-  `AdminKey` is admin access for the preset config API. The current UI only
-  prompts for `SharedKey`.
+  `AdminKey` is admin access for protected preset create, edit, and delete.
 - `SharedKey` blank and `AdminKey` set: all visitors are users without
-  authentication; admin actions require `AdminKey`, which currently needs a
-  direct API client.
+  authentication; admin actions require `AdminKey`.
 - `SharedKey` set and `AdminKey` blank: anyone who authenticates with
   `SharedKey` has admin access.
 - `SharedKey` and `AdminKey` both blank: all visitors have admin access without

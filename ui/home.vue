@@ -83,12 +83,21 @@ SPDX-License-Identifier: AGPL-3.0-only
       :display="windows.connect"
       :connectors="connector.connectors"
       :presets="presets"
+      :can-manage-presets="canManagePresets"
+      :preset-editor="presetEditor"
+      :preset-management-policy="presetManagementPolicy"
+      :private-key-files="presetPrivateKeyFiles"
+      :admin-key-cached="adminKeyCached"
+      :preset-save-handler="savePresetFromEditor"
+      :preset-delete-handler="deletePresetFromEditor"
       :restricted-to-presets="restrictedToPresets"
       :refreshing-presets="connector.refreshingPresets"
       :busy="connector.busy"
       @display="windows.connect = $event"
       @connector-select="connectNew"
       @preset-select="connectPreset"
+      @preset-edit="openPresetEditor"
+      @preset-editor-cancel="presetEditor = null"
       @refresh-presets="refreshPresets"
     >
       <connector
@@ -140,6 +149,12 @@ import * as home_socket from "./home_socketctl.js";
 
 import * as presets from "./commands/presets.js";
 import { buildPresetExecution } from "./home_preset_execution.js";
+import {
+  buildPresetConfigFromWizardFields,
+  buildEditorState,
+  canManagePresets,
+  clearHiddenPasswordIDs,
+} from "./preset_management.js";
 
 /* global __SHELLPORT_SOURCE_URL__, __SHELLPORT_VERSION__ */
 
@@ -260,6 +275,18 @@ export default {
       type: Boolean,
       default: () => false,
     },
+    presetManagementPolicy: {
+      type: Object,
+      default: () => null,
+    },
+    savePresetConfig: {
+      type: Function,
+      default: () => null,
+    },
+    adminKeyRequired: {
+      type: Function,
+      default: () => true,
+    },
     /**
      * Saves an accepted fingerprint to a preset in backend config.
      *
@@ -277,6 +304,10 @@ export default {
     refreshPresetConfig: {
       type: Function,
       default: () => null,
+    },
+    presetPrivateKeyFiles: {
+      type: Array,
+      default: () => [],
     },
   },
   emits: [
@@ -305,6 +336,8 @@ export default {
         refreshingPresets: false,
       },
       presets: markRaw(this.commands.mergePresets(this.presetData)),
+      presetConfigs: this.clonePresetConfigs(this.presetData.toConfig()),
+      presetEditor: null,
       tab: {
         current: -1,
         lastID: 0,
@@ -344,6 +377,12 @@ export default {
         return "ShellPort - browser-based remote shell access over SSH, Telnet, ET, and Mosh";
       }
       return "";
+    },
+    canManagePresets() {
+      return canManagePresets(this.presetManagementPolicy);
+    },
+    adminKeyCached() {
+      return !this.adminKeyRequired();
     },
   },
   watch: {
@@ -565,6 +604,11 @@ export default {
      */
     connectNew(connector) {
       const self = this;
+      const saveAsPreset = self.canManagePresets
+        ? (type, fields) => {
+            self.openNewPresetEditor(type, fields);
+          }
+        : null;
 
       self.runConnect((stream) => {
         self.connector.connector = {
@@ -581,6 +625,7 @@ export default {
               false,
               () => {},
               null,
+              saveAsPreset,
             ),
           ),
         };
@@ -652,9 +697,85 @@ export default {
      * @returns {void}
      */
     replacePresets(updatedPresets) {
+      this.presetConfigs = this.clonePresetConfigs(updatedPresets);
       this.presets = markRaw(
         this.commands.mergePresets(new presets.Presets(updatedPresets)),
       );
+    },
+    clonePresetConfigs(configs) {
+      return configs.map((preset) => ({
+        ...preset,
+        meta: { ...(preset.meta || {}) },
+      }));
+    },
+    rawPresetConfigs() {
+      return this.clonePresetConfigs(this.presetConfigs);
+    },
+    openPresetEditor(preset) {
+      if (!this.canManagePresets) {
+        return;
+      }
+
+      this.presetEditor = {
+        mode: "edit",
+        presetID: preset.preset.id(),
+        state: buildEditorState(preset.preset),
+      };
+    },
+    openNewPresetEditor(type, fields) {
+      if (!this.canManagePresets) {
+        return;
+      }
+
+      this.presetEditor = {
+        mode: "create",
+        presetID: "",
+        state: buildEditorState(
+          null,
+          buildPresetConfigFromWizardFields(type, fields),
+        ),
+      };
+
+      this.connector.inputting = false;
+      this.connector.acquired = false;
+    },
+    async savePresetFromEditor(payload) {
+      if (!this.savePresetConfig || this.presetEditor === null) {
+        return;
+      }
+
+      const configs = this.rawPresetConfigs();
+      const index = configs.findIndex(
+        (preset) => preset.id === payload.config.id,
+      );
+
+      if (index >= 0) {
+        configs[index] = payload.config;
+      } else {
+        configs.push(payload.config);
+      }
+
+      const clearIDs = clearHiddenPasswordIDs([payload.state]);
+      const updatedPresets = await this.savePresetConfig(configs, {
+        adminKey: payload.adminKey,
+        clearPasswordIDs: clearIDs,
+      });
+      this.replacePresets(updatedPresets);
+      this.presetEditor = null;
+    },
+    async deletePresetFromEditor(payload) {
+      if (!this.savePresetConfig || this.presetEditor === null) {
+        return;
+      }
+
+      const configs = this.rawPresetConfigs().filter(
+        (preset) => preset.id !== payload.id,
+      );
+      const updatedPresets = await this.savePresetConfig(configs, {
+        adminKey: payload.adminKey,
+      });
+      this.replacePresets(updatedPresets);
+      this.presetEditor = null;
     },
     /**
      * Reloads presets without restarting ShellPort.

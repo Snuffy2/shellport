@@ -1,0 +1,131 @@
+/*
+ * Copyright (C) 2026 Snuffy2
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+#preset-editor {
+  background: #3a3a3a;
+  color: #ddd;
+  padding: 0 20px 20px;
+}
+
+#preset-editor h2 {
+  color: #ccc;
+  font-size: 1.3em;
+  margin: 0 0 14px;
+}
+
+#preset-editor-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+#preset-editor .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+#preset-editor .field.horizontal {
+  align-items: center;
+  flex-direction: row;
+}
+
+#preset-editor input,
+#preset-editor select,
+#preset-editor textarea {
+  background: #2d2d2d;
+  border: 1px solid #666;
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+  padding: 8px;
+}
+
+#preset-editor textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+#preset-editor input[type="color"] {
+  height: 42px;
+  padding: 4px;
+}
+
+#preset-editor .preset-editor-actions {
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
+}
+
+#preset-editor-confirm-delete {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#preset-editor-confirm-delete p {
+  flex: 0 0 100%;
+  margin: 0 0 4px;
+}
+
+#preset-editor button {
+  background: var(--shellport-royal-blue);
+  border: 2px solid var(--shellport-royal-blue);
+  border-radius: 3px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 13px;
+}
+
+#preset-editor button:focus,
+#preset-editor button:hover {
+  background: var(--shellport-logo-purple);
+  border-color: var(--shellport-logo-purple);
+}
+
+#preset-editor button:active {
+  background: var(--shellport-logo-purple);
+  border-color: var(--shellport-logo-purple);
+}
+
+#preset-editor button.secondary {
+  background: transparent;
+  border-color: #eee;
+  color: #eee;
+}
+
+#preset-editor button.secondary:focus,
+#preset-editor button.secondary:hover {
+  background: transparent;
+  border-color: #ddd;
+  color: #ddd;
+}
+
+#preset-editor button.secondary:active {
+  background: transparent;
+  border-color: #666;
+  color: #666;
+}
+
+#preset-editor .preset-editor-cancel-action {
+  margin-left: auto;
+}
+
+#preset-editor-error {
+  background: #733;
+  color: #fff;
+  margin: 0 0 12px;
+  padding: 10px;
+}
+
+#preset-editor-admin-key-error {
+  background: #733;
+  color: #fff;
+  margin: 0 0 12px;
+  padding: 10px;
+}

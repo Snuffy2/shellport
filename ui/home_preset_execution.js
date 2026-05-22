@@ -19,8 +19,10 @@ export function presetCredential(presetData, authentication) {
     case "Password":
       return presetData.metaDefault("Password", "");
 
-    case "Private Key":
-      return presetData.metaDefault("Private Key", "");
+    case "Private Key": {
+      const privateKey = presetData.metaDefault("Private Key", "");
+      return privateKey.includes("://") ? "" : privateKey;
+    }
 
     case "None":
       return "";

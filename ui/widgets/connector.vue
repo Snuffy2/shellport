@@ -229,7 +229,10 @@ SPDX-License-Identifier: AGPL-3.0-only
         ></div>
       </div>
 
-      <div v-if="current.submittable || showCancelButton()" class="field">
+      <div
+        v-if="current.submittable || showCancelButton()"
+        class="field connector-actions"
+      >
         <button
           v-if="current.submittable"
           v-focus="submitterTabIndex === 1"
@@ -1110,9 +1113,10 @@ export default {
       }
     },
     /**
-     * Runs a secondary prompt action after validating the current fields.
+     * Runs a secondary prompt action after optional field validation.
      *
-     * @param {{respond: function}} action - Prompt action descriptor.
+     * @param {{respond: function, validate?: boolean}} action - Prompt action
+     *   descriptor.
      * @returns {Promise<void>}
      */
     async runAction(action) {
@@ -1124,7 +1128,7 @@ export default {
         return;
       }
 
-      if (!this.verifyAll()) {
+      if (action.validate !== false && !this.verifyAll()) {
         return;
       }
 

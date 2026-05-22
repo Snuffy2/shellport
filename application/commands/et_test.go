@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"io"
 	"net"
@@ -120,6 +122,62 @@ func TestETAcceptsOnlyPrivateKeyAuth(t *testing.T) {
 	}
 	if authMethodBuilder == nil {
 		t.Fatal("expected private-key auth method builder, got nil")
+	}
+}
+
+func TestETPresetFilePrivateKeyCachesMaterial(t *testing.T) {
+	privateKey := etTestPrivateKeyPEM(t, 1)
+	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
+	if err := os.WriteFile(keyPath, privateKey, 0o600); err != nil {
+		t.Fatalf("write private key fixture: %v", err)
+	}
+
+	bufferPool := command.NewBufferPool(4096)
+	clientMachine := newET(
+		log.NewDitch(),
+		command.NewHooks(configuration.HookSettings{}),
+		command.StreamResponder{},
+		command.Configuration{
+			Presets: []configuration.Preset{
+				{
+					ID:   "preset-et",
+					Type: "ET",
+					Host: "example.com:22",
+					Meta: map[string]string{
+						"Authentication":                   "Private Key",
+						configuration.PresetMetaPrivateKey: "file://" + keyPath,
+						"User":                             "alice",
+					},
+				},
+			},
+		},
+		&bufferPool,
+	)
+	client, ok := clientMachine.(*etClient)
+	if !ok {
+		t.Fatalf("expected newET to return *etClient")
+	}
+
+	authMethodBuilder, err := client.buildAuthMethod(
+		SSHAuthMethodPrivateKey,
+		"preset-et",
+		"alice",
+		"example.com:22",
+	)
+	if err != nil {
+		t.Fatalf("buildAuthMethod() error = %v", err)
+	}
+
+	if err := exerciseETSSHAuth(t, authMethodBuilder(make([]byte, 4096))); err != nil {
+		t.Fatalf("exercise SSH auth: %v", err)
+	}
+
+	cachedPrivateKey, ok := client.privateKeyForET()
+	if !ok {
+		t.Fatal("expected preset private key to be cached for ET process material")
+	}
+	if !bytes.Equal(cachedPrivateKey, privateKey) {
+		t.Fatalf("cached private key = %q, want %q", cachedPrivateKey, privateKey)
 	}
 }
 
@@ -419,6 +477,97 @@ func etTestPublicKey(t *testing.T) ssh.PublicKey {
 	}
 
 	return publicKey
+}
+
+func etTestPrivateKeyPEM(t *testing.T, seedByte byte) []byte {
+	t.Helper()
+
+	seed := bytes.Repeat([]byte{seedByte}, ed25519.SeedSize)
+	privateKey := ed25519.NewKeyFromSeed(seed)
+	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		t.Fatalf("marshal private key: %v", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+}
+
+func exerciseETSSHAuth(t *testing.T, auth []ssh.AuthMethod) error {
+	t.Helper()
+
+	serverSigner, err := ssh.NewSignerFromKey(
+		ed25519.NewKeyFromSeed(bytes.Repeat([]byte{2}, ed25519.SeedSize)),
+	)
+	if err != nil {
+		t.Fatalf("build server signer: %v", err)
+	}
+	serverConfig := &ssh.ServerConfig{
+		PublicKeyCallback: func(_ ssh.ConnMetadata, _ ssh.PublicKey) (*ssh.Permissions, error) {
+			return nil, nil
+		},
+	}
+	serverConfig.AddHostKey(serverSigner)
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen for test SSH server: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	serverDone := make(chan error, 1)
+	go func() {
+		serverConn, err := listener.Accept()
+		if err != nil {
+			serverDone <- err
+			return
+		}
+		defer func() { _ = serverConn.Close() }()
+		conn, chans, reqs, err := ssh.NewServerConn(serverConn, serverConfig)
+		if err != nil {
+			serverDone <- err
+			return
+		}
+		go ssh.DiscardRequests(reqs)
+		go func() {
+			for ch := range chans {
+				_ = ch.Reject(ssh.Prohibited, "test does not open channels")
+			}
+		}()
+		serverDone <- conn.Close()
+	}()
+
+	clientConn, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = clientConn.Close() }()
+	clientConfig := &ssh.ClientConfig{
+		User:            "alice",
+		Auth:            auth,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         time.Second,
+	}
+	conn, chans, reqs, err := ssh.NewClientConn(
+		clientConn,
+		listener.Addr().String(),
+		clientConfig,
+	)
+	if err != nil {
+		return err
+	}
+	go ssh.DiscardRequests(reqs)
+	go func() {
+		for ch := range chans {
+			_ = ch.Reject(ssh.Prohibited, "test does not open channels")
+		}
+	}()
+	_ = conn.Close()
+
+	select {
+	case err := <-serverDone:
+		return err
+	case <-time.After(time.Second):
+		return errors.New("timed out waiting for test SSH server")
+	}
 }
 
 func TestETBuildKnownHostsLineUsesSSHMaterial(t *testing.T) {

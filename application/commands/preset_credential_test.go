@@ -5,6 +5,8 @@
 package commands
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Snuffy2/shellport/application/command"
@@ -40,6 +42,107 @@ func TestPresetPasswordCredentialMatchesHostUserAndPasswordAuth(t *testing.T) {
 	}
 	if credential != "mypassword" {
 		t.Fatalf("credential = %q, want mypassword", credential)
+	}
+}
+
+func TestPresetPrivateKeyCredentialReadsFileReference(t *testing.T) {
+	keyPath := filepath.Join(t.TempDir(), "atlantis.key")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	credential, ok := presetPrivateKeyCredential(
+		command.Configuration{
+			Presets: []configuration.Preset{
+				{
+					ID:   "preset-atlantis",
+					Type: "SSH",
+					Host: "atlantis.home:22",
+					Meta: map[string]string{
+						"Authentication": "Private Key",
+						"User":           "pi",
+						"Private Key":    "file://" + keyPath,
+					},
+				},
+			},
+		},
+		"SSH",
+		"preset-atlantis",
+		"pi",
+		"atlantis.home:22",
+	)
+
+	if !ok {
+		t.Fatal("presetPrivateKeyCredential ok = false, want true")
+	}
+	if credential != "PRIVATE KEY DATA" {
+		t.Fatalf("credential = %q, want PRIVATE KEY DATA", credential)
+	}
+}
+
+func TestPresetPrivateKeyCredentialPreservesEnvironmentReference(t *testing.T) {
+	t.Setenv("SHELLPORT_TEST_PRIVATE_KEY", "ENV PRIVATE KEY DATA")
+
+	credential, ok := presetPrivateKeyCredential(
+		command.Configuration{
+			Presets: []configuration.Preset{
+				{
+					ID:   "preset-atlantis",
+					Type: "SSH",
+					Host: "atlantis.home:22",
+					Meta: map[string]string{
+						"Authentication": "Private Key",
+						"User":           "pi",
+						"Private Key":    "environment://SHELLPORT_TEST_PRIVATE_KEY",
+					},
+				},
+			},
+		},
+		"SSH",
+		"preset-atlantis",
+		"pi",
+		"atlantis.home:22",
+	)
+
+	if !ok {
+		t.Fatal("presetPrivateKeyCredential ok = false, want true")
+	}
+	if credential != "ENV PRIVATE KEY DATA" {
+		t.Fatalf("credential = %q, want ENV PRIVATE KEY DATA", credential)
+	}
+}
+
+func TestPresetPrivateKeyCredentialTreatsEmptyResolvedReferenceAsMissing(
+	t *testing.T,
+) {
+	t.Setenv("SHELLPORT_TEST_PRIVATE_KEY", "")
+
+	credential, ok := presetPrivateKeyCredential(
+		command.Configuration{
+			Presets: []configuration.Preset{
+				{
+					ID:   "preset-atlantis",
+					Type: "SSH",
+					Host: "atlantis.home:22",
+					Meta: map[string]string{
+						"Authentication": "Private Key",
+						"User":           "pi",
+						"Private Key":    "environment://SHELLPORT_TEST_PRIVATE_KEY",
+					},
+				},
+			},
+		},
+		"SSH",
+		"preset-atlantis",
+		"pi",
+		"atlantis.home:22",
+	)
+
+	if ok {
+		t.Fatal("presetPrivateKeyCredential ok = true, want false")
+	}
+	if credential != "" {
+		t.Fatalf("credential = %q, want empty", credential)
 	}
 }
 
