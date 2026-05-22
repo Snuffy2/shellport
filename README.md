@@ -31,7 +31,6 @@ services:
       SHELLPORT_PRESET_SECRET_KEY: "replace-with-generated-key"
       # Optional: set to "1" to enable debug-level logs on Docker stdout.
       # SHELLPORT_DEBUG: "1"
-
 ```
 
 Then open `http://localhost:8182`.
@@ -122,7 +121,6 @@ go test ./...
 ## Fork
 
 This repository is a fork of [nirui/sshwifty](https://github.com/nirui/sshwifty). The original project and its design are the work of [@nirui](https://github.com/nirui), whose excellent work made this possible.
-
 
 ## License
 
