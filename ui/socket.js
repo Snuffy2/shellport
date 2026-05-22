@@ -326,7 +326,7 @@ export class Socket {
    * @throws {Error} Re-throws any dial failure after calling `callbacks.failed`.
    */
   async get(callbacks) {
-    if (this.streamHandler) {
+    if (this.streamHandler && !this.streamHandler.stop) {
       return this.streamHandler;
     }
 
@@ -458,20 +458,33 @@ export class Socket {
           return callbacks.echo(delay);
         },
         cleared(e) {
-          if (self.streamHandler === null) {
-            return;
-          }
+          const activeStream = self.streamHandler === streamHandler;
 
-          self.streamHandler = null;
+          if (activeStream) {
+            self.streamHandler = null;
+          }
 
           // Close connection first otherwise we may
           // risk sending things out
           conn.ws.close();
-          callbacks.close(e);
+
+          if (activeStream) {
+            callbacks.close(e);
+          }
         },
       });
 
+      this.streamHandler = streamHandler;
       callbacks.connected();
+
+      if (
+        openSerial !== this.openSerial ||
+        this.streamHandler !== streamHandler
+      ) {
+        conn.ws.close();
+
+        throw new Error("Socket open cancelled");
+      }
 
       streamHandler.serve().catch((e) => {
         if (process.env.NODE_ENV !== "development") {
@@ -480,8 +493,6 @@ export class Socket {
 
         console.trace(e);
       });
-
-      this.streamHandler = streamHandler;
     } catch (e) {
       if (openSerial === this.openSerial) {
         callbacks.failed(e);

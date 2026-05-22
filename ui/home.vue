@@ -334,6 +334,7 @@ export default {
         inputting: false,
         acquired: false,
         busy: false,
+        serial: 0,
         refreshingPresets: false,
       },
       monitor: {
@@ -658,14 +659,23 @@ export default {
 
       this.connector.acquired = true;
       this.connector.busy = true;
+      const serial = ++this.connector.serial;
 
       this.getStreamThenRun(
         (stream) => {
+          if (serial !== this.connector.serial || !this.connector.acquired) {
+            return;
+          }
+
           this.connector.busy = false;
 
           callback(stream);
         },
         () => {
+          if (serial !== this.connector.serial) {
+            return;
+          }
+
           this.connector.busy = false;
           this.connector.acquired = false;
         },
@@ -1004,8 +1014,10 @@ export default {
      * @returns {void}
      */
     cancelConnection() {
+      this.connector.serial++;
       this.connector.inputting = false;
       this.connector.acquired = false;
+      this.connector.busy = false;
     },
     /**
      * Handles a successful connection, closes the connect window, and opens a
@@ -1016,8 +1028,10 @@ export default {
      * @returns {void}
      */
     connectionSucceed(data) {
+      this.connector.serial++;
       this.connector.inputting = false;
       this.connector.acquired = false;
+      this.connector.busy = false;
       this.windows.connect = false;
 
       this.addToTab(data);

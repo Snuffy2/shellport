@@ -60,6 +60,14 @@ describe("home socket monitoring", () => {
     expect(source).toContain("this.connection.close().catch");
   });
 
+  test("home ignores stale connect callbacks after cancellation", () => {
+    const source = readProjectFile("ui/home.vue");
+
+    expect(source).toContain("const serial = ++this.connector.serial;");
+    expect(source).toContain("serial !== this.connector.serial");
+    expect(source).toContain("this.connector.serial++;");
+  });
+
   test("socket reuses a pending backend stream dial", () => {
     const source = readProjectFile("ui/socket.js");
 

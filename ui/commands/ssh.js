@@ -689,6 +689,11 @@ class Wizard {
     // Copy the keptSessions from the record so it will not be overwritten here
     let keptSessions = self.keptSessions ? [].concat(...self.keptSessions) : [];
     const resolveStep = (step) => self.requestLifecycle.resolve(step);
+    const resolveTerminalStep = (step) => {
+      if (resolveStep(step)) {
+        self.requestLifecycle.complete();
+      }
+    };
 
     return new SSH(sender, config, {
       "initialization.failed"(hd) {
@@ -698,19 +703,19 @@ class Wizard {
 
         switch (hd.data()) {
           case SERVER_REQUEST_ERROR_BAD_USERNAME:
-            resolveStep(
+            resolveTerminalStep(
               self.stepErrorDone("Request failed", "Invalid username"),
             );
             return;
 
           case SERVER_REQUEST_ERROR_BAD_ADDRESS:
-            resolveStep(
+            resolveTerminalStep(
               self.stepErrorDone("Request failed", "Invalid address"),
             );
             return;
 
           case SERVER_REQUEST_ERROR_BAD_AUTHMETHOD:
-            resolveStep(
+            resolveTerminalStep(
               self.stepErrorDone(
                 "Request failed",
                 "Invalid authication method",
@@ -719,7 +724,7 @@ class Wizard {
             return;
         }
 
-        resolveStep(
+        resolveTerminalStep(
           self.stepErrorDone("Request failed", "Unknown error: " + hd.data()),
         );
       },
@@ -738,7 +743,7 @@ class Wizard {
         let d = new TextDecoder("utf-8").decode(
           await reader.readCompletely(rd),
         );
-        resolveStep(self.stepErrorDone("Connection failed", d));
+        resolveTerminalStep(self.stepErrorDone("Connection failed", d));
       },
       async "hook.before_connected"(rd) {
         if (!self.requestLifecycle.active()) {
@@ -757,33 +762,29 @@ class Wizard {
 
         self.connectionSucceed = true;
 
-        if (
-          resolveStep(
-            self.stepSuccessfulDone(
-              new command.Result(
-                configInput.user + "@" + configInput.host,
-                self.info,
-                self.controls.build({
-                  charset: configInput.charset,
-                  tabColor: configInput.tabColor,
-                  send(data) {
-                    return commandHandler.sendData(data);
-                  },
-                  close() {
-                    return commandHandler.sendClose();
-                  },
-                  resize(rows, cols) {
-                    return commandHandler.sendResize(rows, cols);
-                  },
-                  events: commandHandler.events,
-                }),
-                self.controls.ui(),
-              ),
+        resolveTerminalStep(
+          self.stepSuccessfulDone(
+            new command.Result(
+              configInput.user + "@" + configInput.host,
+              self.info,
+              self.controls.build({
+                charset: configInput.charset,
+                tabColor: configInput.tabColor,
+                send(data) {
+                  return commandHandler.sendData(data);
+                },
+                close() {
+                  return commandHandler.sendClose();
+                },
+                resize(rows, cols) {
+                  return commandHandler.sendResize(rows, cols);
+                },
+                events: commandHandler.events,
+              }),
+              self.controls.ui(),
             ),
-          )
-        ) {
-          self.requestLifecycle.complete();
-        }
+          ),
+        );
 
         void sessionData;
         void keptSessions;
@@ -835,7 +836,7 @@ class Wizard {
       "@stderr"(_rd) {},
       close() {},
       "@completed"() {
-        resolveStep(
+        resolveTerminalStep(
           self.stepErrorDone(
             "Operation has failed",
             "Connection has been cancelled",

@@ -15,6 +15,7 @@ const streamMocks = vi.hoisted(() => {
       this.sender = sender;
       this.config = config;
       this.served = false;
+      this.stop = false;
       this.clearedWith = undefined;
       state.instances.push(this);
     }
@@ -34,6 +35,7 @@ const streamMocks = vi.hoisted(() => {
     }
 
     clear(e) {
+      this.stop = true;
       this.clearedWith = e;
       this.config.cleared(e);
 
@@ -149,5 +151,62 @@ describe("Socket", () => {
     assert.strictEqual(socket.streamHandler, second);
     assert.notStrictEqual(first, second);
     assert.strictEqual(second.clearedWith, undefined);
+  });
+
+  it("does not let a stale clear callback tear down a newer stream", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const callbacks = buildCallbacks();
+    const firstConn = buildConnection();
+    const secondConn = buildConnection();
+
+    socket.dial.dial = vi
+      .fn()
+      .mockResolvedValueOnce(firstConn)
+      .mockResolvedValueOnce(secondConn);
+
+    const first = await socket.get(callbacks);
+    socket.streamHandler = null;
+    const second = await socket.get(callbacks);
+
+    await first.clear(new Error("late old clear"));
+
+    assert.strictEqual(socket.streamHandler, second);
+    expect(firstConn.ws.close).toHaveBeenCalledTimes(1);
+    expect(secondConn.ws.close).not.toHaveBeenCalled();
+  });
+
+  it("does not assign a stream handler if close is invoked from connected", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const conn = buildConnection();
+    const callbacks = buildCallbacks();
+
+    socket.dial.dial = vi.fn(() => Promise.resolve(conn));
+    callbacks.connected.mockImplementation(() => socket.close());
+
+    const result = await socket.get(callbacks).catch((e) => e);
+
+    assert(result instanceof Error);
+    assert.strictEqual(socket.streamHandler, null);
+    assert.strictEqual(streamMocks.state.instances[0].served, false);
+    expect(conn.ws.close).toHaveBeenCalled();
+  });
+
+  it("does not reuse a stream handler that is already clearing", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const callbacks = buildCallbacks();
+    const firstConn = buildConnection();
+    const secondConn = buildConnection();
+
+    socket.dial.dial = vi
+      .fn()
+      .mockResolvedValueOnce(firstConn)
+      .mockResolvedValueOnce(secondConn);
+
+    const first = await socket.get(callbacks);
+    first.stop = true;
+    const second = await socket.get(callbacks);
+
+    assert.notStrictEqual(first, second);
+    assert.strictEqual(socket.streamHandler, second);
   });
 });

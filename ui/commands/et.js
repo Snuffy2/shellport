@@ -687,6 +687,11 @@ class Wizard {
 
     let keptSessions = self.keptSessions ? [].concat(...self.keptSessions) : [];
     const resolveStep = (step) => self.requestLifecycle.resolve(step);
+    const resolveTerminalStep = (step) => {
+      if (resolveStep(step)) {
+        self.requestLifecycle.complete();
+      }
+    };
 
     return new ET(sender, config, {
       "initialization.failed"(hd) {
@@ -696,19 +701,19 @@ class Wizard {
 
         switch (hd.data()) {
           case SERVER_REQUEST_ERROR_BAD_USERNAME:
-            resolveStep(
+            resolveTerminalStep(
               self.stepErrorDone("Request failed", "Invalid username"),
             );
             return;
 
           case SERVER_REQUEST_ERROR_BAD_ADDRESS:
-            resolveStep(
+            resolveTerminalStep(
               self.stepErrorDone("Request failed", "Invalid address"),
             );
             return;
 
           case SERVER_REQUEST_ERROR_BAD_AUTHMETHOD:
-            resolveStep(
+            resolveTerminalStep(
               self.stepErrorDone(
                 "Request failed",
                 "ET v1 supports Private Key authentication only",
@@ -717,7 +722,7 @@ class Wizard {
             return;
 
           case SERVER_REQUEST_ERROR_UNSUPPORTED_PROXY:
-            resolveStep(
+            resolveTerminalStep(
               self.stepErrorDone(
                 "Request failed",
                 "ET does not support SOCKS5 proxying in this version",
@@ -726,13 +731,13 @@ class Wizard {
             return;
 
           case SERVER_REQUEST_ERROR_BAD_METADATA:
-            resolveStep(
+            resolveTerminalStep(
               self.stepErrorDone("Request failed", "Invalid ET metadata"),
             );
             return;
         }
 
-        resolveStep(
+        resolveTerminalStep(
           self.stepErrorDone("Request failed", "Unknown error: " + hd.data()),
         );
       },
@@ -751,7 +756,7 @@ class Wizard {
         let d = new TextDecoder("utf-8").decode(
           await reader.readCompletely(rd),
         );
-        resolveStep(self.stepErrorDone("Connection failed", d));
+        resolveTerminalStep(self.stepErrorDone("Connection failed", d));
       },
       async "hook.before_connected"(rd) {
         if (!self.requestLifecycle.active()) {
@@ -772,33 +777,29 @@ class Wizard {
 
         self.connectionSucceed = true;
 
-        if (
-          resolveStep(
-            self.stepSuccessfulDone(
-              new command.Result(
-                configInput.user + "@" + configInput.host,
-                self.info,
-                self.controls.build({
-                  charset: configInput.charset,
-                  tabColor: configInput.tabColor,
-                  send(data) {
-                    return commandHandler.sendData(data);
-                  },
-                  close() {
-                    return commandHandler.sendClose();
-                  },
-                  resize(rows, cols) {
-                    return commandHandler.sendResize(rows, cols);
-                  },
-                  events: commandHandler.events,
-                }),
-                self.controls.ui(),
-              ),
+        resolveTerminalStep(
+          self.stepSuccessfulDone(
+            new command.Result(
+              configInput.user + "@" + configInput.host,
+              self.info,
+              self.controls.build({
+                charset: configInput.charset,
+                tabColor: configInput.tabColor,
+                send(data) {
+                  return commandHandler.sendData(data);
+                },
+                close() {
+                  return commandHandler.sendClose();
+                },
+                resize(rows, cols) {
+                  return commandHandler.sendResize(rows, cols);
+                },
+                events: commandHandler.events,
+              }),
+              self.controls.ui(),
             ),
-          )
-        ) {
-          self.requestLifecycle.complete();
-        }
+          ),
+        );
 
         void sessionData;
         void keptSessions;
@@ -848,7 +849,7 @@ class Wizard {
       "@stdout"(_rd) {},
       close() {},
       "@completed"() {
-        resolveStep(
+        resolveTerminalStep(
           self.stepErrorDone(
             "Operation has failed",
             "Connection has been cancelled",

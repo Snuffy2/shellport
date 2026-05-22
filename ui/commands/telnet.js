@@ -426,6 +426,11 @@ class Wizard {
     // Copy the keptSessions from the record so it will not be overwritten here
     let keptSessions = self.keptSessions ? [].concat(...self.keptSessions) : [];
     const resolveStep = (step) => self.requestLifecycle.resolve(step);
+    const resolveTerminalStep = (step) => {
+      if (resolveStep(step)) {
+        self.requestLifecycle.complete();
+      }
+    };
 
     return new Telnet(sender, parsedConfig, {
       "initialization.failed"(streamInitialHeader) {
@@ -435,14 +440,14 @@ class Wizard {
 
         switch (streamInitialHeader.data()) {
           case SERVER_INITIAL_ERROR_BAD_ADDRESS:
-            resolveStep(
+            resolveTerminalStep(
               self.stepErrorDone("Request rejected", "Invalid address"),
             );
 
             return;
         }
 
-        resolveStep(
+        resolveTerminalStep(
           self.stepErrorDone(
             "Request rejected",
             "Unknown error code: " + streamInitialHeader.data(),
@@ -471,30 +476,26 @@ class Wizard {
           return;
         }
 
-        if (
-          resolveStep(
-            self.stepSuccessfulDone(
-              new command.Result(
-                configInput.host,
-                self.info,
-                self.controls.build({
-                  charset: parsedConfig.charset,
-                  tabColor: configInput.tabColor,
-                  send(data) {
-                    return commandHandler.sendData(data);
-                  },
-                  close() {
-                    return commandHandler.sendClose();
-                  },
-                  events: commandHandler.events,
-                }),
-                self.controls.ui(),
-              ),
+        resolveTerminalStep(
+          self.stepSuccessfulDone(
+            new command.Result(
+              configInput.host,
+              self.info,
+              self.controls.build({
+                charset: parsedConfig.charset,
+                tabColor: configInput.tabColor,
+                send(data) {
+                  return commandHandler.sendData(data);
+                },
+                close() {
+                  return commandHandler.sendClose();
+                },
+                events: commandHandler.events,
+              }),
+              self.controls.ui(),
             ),
-          )
-        ) {
-          self.requestLifecycle.complete();
-        }
+          ),
+        );
 
         void sessionData;
         void keptSessions;
@@ -507,7 +508,7 @@ class Wizard {
         let readed = await reader.readCompletely(rd),
           message = new TextDecoder("utf-8").decode(readed.buffer);
 
-        resolveStep(self.stepErrorDone("Connection failed", message));
+        resolveTerminalStep(self.stepErrorDone("Connection failed", message));
       },
       "@inband"(_rd) {},
       close() {},
