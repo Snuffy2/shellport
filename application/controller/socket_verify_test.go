@@ -5,11 +5,15 @@ package controller
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/Snuffy2/shellport/application/configuration"
+	"github.com/Snuffy2/shellport/application/log"
 )
 
 func decodeAccessConfigForTest(t *testing.T, cfg socketAccessConfiguration) map[string]any {
@@ -347,5 +351,37 @@ func TestSocketAccessConfigurationListsPrivateKeyFilesOnlyWhenManageable(
 	}
 	if cfg.PrivateKeyFiles[0] != "file://"+resolvedKeyPath {
 		t.Fatalf("PrivateKeyFiles[0] = %q, want file://%s", cfg.PrivateKeyFiles[0], resolvedKeyPath)
+	}
+}
+
+func TestSocketVerificationAdvertisesReadAndHeartbeatTimeoutHeaders(t *testing.T) {
+	serverCfg := configuration.Server{
+		HeartbeatTimeout: 15 * time.Second,
+		ReadTimeout:      2 * time.Minute,
+	}
+	verification := newSocketVerification(
+		socket{},
+		serverCfg,
+		configuration.Common{},
+	)
+
+	request := httptest.NewRequest("GET", "/shellport/socket/verify", nil)
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := verification.Get(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+
+	gotHeartbeat := recorder.Result().Header.Get("X-Heartbeat")
+	wantHeartbeat := strconv.FormatFloat(serverCfg.HeartbeatTimeout.Seconds(), 'g', 2, 64)
+	if gotHeartbeat != wantHeartbeat {
+		t.Fatalf("X-Heartbeat = %q, want %q", gotHeartbeat, wantHeartbeat)
+	}
+
+	gotTimeout := recorder.Result().Header.Get("X-Timeout")
+	wantTimeout := strconv.FormatFloat(serverCfg.ReadTimeout.Seconds(), 'g', 2, 64)
+	if gotTimeout != wantTimeout {
+		t.Fatalf("X-Timeout = %q, want %q", gotTimeout, wantTimeout)
 	}
 }

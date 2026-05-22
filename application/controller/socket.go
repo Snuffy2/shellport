@@ -110,18 +110,88 @@ func newSocketCtl(
 // interface by sending every Write call as a single binary WebSocket message.
 type websocketWriter struct {
 	*websocket.Conn
+	writeTimeout     time.Duration
+	now              func() time.Time
+	writeMessage     func(int, []byte) error
+	setWriteDeadline func(time.Time) error
 }
 
-// Write sends b as a binary WebSocket message. It returns the length of b on
-// success, or (0, err) if the underlying WriteMessage call fails.
+// websocketLivenessConn captures only the websocket behaviors needed to run heartbeat
+// and timeout handlers during socket lifetime.
+type websocketLivenessConn interface {
+	SetReadDeadline(time.Time) error
+	SetWriteDeadline(time.Time) error
+	SetPongHandler(func(string) error)
+	WriteMessage(int, []byte) error
+	Close() error
+}
+
+// websocketTicker abstracts the ticker interface used for heartbeat scheduling.
+type websocketTicker interface {
+	C() <-chan time.Time
+	Stop()
+}
+
+type websocketTickerImpl struct {
+	*time.Ticker
+}
+
+func (w websocketTickerImpl) C() <-chan time.Time {
+	return w.Ticker.C
+}
+
+func websocketTickerDefaultFactory(interval time.Duration) websocketTicker {
+	return websocketTickerImpl{Ticker: time.NewTicker(interval)}
+}
+
+// newWebsocketWriter initializes a deadline-aware websocketWriter.
+func newWebsocketWriter(
+	conn *websocket.Conn,
+	writeTimeout time.Duration,
+) websocketWriter {
+	return websocketWriter{
+		Conn:             conn,
+		writeTimeout:     writeTimeout,
+		now:              time.Now,
+		writeMessage:     conn.WriteMessage,
+		setWriteDeadline: conn.SetWriteDeadline,
+	}
+}
+
+// Write sends b as a binary WebSocket message. It sets a write deadline when
+// configured, returns the number of bytes written, and returns error when the
+// underlying write fails.
 func (w websocketWriter) Write(b []byte) (int, error) {
-	wErr := w.WriteMessage(websocket.BinaryMessage, b)
+	wErr := w.writeMessageWithDeadline(websocket.BinaryMessage, b)
 
 	if wErr != nil {
 		return 0, wErr
 	}
 
 	return len(b), nil
+}
+
+func (w websocketWriter) writeMessageWithDeadline(
+	messageType int,
+	message []byte,
+) error {
+	if w.writeTimeout > 0 && w.setWriteDeadline != nil {
+		if nowFn := w.now; nowFn == nil {
+			if wErr := w.setWriteDeadline(time.Now().Add(w.writeTimeout)); wErr != nil {
+				return wErr
+			}
+		} else {
+			if wErr := w.setWriteDeadline(nowFn().Add(w.writeTimeout)); wErr != nil {
+				return wErr
+			}
+		}
+	}
+
+	if w.writeMessage == nil {
+		return fmt.Errorf("websocket writer write callback is not configured")
+	}
+
+	return w.writeMessage(messageType, message)
 }
 
 // socketPackageWriter is an io.Writer that fragments and encrypts data through
@@ -194,6 +264,92 @@ func (s socket) buildWSFetcher(c *websocket.Conn) rw.FetchReaderFetcher {
 	}
 }
 
+// configureWebsocketLiveness configures read deadlines, pong handlers, and ping
+// heartbeats for the WebSocket connection. It returns a stop function that should
+// be called on request exit.
+func (s socket) configureWebsocketLiveness(
+	conn websocketLivenessConn,
+	nowFn func() time.Time,
+	tickerFn func(time.Duration) websocketTicker,
+	writeMu *sync.Mutex,
+) (func(), error) {
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	if tickerFn == nil {
+		tickerFn = websocketTickerDefaultFactory
+	}
+
+	if s.serverCfg.ReadTimeout > 0 {
+		if setErr := conn.SetReadDeadline(nowFn().Add(s.serverCfg.ReadTimeout)); setErr != nil {
+			return func() {}, setErr
+		}
+	}
+
+	conn.SetPongHandler(func(_ string) error {
+		if s.serverCfg.ReadTimeout <= 0 {
+			return nil
+		}
+		return conn.SetReadDeadline(nowFn().Add(s.serverCfg.ReadTimeout))
+	})
+
+	if s.serverCfg.HeartbeatTimeout <= 0 {
+		return func() {}, nil
+	}
+
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	ticker := tickerFn(s.serverCfg.HeartbeatTimeout)
+	stop := sync.Once{}
+	var stopTicker sync.Once
+	stopTickerFn := func() {
+		stopTicker.Do(func() {
+			ticker.Stop()
+		})
+	}
+	stopFn := func() {
+		stop.Do(func() {
+			close(done)
+			stopTickerFn()
+			_ = conn.Close()
+		})
+		<-stopped
+	}
+
+	go func() {
+		defer close(stopped)
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C():
+				if writeMu != nil {
+					writeMu.Lock()
+				}
+				var doneErr error
+				if s.serverCfg.WriteTimeout > 0 {
+					if setErr := conn.SetWriteDeadline(nowFn().Add(s.serverCfg.WriteTimeout)); setErr != nil {
+						doneErr = setErr
+					}
+				}
+				if doneErr == nil {
+					doneErr = conn.WriteMessage(websocket.PingMessage, nil)
+				}
+				if writeMu != nil {
+					writeMu.Unlock()
+				}
+				if doneErr != nil {
+					_ = conn.Close()
+					stopTickerFn()
+					return
+				}
+			}
+		}
+	}()
+
+	return stopFn, nil
+}
+
 // generateNonce fills nonce[:socketGCMStandardNonceSize] with cryptographically
 // random bytes using crypto/rand. It returns an error if the read fails.
 func (s socket) generateNonce(nonce []byte) error {
@@ -213,6 +369,23 @@ func (s socket) increaseNonce(nonce []byte) {
 		}
 		break
 	}
+}
+
+func (s socket) writeServerNonce(
+	writeMu *sync.Mutex,
+	w websocketWriter,
+	nonce []byte,
+) error {
+	if writeMu != nil {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+	}
+
+	if _, writeErr := w.Write(nonce); writeErr != nil {
+		return writeErr
+	}
+
+	return nil
 }
 
 // createCipher builds two independent AES-GCM AEAD instances—one for reading
@@ -287,11 +460,26 @@ func (s socket) Get(
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
 	}
-	defer c.Close()
 	defer w.disable()
+	senderLock := sync.Mutex{}
+	wsWriter := newWebsocketWriter(
+		c,
+		s.serverCfg.WriteTimeout,
+	)
+	stopHeartbeat, heartbeatErr := s.configureWebsocketLiveness(
+		c,
+		time.Now,
+		websocketTickerDefaultFactory,
+		&senderLock,
+	)
+	if heartbeatErr != nil {
+		_ = c.Close()
+		return NewError(http.StatusBadRequest, heartbeatErr.Error())
+	}
+	defer stopHeartbeat()
+	defer c.Close()
 
 	wsReader := rw.NewFetchReader(s.buildWSFetcher(c))
-	wsWriter := websocketWriter{Conn: c}
 
 	// Initialize ciphers
 	//
@@ -318,8 +506,11 @@ func (s socket) Get(
 			nonceReadErr.Error()))
 	}
 
-	_, nonceSendErr := wsWriter.Write(writeNonce[:])
-	if nonceSendErr != nil {
+	if nonceSendErr := s.writeServerNonce(
+		&senderLock,
+		wsWriter,
+		writeNonce[:],
+	); nonceSendErr != nil {
 		return NewError(http.StatusBadRequest, fmt.Sprintf(
 			"Unable to send server nonce to client: %s", nonceSendErr.Error()))
 	}
@@ -338,7 +529,6 @@ func (s socket) Get(
 	cipherWriteBuf := [cipherReadBufSize]byte{}
 	maxWriteLen := int(cipherReadBufSize) - (writeCipher.Overhead() + 2)
 
-	senderLock := sync.Mutex{}
 	cmdExec, cmdExecErr := s.commander.New(
 		command.Configuration{
 			Dial:                   s.commonCfg.Dialer,
