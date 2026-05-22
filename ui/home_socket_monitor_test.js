@@ -63,4 +63,17 @@ describe("home socket monitoring", () => {
       "this.streamHandlerPromise = this.open(callbacks);",
     );
   });
+
+  test("socket keep-alive failures do not become unhandled rejections", () => {
+    const source = readProjectFile("ui/socket.js");
+
+    expect(source).toContain("xhr.options(address.keepAlive, {}).catch");
+  });
+
+  test("socket flow-control send failures clear the active stream", () => {
+    const source = readProjectFile("ui/socket.js");
+
+    expect(source).toContain("sendFlowControl");
+    expect(source).toContain("self.streamHandler.clear(e);");
+  });
 });

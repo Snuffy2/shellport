@@ -303,11 +303,6 @@ export class Streams {
             continue;
           }
 
-          this.lastEchoTime = null;
-          this.lastEchoData = null;
-
-          this.config.echoUpdater(ECHO_FAILED);
-
           return;
         }
 

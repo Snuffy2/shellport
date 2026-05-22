@@ -258,4 +258,39 @@ describe("Streams", () => {
 
     assert.match(clearedError.message, /missed heartbeat responses/);
   });
+
+  it("ignores stale echo responses without clearing the active heartbeat", async () => {
+    const echoUpdates = [];
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater(delay) {
+          echoUpdates.push(delay);
+        },
+        cleared() {},
+      },
+    );
+    st.lastEchoTime = new Date();
+    st.lastEchoData = Uint8Array.from([1, 2, 3]);
+    const staleEchoReader = new reader.Buffer(
+      Uint8Array.from([header.CONTROL_ECHO, 9, 9, 9]),
+      () => {},
+    );
+
+    await st.handleControl(staleEchoReader);
+
+    assert.deepStrictEqual(Array.from(st.lastEchoData), [1, 2, 3]);
+    assert.deepStrictEqual(echoUpdates, []);
+  });
 });

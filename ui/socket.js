@@ -93,7 +93,9 @@ class Dial {
       if (!self.keepAliveTicker) {
         self.keepAliveTicker = setInterval(
           () => {
-            xhr.options(address.keepAlive, {});
+            xhr.options(address.keepAlive, {}).catch((e) => {
+              process.env.NODE_ENV === "development" && console.trace(e);
+            });
           },
           Math.max(self.timeout / 2, 1000),
         );
@@ -369,6 +371,13 @@ export class Socket {
         currentReceived > currentUnpacked * receiveToPauseFactor
       );
     };
+    const sendFlowControl = (send) => {
+      send().catch((e) => {
+        if (self.streamHandler !== null) {
+          self.streamHandler.clear(e);
+        }
+      });
+    };
 
     try {
       let conn = await this.dial.dial({
@@ -388,12 +397,12 @@ export class Socket {
           if (self.streamHandler !== null) {
             if (streamPaused && !shouldPause()) {
               streamPaused = false;
-              self.streamHandler.resume();
+              sendFlowControl(() => self.streamHandler.resume());
 
               return;
             } else if (!streamPaused && shouldPause()) {
               streamPaused = true;
-              self.streamHandler.pause();
+              sendFlowControl(() => self.streamHandler.pause());
 
               return;
             }
