@@ -5,7 +5,11 @@
 import assert from "assert";
 import { describe, it } from "vitest";
 import * as command from "./commands.js";
+import * as et from "./et.js";
+import * as mosh from "./mosh.js";
 import * as presets from "./presets.js";
+import * as ssh from "./ssh.js";
+import * as telnet from "./telnet.js";
 
 describe("Command prompts", () => {
   it("exposes secondary prompt actions", () => {
@@ -187,6 +191,39 @@ describe("Command prompts", () => {
       merged.map((preset) => preset.preset.title()),
       ["alpha telnet", "bravo ssh", "zulu ssh"],
     );
+  });
+
+  it("merges saved presets that already include Host metadata", () => {
+    for (const [type, CommandClass] of [
+      ["SSH", ssh.Command],
+      ["ET", et.Command],
+      ["Mosh", mosh.Command],
+      ["Telnet", telnet.Command],
+    ]) {
+      const commands = new command.Commands([new CommandClass()]);
+      const merged = commands.mergePresets(
+        new presets.Presets([
+          {
+            id: "preset-atlantis",
+            title: "Atlantis",
+            type,
+            host: "atlantis.home:22",
+            tab_color: "",
+            meta: {
+              Host: "atlantis.home:22",
+              User: "pi",
+            },
+          },
+        ]),
+      );
+
+      assert.strictEqual(merged.length, 1, type);
+      assert.strictEqual(
+        merged[0].preset.meta("Host"),
+        "atlantis.home:22",
+        type,
+      );
+    }
   });
 });
 

@@ -226,6 +226,21 @@ export class Preset {
   }
 
   /**
+   * Insert a meta item only when it is not already present.
+   *
+   * @param {string} name name of the meta data
+   * @param {string} data data of the meta data
+   *
+   */
+  insertMetaDefault(name, data) {
+    if (typeof this.preset.meta[name] !== "undefined") {
+      return;
+    }
+
+    this.preset.meta[name] = data;
+  }
+
+  /**
    * Export all meta keys
    *
    * @returns {Array<string>} All meta keys
