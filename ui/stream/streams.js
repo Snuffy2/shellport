@@ -69,6 +69,8 @@ export class Streams {
     this.echoTimer = null;
     this.lastEchoTime = null;
     this.lastEchoData = null;
+    this.missedEchoResponses = 0;
+    this.maxMissedEchoResponses = 2;
     this.stop = false;
 
     this.streams = [];
@@ -255,6 +257,14 @@ export class Streams {
           this.lastEchoData = null;
 
           this.config.echoUpdater(ECHO_FAILED);
+          this.missedEchoResponses++;
+
+          if (this.missedEchoResponses >= this.maxMissedEchoResponses) {
+            this.clear(
+              new Exception("Streams missed heartbeat responses", false),
+            );
+            return;
+          }
         }
 
         this.lastEchoTime = new Date();
@@ -309,6 +319,7 @@ export class Streams {
 
         this.lastEchoTime = null;
         this.lastEchoData = null;
+        this.missedEchoResponses = 0;
 
         this.config.echoUpdater(delay);
 

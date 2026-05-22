@@ -219,4 +219,43 @@ describe("Streams", () => {
 
     assert.strictEqual(clearedError, expectedError);
   });
+
+  it("clears the stream after repeated missed heartbeats", async () => {
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    assert.match(clearedError.message, /missed heartbeat responses/);
+  });
 });
