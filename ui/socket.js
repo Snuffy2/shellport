@@ -308,6 +308,7 @@ export class Socket {
     this.echoInterval = echoInterval;
     this.streamHandler = null;
     this.streamHandlerPromise = null;
+    this.openSerial = 0;
   }
 
   /**
@@ -333,12 +334,15 @@ export class Socket {
       return this.streamHandlerPromise;
     }
 
-    this.streamHandlerPromise = this.open(callbacks);
+    const streamHandlerPromise = this.open(callbacks, ++this.openSerial);
+    this.streamHandlerPromise = streamHandlerPromise;
 
     try {
-      return await this.streamHandlerPromise;
+      return await streamHandlerPromise;
     } finally {
-      this.streamHandlerPromise = null;
+      if (this.streamHandlerPromise === streamHandlerPromise) {
+        this.streamHandlerPromise = null;
+      }
     }
   }
 
@@ -348,6 +352,9 @@ export class Socket {
    * @returns {Promise<void>} Resolves once the active stream clear completes.
    */
   close() {
+    this.openSerial++;
+    this.streamHandlerPromise = null;
+
     if (this.streamHandler === null) {
       return Promise.resolve();
     }
@@ -363,10 +370,11 @@ export class Socket {
    *   failed: function(Error): void, close: function(Error|null): void,
    *   traffic: function(number, number): void,
    *   echo: function(number): void }} callbacks - Lifecycle and traffic callbacks.
+   * @param {number} openSerial Serial number for this open attempt.
    * @returns {Promise<streams.Streams>} The active stream manager.
    * @throws {Error} Re-throws any dial failure after calling `callbacks.failed`.
    */
-  async open(callbacks) {
+  async open(callbacks, openSerial) {
     let self = this;
 
     callbacks.connecting();
@@ -384,10 +392,10 @@ export class Socket {
         currentReceived > currentUnpacked * receiveToPauseFactor
       );
     };
-    const sendFlowControl = (send) => {
+    const sendFlowControl = (streamHandler, send) => {
       send().catch((e) => {
-        if (self.streamHandler !== null) {
-          self.streamHandler.clear(e);
+        if (self.streamHandler === streamHandler) {
+          streamHandler.clear(e);
         }
       });
     };
@@ -408,14 +416,16 @@ export class Socket {
           }
 
           if (self.streamHandler !== null) {
+            const streamHandler = self.streamHandler;
+
             if (streamPaused && !shouldPause()) {
               streamPaused = false;
-              sendFlowControl(() => self.streamHandler.resume());
+              sendFlowControl(streamHandler, () => streamHandler.resume());
 
               return;
             } else if (!streamPaused && shouldPause()) {
               streamPaused = true;
-              sendFlowControl(() => self.streamHandler.pause());
+              sendFlowControl(streamHandler, () => streamHandler.pause());
 
               return;
             }
@@ -425,6 +435,12 @@ export class Socket {
           callbacks.traffic(0, data.length);
         },
       });
+
+      if (openSerial !== this.openSerial) {
+        conn.ws.close();
+
+        throw new Error("Socket open cancelled");
+      }
 
       let streamHandler = new streams.Streams(conn.reader, conn.sender, {
         echoInterval: self.echoInterval,
@@ -467,7 +483,9 @@ export class Socket {
 
       this.streamHandler = streamHandler;
     } catch (e) {
-      callbacks.failed(e);
+      if (openSerial === this.openSerial) {
+        callbacks.failed(e);
+      }
 
       throw e;
     }

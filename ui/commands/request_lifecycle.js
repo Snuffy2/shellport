@@ -100,6 +100,21 @@ export class ConnectionRequestLifecycle {
   }
 
   /**
+   * Marks startup as complete so late backend startup events are ignored.
+   *
+   * @returns {boolean} True when the request was completed.
+   */
+  complete() {
+    if (!this.active()) {
+      return false;
+    }
+
+    this.clearTimeout();
+    this.request = null;
+    return true;
+  }
+
+  /**
    * Cancels the current request and publishes a cancellation step.
    *
    * @returns {void}

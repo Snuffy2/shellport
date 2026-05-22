@@ -87,6 +87,16 @@ export function build(ctx) {
     delaySamples = 0,
     delayPerInterval = 0;
 
+  const resetSessionCounters = () => {
+    inboundPerSecond = 0;
+    outboundPerSecond = 0;
+    inboundPre10Seconds = 0;
+    outboundPre10Seconds = 0;
+    trafficSamples = 0;
+    delaySamples = 0;
+    delayPerInterval = 0;
+  };
+
   return {
     /**
      * Ticks the traffic and delay aggregation windows.
@@ -180,6 +190,7 @@ export function build(ctx) {
      */
     connected() {
       isClosed = false;
+      resetSessionCounters();
 
       ctx.resetConnectionMonitorReconnect();
 
@@ -268,9 +279,12 @@ export function build(ctx) {
      */
     close(e) {
       isClosed = true;
+      resetSessionCounters();
       delayHistory.expire();
       inboundHistory.expire();
       outboundHistory.expire();
+      this.status.inbound = 0;
+      this.status.outbound = 0;
 
       ctx.connector.inputting = false;
       ctx.scheduleConnectionMonitorReconnect();

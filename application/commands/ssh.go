@@ -801,6 +801,7 @@ func (d *sshClient) local(
 			if wErr != nil {
 				remote.closer()
 				d.l.Debug("Failed to write data to remote: %s", wErr)
+				return wErr
 			}
 		}
 

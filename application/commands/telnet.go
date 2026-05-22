@@ -267,6 +267,7 @@ func (d *telnetClient) client(
 		if wErr != nil {
 			remoteConn.Close()
 			d.l.Debug("Failed to write data to remote: %s", wErr)
+			return wErr
 		}
 	}
 

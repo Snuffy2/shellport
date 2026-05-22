@@ -67,7 +67,7 @@ describe("home socket monitoring", () => {
     expect(source).toContain("if (this.streamHandlerPromise)");
     expect(source).toContain("return this.streamHandlerPromise;");
     expect(source).toContain(
-      "this.streamHandlerPromise = this.open(callbacks);",
+      "const streamHandlerPromise = this.open(callbacks, ++this.openSerial);",
     );
   });
 
@@ -81,7 +81,7 @@ describe("home socket monitoring", () => {
     const source = readProjectFile("ui/socket.js");
 
     expect(source).toContain("sendFlowControl");
-    expect(source).toContain("self.streamHandler.clear(e);");
+    expect(source).toContain("if (self.streamHandler === streamHandler)");
   });
 
   test("socket waits for the initial nonce send during dialing", () => {

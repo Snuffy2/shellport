@@ -6,6 +6,8 @@ package commands
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net"
 	"reflect"
 	"testing"
@@ -77,5 +79,66 @@ func TestTelnetCloseCancelsBeforeWaitingForRemote(t *testing.T) {
 	case <-done:
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("Close did not return after remote shutdown")
+	}
+}
+
+type failingTelnetConn struct {
+	net.Conn
+	writeErr error
+	closed   bool
+}
+
+func (c *failingTelnetConn) Read(_ []byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (c *failingTelnetConn) Write(_ []byte) (int, error) {
+	return 0, c.writeErr
+}
+
+func (c *failingTelnetConn) Close() error {
+	c.closed = true
+	return nil
+}
+
+func (c *failingTelnetConn) LocalAddr() net.Addr {
+	return nil
+}
+
+func (c *failingTelnetConn) RemoteAddr() net.Addr {
+	return nil
+}
+
+func (c *failingTelnetConn) SetDeadline(_ time.Time) error {
+	return nil
+}
+
+func (c *failingTelnetConn) SetReadDeadline(_ time.Time) error {
+	return nil
+}
+
+func (c *failingTelnetConn) SetWriteDeadline(_ time.Time) error {
+	return nil
+}
+
+// TestTelnetClientReturnsRemoteWriteErrors verifies stdin write failures
+// surface to the stream handler instead of leaving the UI connected to dead IO.
+func TestTelnetClientReturnsRemoteWriteErrors(t *testing.T) {
+	writeErr := errors.New("remote write failed")
+	remote := &failingTelnetConn{writeErr: writeErr}
+	client := &telnetClient{l: log.NewDitch(), remoteConn: remote}
+
+	err := client.client(
+		nil,
+		newLimitedReader([]byte("hello")),
+		command.StreamHeader{},
+		make([]byte, 16),
+	)
+
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("expected remote write error, got %v", err)
+	}
+	if !remote.closed {
+		t.Fatal("expected remote connection to close after write failure")
 	}
 }

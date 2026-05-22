@@ -471,26 +471,30 @@ class Wizard {
           return;
         }
 
-        resolveStep(
-          self.stepSuccessfulDone(
-            new command.Result(
-              configInput.host,
-              self.info,
-              self.controls.build({
-                charset: parsedConfig.charset,
-                tabColor: configInput.tabColor,
-                send(data) {
-                  return commandHandler.sendData(data);
-                },
-                close() {
-                  return commandHandler.sendClose();
-                },
-                events: commandHandler.events,
-              }),
-              self.controls.ui(),
+        if (
+          resolveStep(
+            self.stepSuccessfulDone(
+              new command.Result(
+                configInput.host,
+                self.info,
+                self.controls.build({
+                  charset: parsedConfig.charset,
+                  tabColor: configInput.tabColor,
+                  send(data) {
+                    return commandHandler.sendData(data);
+                  },
+                  close() {
+                    return commandHandler.sendClose();
+                  },
+                  events: commandHandler.events,
+                }),
+                self.controls.ui(),
+              ),
             ),
-          ),
-        );
+          )
+        ) {
+          self.requestLifecycle.complete();
+        }
 
         void sessionData;
         void keptSessions;

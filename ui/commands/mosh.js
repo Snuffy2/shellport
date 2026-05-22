@@ -748,29 +748,33 @@ class Wizard {
 
         self.connectionSucceed = true;
 
-        resolveStep(
-          self.stepSuccessfulDone(
-            new command.Result(
-              configInput.user + "@" + configInput.host,
-              self.info,
-              self.controls.build({
-                charset: configInput.charset,
-                tabColor: configInput.tabColor,
-                send(data) {
-                  return commandHandler.sendData(data);
-                },
-                close() {
-                  return commandHandler.sendClose();
-                },
-                resize(rows, cols) {
-                  return commandHandler.sendResize(rows, cols);
-                },
-                events: commandHandler.events,
-              }),
-              self.controls.ui(),
+        if (
+          resolveStep(
+            self.stepSuccessfulDone(
+              new command.Result(
+                configInput.user + "@" + configInput.host,
+                self.info,
+                self.controls.build({
+                  charset: configInput.charset,
+                  tabColor: configInput.tabColor,
+                  send(data) {
+                    return commandHandler.sendData(data);
+                  },
+                  close() {
+                    return commandHandler.sendClose();
+                  },
+                  resize(rows, cols) {
+                    return commandHandler.sendResize(rows, cols);
+                  },
+                  events: commandHandler.events,
+                }),
+                self.controls.ui(),
+              ),
             ),
-          ),
-        );
+          )
+        ) {
+          self.requestLifecycle.complete();
+        }
 
         void sessionData;
         void keptSessions;

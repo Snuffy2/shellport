@@ -6,6 +6,7 @@ package command
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"sync"
 	"testing"
@@ -91,5 +92,35 @@ func TestHandlerHandleEcho(t *testing.T) {
 		t.Errorf("Expecting the data to be %d, got %d instead", s, w.written)
 
 		return
+	}
+}
+
+func TestHandlerRejectsUnknownControlSignal(t *testing.T) {
+	w := dummyWriter{
+		written: make([]byte, 0, 64),
+	}
+	s := []byte{
+		byte(HeaderControl | 1),
+		0xff,
+	}
+	lock := sync.Mutex{}
+	bufferPool := NewBufferPool(4096)
+	handler := newHandler(
+		Configuration{},
+		nil,
+		rw.NewFetchReader(testDummyFetchGen(s)),
+		&w,
+		&lock,
+		0,
+		0,
+		log.NewDitch(),
+		NewHooks(configuration.HookSettings{}),
+		&bufferPool,
+	)
+
+	hErr := handler.Handle()
+
+	if !errors.Is(hErr, ErrHandlerUnknownControlSignal) {
+		t.Fatalf("expected unknown control signal error, got %v", hErr)
 	}
 }

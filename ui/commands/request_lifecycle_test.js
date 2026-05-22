@@ -120,6 +120,29 @@ describe("ConnectionRequestLifecycle", () => {
     ]);
   });
 
+  it("does not publish late steps after completion", () => {
+    const resolved = [];
+    const lifecycle = new ConnectionRequestLifecycle(
+      {
+        resolve(step) {
+          resolved.push(step);
+        },
+      },
+      (title, message) => ({ title, message }),
+    );
+
+    lifecycle.start(() => ({
+      stream: {
+        close() {},
+      },
+    }));
+
+    assert.strictEqual(lifecycle.resolve({ title: "connected" }), true);
+    assert.strictEqual(lifecycle.complete(), true);
+    assert.strictEqual(lifecycle.resolve({ title: "late" }), false);
+    assert.deepStrictEqual(resolved, [{ title: "connected" }]);
+  });
+
   it("cancels the active request stream", () => {
     const resolved = [];
     let closed = 0;
