@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"strings"
 
 	"github.com/Snuffy2/shellport/application/log"
 )
@@ -18,7 +17,40 @@ import (
 // fileTypeName is the loader name reported when configuration is loaded from a
 // JSON file.
 const (
-	fileTypeName = "File"
+	defaultConfigFilePath = "/etc/shellport/shellport.conf.json"
+	fileTypeName          = "File"
+	defaultConfigContent  = `{
+  "HostName": "",
+  "SharedKey": "",
+  "AdminKey": "",
+  "DialTimeout": 5,
+  "Socks5": "",
+  "Socks5User": "",
+  "Socks5Password": "",
+  "Hooks": {
+    "before_connecting": []
+  },
+  "HookTimeout": 30,
+  "Servers": [
+    {
+      "ListenInterface": "0.0.0.0",
+      "ListenPort": 8182,
+      "InitialTimeout": 10,
+      "ReadTimeout": 120,
+      "WriteTimeout": 120,
+      "HeartbeatTimeout": 15,
+      "ReadDelay": 10,
+      "WriteDelay": 10,
+      "TLSCertificateFile": "",
+      "TLSCertificateKeyFile": "",
+      "ServerTitle": "",
+      "ServerMessage": ""
+    }
+  ],
+  "Presets": [],
+  "OnlyAllowPresetRemotes": false
+}
+`
 )
 
 // loadFile opens filePath, JSON-decodes it into a commonInput, and returns the
@@ -73,13 +105,28 @@ func CustomFile(customPath string) Loader {
 	}
 }
 
+func createDefaultConfigFile(filePath string) error {
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.WriteString(defaultConfigContent); err != nil {
+		return err
+	}
+	return nil
+}
+
 func defaultFileSearchList(homeDir string, executablePath string) []string {
 	fallbackFileSearchList := make([]string, 0, 4)
 
 	// /etc/shellport/shellport.conf.json
 	fallbackFileSearchList = append(
 		fallbackFileSearchList,
-		filepath.Join("/", "etc", "shellport", "shellport.conf.json"),
+		defaultConfigFilePath,
 	)
 
 	// ~/.config/shellport.conf.json
@@ -129,9 +176,16 @@ func DefaultFile() Loader {
 				return loadFile(fallbackFileSearchList[f])
 			}
 		}
-		return fileTypeName, Configuration{}, fmt.Errorf(
-			"Configuration file was not specified. Also tried fallback files "+
-				"\"%s\", but none of them was available",
-			strings.Join(fallbackFileSearchList, "\", \""))
+		defaultPath := fallbackFileSearchList[0]
+		log.Info("No default configuration file was found; creating %s", defaultPath)
+		if err := createDefaultConfigFile(defaultPath); err != nil {
+			return fileTypeName, Configuration{}, fmt.Errorf(
+				"configuration file was not specified and no fallback files "+
+					"were available; also failed to create %q: %w",
+				defaultPath,
+				err,
+			)
+		}
+		return loadFile(defaultPath)
 	}
 }

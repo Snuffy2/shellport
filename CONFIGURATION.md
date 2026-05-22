@@ -9,6 +9,13 @@ are checked in this order:
 2. `~/.config/shellport.conf.json`
 3. `shellport.conf.json` in the same directory as the running `shellport` binary
 
+If none of those files exists, ShellPort creates
+`/etc/shellport/shellport.conf.json` with a minimal writable configuration,
+then loads it. The generated file listens on `0.0.0.0:8182` and starts with no
+presets so operators can add presets from the UI immediately. `SharedKey` and
+`AdminKey` are left empty in the generated file; edit the config file later to
+add authentication, admin protection, or other advanced settings.
+
 Use `SHELLPORT_CONFIG` to override the configuration file path:
 
 ```sh
