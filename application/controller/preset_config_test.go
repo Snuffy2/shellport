@@ -233,6 +233,12 @@ func TestPresetConfigGetDoesNotMigratePrivateKeysForUserRole(t *testing.T) {
 	if _, ok := response.Presets[0].Meta["Private Key"]; ok {
 		t.Fatal("response exposed private key metadata")
 	}
+	if !response.Presets[0].HasSavedPrivateKey {
+		t.Fatal("HasSavedPrivateKey = false, want true")
+	}
+	if response.Presets[0].PrivateKeyFile != "" {
+		t.Fatalf("PrivateKeyFile = %q, want empty", response.Presets[0].PrivateKeyFile)
+	}
 	if len(response.PrivateKeyFiles) != 0 {
 		t.Fatalf("PrivateKeyFiles count = %d, want 0", len(response.PrivateKeyFiles))
 	}
@@ -784,6 +790,68 @@ func TestPresetConfigPutAllowsFingerprintSaveWhenRestrictedToPresets(t *testing.
 	}
 }
 
+func TestPresetConfigPutPreservesHiddenPrivateKeyOnFullFingerprintSave(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	keyPath := filepath.Join(t.TempDir(), "atlantis.key")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "file://" + keyPath,
+			},
+		},
+	})
+	controller := newAuthenticatedTestPresetConfig(t, configPath)
+	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home:22","meta":{"User":"pi","Authentication":"Private Key","Fingerprint":"SHA256:abc"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizePresetConfigRequest(controller, request)
+	request.Header.Set(preserveHiddenPresetPasswordsHeader, "yes")
+	request.Header.Set(presetFingerprintIDHeader, "preset-atlantis")
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Put(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Put returned error: %v", err)
+	}
+
+	live := controller.commonCfg.CurrentPresets()
+	livePrivateKey, err := configuration.String(
+		live[0].Meta[configuration.PresetMetaPrivateKey],
+	).Parse()
+	if err != nil {
+		t.Fatalf("live private key parse returned error: %v", err)
+	}
+	if livePrivateKey != "PRIVATE KEY DATA" {
+		t.Fatal("live preset lost hidden private key")
+	}
+	if live[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatal("live preset missing fingerprint")
+	}
+
+	_, reloaded, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("CustomFile returned error: %v", err)
+	}
+	if reloaded.Presets[0].Meta[configuration.PresetMetaPrivateKey] != "PRIVATE KEY DATA" {
+		t.Fatal("persisted config lost private key")
+	}
+	if reloaded.Presets[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatal("persisted config missing fingerprint")
+	}
+}
+
 func TestPresetConfigPutPreservesHiddenPasswordOnFullAdminReplacement(t *testing.T) {
 	t.Setenv(
 		configuration.PresetSecretKeyEnv,
@@ -1081,6 +1149,153 @@ func TestPresetConfigPutFullUpdatePreservesRotatedPrivateKeyFileReference(t *tes
 	}
 	if raw.Presets[0].Meta["Fingerprint"] != "SHA256:abc" {
 		t.Fatal("raw fingerprint was not updated")
+	}
+}
+
+func TestPresetConfigPutRestoresHiddenPrivateKeyFileReferenceToRuntime(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "shellport.conf.json")
+	keyPath := filepath.Join(tempDir, "id_ed25519")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "file://" + keyPath,
+			},
+		},
+	})
+	controller := newAdminTestPresetConfig(t, configPath)
+	controller.commonCfg.PresetRepository = configuration.NewPresetRepository(
+		[]configuration.Preset{
+			{
+				ID:    "preset-atlantis",
+				Title: "Atlantis",
+				Type:  "SSH",
+				Host:  "atlantis.home:22",
+				Meta: map[string]string{
+					"User":           "pi",
+					"Authentication": "Private Key",
+					"Encoding":       "utf-8",
+				},
+			},
+		},
+	)
+	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home:22","meta":{"User":"pi","Authentication":"Private Key","Encoding":"utf-8","Fingerprint":"SHA256:abc"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizeAdminRequest(controller, request)
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Put(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Put returned error: %v", err)
+	}
+
+	var response presetConfigResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("json.Unmarshal response returned error: %v", err)
+	}
+	if !response.Presets[0].HasSavedPrivateKey {
+		t.Fatal("response HasSavedPrivateKey = false, want true")
+	}
+	if response.Presets[0].PrivateKeyFile != "file://"+keyPath {
+		t.Fatalf(
+			"response PrivateKeyFile = %q, want file://%s",
+			response.Presets[0].PrivateKeyFile,
+			keyPath,
+		)
+	}
+
+	repositoryPresets := controller.commonCfg.PresetRepository.List()
+	if repositoryPresets[0].Meta["Private Key"] != "file://"+keyPath {
+		t.Fatalf(
+			"repository Private Key = %q, want file://%s",
+			repositoryPresets[0].Meta["Private Key"],
+			keyPath,
+		)
+	}
+}
+
+func TestPresetConfigPutRestoresHiddenFingerprintToRuntime(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "shellport.conf.json")
+	keyPath := filepath.Join(tempDir, "id_ed25519")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Fingerprint":    "SHA256:abc",
+				"Private Key":    "file://" + keyPath,
+			},
+		},
+	})
+	controller := newAdminTestPresetConfig(t, configPath)
+	controller.commonCfg.PresetRepository = configuration.NewPresetRepository(
+		[]configuration.Preset{
+			{
+				ID:    "preset-atlantis",
+				Title: "Atlantis",
+				Type:  "SSH",
+				Host:  "atlantis.home:22",
+				Meta: map[string]string{
+					"User":           "pi",
+					"Authentication": "Private Key",
+					"Encoding":       "utf-8",
+					"Private Key":    "file://" + keyPath,
+				},
+			},
+		},
+	)
+	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home:22","meta":{"User":"pi","Authentication":"Private Key","Encoding":"utf-8","Private Key":"file://` + keyPath + `"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizeAdminRequest(controller, request)
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Put(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Put returned error: %v", err)
+	}
+
+	var response presetConfigResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("json.Unmarshal response returned error: %v", err)
+	}
+	if response.Presets[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatalf(
+			"response Fingerprint = %q, want SHA256:abc",
+			response.Presets[0].Meta["Fingerprint"],
+		)
+	}
+
+	repositoryPresets := controller.commonCfg.PresetRepository.List()
+	if repositoryPresets[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatalf(
+			"repository Fingerprint = %q, want SHA256:abc",
+			repositoryPresets[0].Meta["Fingerprint"],
+		)
 	}
 }
 

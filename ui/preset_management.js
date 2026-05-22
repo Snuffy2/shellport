@@ -63,7 +63,8 @@ function normalizeEncodingForType(type, encoding) {
 }
 
 function privateKeyModeForValue(value) {
-  if (value.startsWith("file://") || value.startsWith("environment://")) {
+  const scheme = uriScheme(value);
+  if (scheme === "file" || scheme === "environment") {
     return "existing";
   }
   if (value.length > 0) {
@@ -73,12 +74,17 @@ function privateKeyModeForValue(value) {
 }
 
 export function privateKeyFileLabel(value) {
-  if (!value.startsWith("file://")) {
+  if (uriScheme(value) !== "file") {
     return value;
   }
-  const path = value.slice("file://".length);
-  const parts = path.split("/").filter((part) => part.length > 0);
+  const path = value.slice(value.indexOf("://") + 3);
+  const parts = path.split(/[\\/]/).filter((part) => part.length > 0);
   return parts.length > 0 ? parts[parts.length - 1] : value;
+}
+
+function uriScheme(value) {
+  const schemeIndex = value.indexOf("://");
+  return schemeIndex < 0 ? "" : value.slice(0, schemeIndex).toLowerCase();
 }
 
 export function canManagePresets(policy) {
@@ -138,6 +144,26 @@ export function buildEditorState(preset, defaults = {}) {
     preset && typeof preset.hasSavedPassword === "function"
       ? preset.hasSavedPassword()
       : false;
+  const hasSavedPrivateKey =
+    preset && typeof preset.hasSavedPrivateKey === "function"
+      ? preset.hasSavedPrivateKey()
+      : false;
+  const savedPrivateKeyFile =
+    preset && typeof preset.privateKeyFile === "function"
+      ? preset.privateKeyFile()
+      : "";
+  const savedPrivateKeyFilename =
+    preset && typeof preset.privateKeyFilename === "function"
+      ? preset.privateKeyFilename()
+      : "";
+  const privateKeyFile =
+    uriScheme(privateKey) === "file" || uriScheme(privateKey) === "environment"
+      ? privateKey
+      : savedPrivateKeyFile;
+  const privateKeyFilename =
+    privateKeyFile.length > 0
+      ? privateKeyFileLabel(privateKeyFile)
+      : savedPrivateKeyFilename;
 
   return {
     id: presetValue(preset, "id", defaults.id || ""),
@@ -156,13 +182,12 @@ export function buildEditorState(preset, defaults = {}) {
     privateKey,
     savePrivateKey:
       privateKey.length > 0 ||
+      hasSavedPrivateKey ||
       (isNewPreset && meta.Authentication === "Private Key"),
+    hasSavedPrivateKey,
     privateKeyMode: privateKeyModeForValue(privateKey),
-    privateKeyFile:
-      privateKey.startsWith("file://") ||
-      privateKey.startsWith("environment://")
-        ? privateKey
-        : "",
+    privateKeyFile,
+    privateKeyFilename,
     confirmDelete: false,
     error: "",
   };
@@ -260,6 +285,22 @@ export function clearHiddenPasswordIDs(states) {
         state.meta.Authentication === "Password";
 
       return !usesPassword || !state.savePassword;
+    })
+    .map((state) => state.id);
+}
+
+export function clearHiddenPrivateKeyIDs(states) {
+  return states
+    .filter((state) => {
+      if (state.id.length <= 0 || !state.hasSavedPrivateKey) {
+        return false;
+      }
+
+      const usesPrivateKey =
+        typeUsesAuthentication(state.type) &&
+        state.meta.Authentication === "Private Key";
+
+      return !usesPrivateKey || !state.savePrivateKey;
     })
     .map((state) => state.id);
 }

@@ -169,6 +169,7 @@ describe("savePresetConfigRequest", () => {
       options: {
         adminKey: "admin-pass",
         clearPasswordIDs: ["preset-1", "preset,2"],
+        clearPrivateKeyIDs: ["preset-3"],
       },
       presetData: {
         management: {
@@ -190,6 +191,7 @@ describe("savePresetConfigRequest", () => {
         "Content-Type": "application/json",
         "X-Preserve-Hidden-Preset-Passwords": "yes",
         "X-Clear-Hidden-Preset-Passwords": '["preset-1","preset,2"]',
+        "X-Clear-Hidden-Preset-Private-Keys": '["preset-3"]',
       }),
       JSON.stringify({ presets: [{ id: "preset-1" }] }),
     );

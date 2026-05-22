@@ -115,6 +115,10 @@ func TestSocketAccessConfigurationIncludesPresetManagementPolicy(t *testing.T) {
 }
 
 func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile config returned error: %v", err)
+	}
 	cfg := newSocketAccessConfiguration(
 		[]configuration.Preset{
 			{
@@ -133,7 +137,7 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 		"",
 		true,
 		newPresetManagementPolicy(configuration.Common{
-			SourceFile: "dummy.conf.json",
+			SourceFile: configPath,
 			AdminKey:   "admin-secret",
 		}, authRoleAdmin),
 	)
@@ -146,6 +150,21 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 	if preset["has_saved_password"] != true {
 		t.Fatalf("has_saved_password = %v, want true", preset["has_saved_password"])
 	}
+	if preset["has_saved_private_key"] != true {
+		t.Fatalf("has_saved_private_key = %v, want true", preset["has_saved_private_key"])
+	}
+	if preset["private_key_file"] != "file:///config/private_keys/atlantis" {
+		t.Fatalf(
+			"private_key_file = %q, want file:///config/private_keys/atlantis",
+			preset["private_key_file"],
+		)
+	}
+	if preset["private_key_filename"] != "atlantis" {
+		t.Fatalf(
+			"private_key_filename = %q, want atlantis",
+			preset["private_key_filename"],
+		)
+	}
 	if _, ok := meta[configuration.PresetMetaPassword]; ok {
 		t.Fatal("plaintext password leaked into socket preset metadata")
 	}
@@ -154,6 +173,103 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 	}
 	if _, ok := meta[configuration.PresetMetaPrivateKey]; ok {
 		t.Fatal("private key leaked into socket preset metadata")
+	}
+}
+
+func TestSocketAccessConfigurationHidesPrivateKeyFileUntilManageAllowed(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile config returned error: %v", err)
+	}
+	preset := configuration.Preset{
+		ID:    "preset-atlantis",
+		Title: "Atlantis",
+		Type:  "SSH",
+		Host:  "atlantis.home:22",
+		Meta: map[string]string{
+			"Authentication":                   "Private Key",
+			configuration.PresetMetaPrivateKey: "file:///config/private_keys/atlantis.key",
+		},
+	}
+
+	cfg := newSocketAccessConfiguration(
+		[]configuration.Preset{preset},
+		"",
+		"",
+		false,
+		newPresetManagementPolicy(configuration.Common{
+			SourceFile: configPath,
+			AdminKey:   "admin-secret",
+		}, authRoleUser),
+	)
+	if cfg.Presets[0].PrivateKeyFile != "" {
+		t.Fatalf("user PrivateKeyFile = %q, want empty", cfg.Presets[0].PrivateKeyFile)
+	}
+	if cfg.Presets[0].PrivateKeyFilename != "atlantis.key" {
+		t.Fatalf(
+			"user PrivateKeyFilename = %q, want atlantis.key",
+			cfg.Presets[0].PrivateKeyFilename,
+		)
+	}
+
+	cfg = newSocketAccessConfiguration(
+		[]configuration.Preset{preset},
+		"",
+		"",
+		false,
+		newPresetManagementPolicy(configuration.Common{
+			SourceFile: configPath,
+			AdminKey:   "admin-secret",
+		}, authRoleAdmin),
+	)
+	if cfg.Presets[0].PrivateKeyFile != "file:///config/private_keys/atlantis.key" {
+		t.Fatalf(
+			"admin PrivateKeyFile = %q, want file:///config/private_keys/atlantis.key",
+			cfg.Presets[0].PrivateKeyFile,
+		)
+	}
+	if cfg.Presets[0].PrivateKeyFilename != "atlantis.key" {
+		t.Fatalf(
+			"admin PrivateKeyFilename = %q, want atlantis.key",
+			cfg.Presets[0].PrivateKeyFilename,
+		)
+	}
+}
+
+func TestSocketAccessConfigurationHandlesFilePrivateKeyURIVariants(t *testing.T) {
+	preset := configuration.Preset{
+		ID:    "preset-atlantis",
+		Title: "Atlantis",
+		Type:  "SSH",
+		Host:  "atlantis.home:22",
+		Meta: map[string]string{
+			"Authentication":                   "Private Key",
+			configuration.PresetMetaPrivateKey: `FILE://C:\config\private_keys\atlantis.key`,
+		},
+	}
+
+	cfg := newSocketAccessConfiguration(
+		[]configuration.Preset{preset},
+		"",
+		"",
+		false,
+		presetManagementPolicy{
+			Writable:  true,
+			CanManage: true,
+		},
+	)
+
+	if cfg.Presets[0].PrivateKeyFile != `FILE://C:\config\private_keys\atlantis.key` {
+		t.Fatalf(
+			"PrivateKeyFile = %q, want original FILE URI",
+			cfg.Presets[0].PrivateKeyFile,
+		)
+	}
+	if cfg.Presets[0].PrivateKeyFilename != "atlantis.key" {
+		t.Fatalf(
+			"PrivateKeyFilename = %q, want atlantis.key",
+			cfg.Presets[0].PrivateKeyFilename,
+		)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"html"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Snuffy2/shellport/application/configuration"
@@ -40,13 +41,16 @@ type socketVerification struct {
 // preset remote connection. It is derived from configuration.Preset and
 // transmitted to the client as part of the socket access configuration.
 type socketRemotePreset struct {
-	ID               string            `json:"id"`
-	Title            string            `json:"title"`
-	Type             string            `json:"type"`
-	Host             string            `json:"host"`
-	TabColor         string            `json:"tab_color"`
-	Meta             map[string]string `json:"meta"`
-	HasSavedPassword bool              `json:"has_saved_password"`
+	ID                 string            `json:"id"`
+	Title              string            `json:"title"`
+	Type               string            `json:"type"`
+	Host               string            `json:"host"`
+	TabColor           string            `json:"tab_color"`
+	Meta               map[string]string `json:"meta"`
+	HasSavedPassword   bool              `json:"has_saved_password"`
+	HasSavedPrivateKey bool              `json:"has_saved_private_key"`
+	PrivateKeyFile     string            `json:"private_key_file"`
+	PrivateKeyFilename string            `json:"private_key_filename"`
 }
 
 // socketAccessConfiguration is the top-level JSON envelope sent to the client
@@ -99,13 +103,16 @@ func newSocketAccessConfiguration(
 	presets := make([]socketRemotePreset, len(remotes))
 	for i := range presets {
 		presets[i] = socketRemotePreset{
-			Title:            remotes[i].Title,
-			ID:               remotes[i].ID,
-			Type:             remotes[i].Type,
-			Host:             remotes[i].Host,
-			TabColor:         remotes[i].TabColor,
-			Meta:             sanitizeSocketPresetMeta(remotes[i].Meta),
-			HasSavedPassword: presetHasSavedPassword(remotes[i]),
+			Title:              remotes[i].Title,
+			ID:                 remotes[i].ID,
+			Type:               remotes[i].Type,
+			Host:               remotes[i].Host,
+			TabColor:           remotes[i].TabColor,
+			Meta:               sanitizeSocketPresetMeta(remotes[i].Meta),
+			HasSavedPassword:   presetHasSavedPassword(remotes[i]),
+			HasSavedPrivateKey: presetHasSavedPrivateKey(remotes[i]),
+			PrivateKeyFile:     presetPrivateKeyFile(remotes[i], policy),
+			PrivateKeyFilename: presetPrivateKeyFilename(remotes[i]),
 		}
 	}
 	return socketAccessConfiguration{
@@ -165,6 +172,43 @@ func presetHasSavedPassword(preset configuration.Preset) bool {
 		}
 	}
 	return false
+}
+
+func presetHasSavedPrivateKey(preset configuration.Preset) bool {
+	return preset.Meta[configuration.PresetMetaPrivateKey] != ""
+}
+
+func presetPrivateKeyFile(preset configuration.Preset, policy presetManagementPolicy) string {
+	if !policy.CanManage || policy.RequiresAdminKey {
+		return ""
+	}
+	privateKey := preset.Meta[configuration.PresetMetaPrivateKey]
+	if privateKeyFilePath(privateKey) != "" {
+		return privateKey
+	}
+	return ""
+}
+
+func presetPrivateKeyFilename(preset configuration.Preset) string {
+	keyPath := privateKeyFilePath(preset.Meta[configuration.PresetMetaPrivateKey])
+	if keyPath == "" {
+		return ""
+	}
+	parts := strings.FieldsFunc(keyPath, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[len(parts)-1]
+}
+
+func privateKeyFilePath(privateKey string) string {
+	schemeIndex := strings.Index(privateKey, "://")
+	if schemeIndex < 0 || !strings.EqualFold(privateKey[:schemeIndex], "file") {
+		return ""
+	}
+	return privateKey[schemeIndex+3:]
 }
 
 // buildAccessConfigRespondBody serializes accessCfg to JSON. It panics if

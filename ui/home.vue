@@ -154,6 +154,7 @@ import {
   buildEditorState,
   canManagePresets,
   clearHiddenPasswordIDs,
+  clearHiddenPrivateKeyIDs,
 } from "./preset_management.js";
 
 /* global __SHELLPORT_SOURCE_URL__, __SHELLPORT_VERSION__ */
@@ -756,9 +757,11 @@ export default {
       }
 
       const clearIDs = clearHiddenPasswordIDs([payload.state]);
+      const clearPrivateKeyIDs = clearHiddenPrivateKeyIDs([payload.state]);
       const updatedPresets = await this.savePresetConfig(configs, {
         adminKey: payload.adminKey,
         clearPasswordIDs: clearIDs,
+        clearPrivateKeyIDs,
       });
       this.replacePresets(updatedPresets);
       this.presetEditor = null;

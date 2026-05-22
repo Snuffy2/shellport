@@ -12,6 +12,7 @@ import {
   canManagePresets,
   cloneEditorState,
   clearHiddenPasswordIDs,
+  clearHiddenPrivateKeyIDs,
   encodingOptionsForType,
   privateKeyFileLabel,
   typeLocksEncoding,
@@ -57,6 +58,9 @@ describe("preset editor state", () => {
   test("private key selector labels file references by filename", () => {
     expect(
       privateKeyFileLabel("file:///config/private_keys/atlantis.key"),
+    ).toBe("atlantis.key");
+    expect(
+      privateKeyFileLabel("FILE://C:\\config\\private_keys\\atlantis.key"),
     ).toBe("atlantis.key");
     expect(privateKeyFileLabel("environment://SHELLPORT_TEST_KEY")).toBe(
       "environment://SHELLPORT_TEST_KEY",
@@ -139,6 +143,77 @@ describe("preset editor state", () => {
     expect(state.privateKeyFile).toBe(
       "file:///config/private_keys/atlantis.key",
     );
+  });
+
+  test("redacted file-backed private keys default to saved existing key mode", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-atlantis",
+        title: "Atlantis",
+        type: "SSH",
+        host: "atlantis.home:22",
+        has_saved_private_key: true,
+        private_key_file: "file:///config/private_keys/atlantis.key",
+        private_key_filename: "atlantis.key",
+        meta: {
+          Authentication: "Private Key",
+          User: "pi",
+        },
+      }),
+    );
+
+    expect(state.savePrivateKey).toBe(true);
+    expect(state.privateKeyMode).toBe("existing");
+    expect(state.privateKeyFile).toBe(
+      "file:///config/private_keys/atlantis.key",
+    );
+    expect(state.privateKeyFilename).toBe("atlantis.key");
+    expect(state.privateKey).toBe("");
+  });
+
+  test("redacted private key filenames show without a full key file reference", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-atlantis",
+        title: "Atlantis",
+        type: "SSH",
+        host: "atlantis.home:22",
+        has_saved_private_key: true,
+        private_key_filename: "atlantis.key",
+        meta: {
+          Authentication: "Private Key",
+          User: "pi",
+        },
+      }),
+    );
+
+    expect(state.savePrivateKey).toBe(true);
+    expect(state.privateKeyMode).toBe("existing");
+    expect(state.privateKeyFile).toBe("");
+    expect(state.privateKeyFilename).toBe("atlantis.key");
+    expect(state.privateKey).toBe("");
+  });
+
+  test("redacted inline private keys default to saved private key without exposing text", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-atlantis",
+        title: "Atlantis",
+        type: "SSH",
+        host: "atlantis.home:22",
+        has_saved_private_key: true,
+        meta: {
+          Authentication: "Private Key",
+          User: "pi",
+        },
+      }),
+    );
+
+    expect(state.savePrivateKey).toBe(true);
+    expect(state.privateKeyMode).toBe("existing");
+    expect(state.privateKeyFile).toBe("");
+    expect(state.privateKeyFilename).toBe("");
+    expect(state.privateKey).toBe("");
   });
 
   test("cloneEditorState works when structuredClone is unavailable", () => {
@@ -417,6 +492,43 @@ describe("preset editor state", () => {
     state.savePassword = false;
 
     expect(clearHiddenPasswordIDs([state])).toEqual(["preset-clear"]);
+  });
+
+  test("clearHiddenPrivateKeyIDs clears hidden private key when unchecked", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-clear-key",
+        title: "Clear key",
+        type: "SSH",
+        host: "clear.home:22",
+        has_saved_private_key: true,
+        private_key_filename: "clear.key",
+        meta: {
+          Authentication: "Private Key",
+        },
+      }),
+    );
+    state.savePrivateKey = false;
+
+    expect(clearHiddenPrivateKeyIDs([state])).toEqual(["preset-clear-key"]);
+  });
+
+  test("clearHiddenPrivateKeyIDs keeps checked hidden private key presets", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-keep-key",
+        title: "Keep key",
+        type: "SSH",
+        host: "keep.home:22",
+        has_saved_private_key: true,
+        private_key_filename: "keep.key",
+        meta: {
+          Authentication: "Private Key",
+        },
+      }),
+    );
+
+    expect(clearHiddenPrivateKeyIDs([state])).toEqual([]);
   });
 
   test("buildPresetConfigFromWizardFields maps SSH connection fields", () => {

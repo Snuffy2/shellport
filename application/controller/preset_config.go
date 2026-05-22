@@ -18,6 +18,7 @@ import (
 const (
 	preserveHiddenPresetPasswordsHeader = "X-Preserve-Hidden-Preset-Passwords"
 	clearHiddenPresetPasswordsHeader    = "X-Clear-Hidden-Preset-Passwords"
+	clearHiddenPresetPrivateKeysHeader  = "X-Clear-Hidden-Preset-Private-Keys"
 	presetFingerprintIDHeader           = "X-Preset-Fingerprint-ID"
 	maxPresetConfigRequestBytes         = 256 * 1024
 	maxPresetConfigPresets              = 512
@@ -110,17 +111,22 @@ func (p presetConfig) Put(
 
 	currentPresets := p.commonCfg.CurrentPresets()
 	clearPresetIDs := parsePresetIDSet(r.Header.Get(clearHiddenPresetPasswordsHeader))
+	clearPrivateKeyPresetIDs := parsePresetIDSet(
+		r.Header.Get(clearHiddenPresetPrivateKeysHeader),
+	)
 	fingerprintOnly := r.Header.Get(preserveHiddenPresetPasswordsHeader) == "yes" && targetPresetID != ""
 	var presets []configuration.Preset
 	clearPresetIDsForPersistence := clearPresetIDs
+	clearPrivateKeyPresetIDsForPersistence := clearPrivateKeyPresetIDs
 	if fingerprintOnly {
-		if len(clearPresetIDs) > 0 {
+		if len(clearPresetIDs) > 0 || len(clearPrivateKeyPresetIDs) > 0 {
 			return NewError(
 				http.StatusBadRequest,
-				"cannot clear hidden passwords on fingerprint-only preset save",
+				"cannot clear hidden secrets on fingerprint-only preset save",
 			)
 		}
 		clearPresetIDsForPersistence = nil
+		clearPrivateKeyPresetIDsForPersistence = nil
 		var err error
 		if isCompactFingerprintRequest(request, targetPresetID) {
 			presets, err = applyCompactFingerprintUpdate(
@@ -136,11 +142,21 @@ func (p presetConfig) Put(
 				return NewError(http.StatusBadRequest, err.Error())
 			}
 			presets = presetConfigRequestPresets(request)
+			requestFingerprintIDs := presetRequestMetaKeyIDs(request.Presets, "Fingerprint")
 			presets = preserveHiddenPresetPasswordsExcept(
 				presets,
 				currentPresets,
 				clearPresetIDs,
 			)
+			presets, err = configuration.PreservePresetPrivateKeyReferencesFromFile(
+				p.commonCfg.SourceFile,
+				presets,
+				clearPrivateKeyPresetIDs,
+			)
+			if err != nil {
+				return NewError(http.StatusInternalServerError, err.Error())
+			}
+			removeRestoredFingerprintsExcept(presets, requestFingerprintIDs)
 		}
 		presets, err = p.commands.Reconfigure(presets)
 		if err != nil {
@@ -180,6 +196,14 @@ func (p presetConfig) Put(
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
 	}
+	normalized, err = configuration.PreservePresetPrivateKeyReferencesFromFile(
+		p.commonCfg.SourceFile,
+		normalized,
+		clearPrivateKeyPresetIDs,
+	)
+	if err != nil {
+		return NewError(http.StatusInternalServerError, err.Error())
+	}
 	normalized, _, err = configuration.ApplyPresetSecrets(normalized)
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
@@ -195,11 +219,12 @@ func (p presetConfig) Put(
 	if err != nil {
 		return NewError(http.StatusInternalServerError, err.Error())
 	}
-	if err := configuration.ReplaceFilePresetsWithRuntime(
+	if err := configuration.ReplaceFilePresetsWithRuntimeSecrets(
 		p.commonCfg.SourceFile,
 		normalized,
 		currentPresets,
 		clearPresetIDsForPersistence,
+		clearPrivateKeyPresetIDsForPersistence,
 	); err != nil {
 		return NewError(http.StatusInternalServerError, err.Error())
 	}
@@ -258,6 +283,32 @@ func presetConfigRequestPresets(
 		}
 	}
 	return presets
+}
+
+func presetRequestMetaKeyIDs(
+	presets []socketRemotePreset,
+	key string,
+) map[string]struct{} {
+	ids := map[string]struct{}{}
+	for _, preset := range presets {
+		if _, ok := preset.Meta[key]; !ok {
+			continue
+		}
+		ids[strings.TrimSpace(preset.ID)] = struct{}{}
+	}
+	return ids
+}
+
+func removeRestoredFingerprintsExcept(
+	presets []configuration.Preset,
+	keepIDs map[string]struct{},
+) {
+	for i := range presets {
+		if _, keep := keepIDs[presets[i].ID]; keep {
+			continue
+		}
+		delete(presets[i].Meta, "Fingerprint")
+	}
 }
 
 func validatePresetConfigRequest(request presetConfigRequest) error {
@@ -447,7 +498,7 @@ func samePresetMetaExceptFingerprint(
 		if key == "Fingerprint" {
 			continue
 		}
-		if currentValue, ok := current[key]; !ok || currentValue != value {
+		if currentValue, ok := current[key]; !ok || !samePresetMetaValue(key, value, currentValue) {
 			return false
 		}
 	}
@@ -455,11 +506,23 @@ func samePresetMetaExceptFingerprint(
 		if key == "Fingerprint" {
 			continue
 		}
-		if nextValue, ok := next[key]; !ok || nextValue != value {
+		if nextValue, ok := next[key]; !ok || !samePresetMetaValue(key, nextValue, value) {
 			return false
 		}
 	}
 	return true
+}
+
+func samePresetMetaValue(key string, nextValue string, currentValue string) bool {
+	if nextValue == currentValue {
+		return true
+	}
+	if key != configuration.PresetMetaPrivateKey {
+		return false
+	}
+	parsedNext, nextErr := configuration.String(nextValue).Parse()
+	parsedCurrent, currentErr := configuration.String(currentValue).Parse()
+	return nextErr == nil && currentErr == nil && parsedNext == parsedCurrent
 }
 
 func parsePresetIDSet(raw string) map[string]struct{} {
@@ -588,7 +651,7 @@ func (p presetConfig) writePresets(
 	w.Header().Add("Pragma", "no-store")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	return json.NewEncoder(w).Encode(presetConfigResponse{
-		Presets:         newSocketAccessConfiguration(presets, "", "", false).Presets,
+		Presets:         newSocketAccessConfiguration(presets, "", "", policy.Writable, policy).Presets,
 		PrivateKeyFiles: p.privateKeyFiles(policy),
 	})
 }

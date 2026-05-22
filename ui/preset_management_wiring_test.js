@@ -56,6 +56,14 @@ describe("preset management UI wiring", () => {
     expect(source).toContain("this.error");
   });
 
+  test("preset editor distinguishes current key and empty key selector labels", () => {
+    const source = readProjectFile("ui/widgets/preset_editor.vue");
+
+    expect(source).toContain("Current: ");
+    expect(source).toContain("Select a private key");
+    expect(source).toContain("localState.privateKeyFile.length <= 0");
+  });
+
   test("preset editor builds save payload after protected prompt", () => {
     const source = readProjectFile("ui/widgets/preset_editor.vue");
 
