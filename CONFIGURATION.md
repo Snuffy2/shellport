@@ -2,9 +2,14 @@
 
 ShellPort can be configured through either a JSON configuration file or
 environment variables. By default, the configuration loader tries default file
-paths first, then falls back to environment variables.
+paths first, then falls back to environment variables. The default file paths
+are checked in this order:
 
-Use `SHELLPORT_CONFIG` to specify a configuration file:
+1. `/etc/shellport/shellport.conf.json`
+2. `~/.config/shellport.conf.json`
+3. `shellport.conf.json` in the same directory as the running `shellport` binary
+
+Use `SHELLPORT_CONFIG` to override the configuration file path:
 
 ```sh
 SHELLPORT_CONFIG=./shellport.conf.json ./shellport

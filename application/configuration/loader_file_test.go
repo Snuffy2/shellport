@@ -83,3 +83,21 @@ func TestLoadFileReadsServerTitle(t *testing.T) {
 		t.Fatalf("ServerMessage = %q, want Pick a host", cfg.Servers[0].ServerMessage)
 	}
 }
+
+func TestDefaultFileSearchListPrefersEtcShellportDirectory(t *testing.T) {
+	searchList := defaultFileSearchList("/home/shellport", "/opt/shellport/shellport")
+
+	expected := []string{
+		filepath.Join("/", "etc", "shellport", "shellport.conf.json"),
+		filepath.Join("/home/shellport", ".config", "shellport.conf.json"),
+		filepath.Join("/opt/shellport", "shellport.conf.json"),
+	}
+	if len(searchList) != len(expected) {
+		t.Fatalf("defaultFileSearchList() length = %d, want %d: %v", len(searchList), len(expected), searchList)
+	}
+	for i := range expected {
+		if searchList[i] != expected[i] {
+			t.Fatalf("defaultFileSearchList()[%d] = %q, want %q", i, searchList[i], expected[i])
+		}
+	}
+}

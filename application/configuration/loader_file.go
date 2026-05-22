@@ -73,33 +73,49 @@ func CustomFile(customPath string) Loader {
 	}
 }
 
+func defaultFileSearchList(homeDir string, executablePath string) []string {
+	fallbackFileSearchList := make([]string, 0, 4)
+
+	// /etc/shellport/shellport.conf.json
+	fallbackFileSearchList = append(
+		fallbackFileSearchList,
+		filepath.Join("/", "etc", "shellport", "shellport.conf.json"),
+	)
+
+	// ~/.config/shellport.conf.json
+	if homeDir != "" {
+		fallbackFileSearchList = append(
+			fallbackFileSearchList,
+			filepath.Join(homeDir, ".config", "shellport.conf.json"))
+	}
+
+	// shellport.conf.json located at the same directory as ShellPort bin
+	if executablePath != "" {
+		fallbackFileSearchList = append(
+			fallbackFileSearchList,
+			filepath.Join(filepath.Dir(executablePath), "shellport.conf.json"))
+	}
+
+	return fallbackFileSearchList
+}
+
 // DefaultFile creates a configuration file loader that loads configuration from
 // one of the default file path
 func DefaultFile() Loader {
 	return func(log log.Logger) (string, Configuration, error) {
 		log.Info("Loading configuration from one of the default " +
 			"configuration files ...")
-		fallbackFileSearchList := make([]string, 0, 3)
-
-		// ~/.config/shellport.conf.json
+		homeDir := ""
 		if u, userErr := user.Current(); userErr == nil {
-			fallbackFileSearchList = append(
-				fallbackFileSearchList,
-				filepath.Join(u.HomeDir, ".config", "shellport.conf.json"))
+			homeDir = u.HomeDir
 		}
 
-		// /etc/shellport.conf.json
-		fallbackFileSearchList = append(
-			fallbackFileSearchList,
-			filepath.Join("/", "etc", "shellport.conf.json"),
-		)
-
-		// shellport.conf.json located at the same directory as ShellPort bin
+		executablePath := ""
 		if ex, exErr := os.Executable(); exErr == nil {
-			fallbackFileSearchList = append(
-				fallbackFileSearchList,
-				filepath.Join(filepath.Dir(ex), "shellport.conf.json"))
+			executablePath = ex
 		}
+
+		fallbackFileSearchList := defaultFileSearchList(homeDir, executablePath)
 
 		// Search given locations to select the config file
 		for f := range fallbackFileSearchList {

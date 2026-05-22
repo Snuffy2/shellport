@@ -8,7 +8,9 @@ services:
     volumes:
       - ./config:/etc/shellport
     environment:
-      SHELLPORT_CONFIG: /etc/shellport/shellport.conf.json
+      # Optional: override the config file path. By default, this compose file
+      # uses /etc/shellport/shellport.conf.json from the mounted ./config dir.
+      # SHELLPORT_CONFIG: /etc/shellport/shellport.conf.json
       # Optional: IANA timezone used for local timestamps in logs.
       TZ: America/New_York
       # Recommended: base64-encoded 32-byte key for encrypted preset passwords.
