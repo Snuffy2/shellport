@@ -123,7 +123,8 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 				Type:  "SSH",
 				Host:  "example.com:22",
 				Meta: map[string]string{
-					"Authentication": "Password",
+					"Authentication":                          "Password",
+					configuration.PresetMetaPrivateKey:        "file:///config/private_keys/atlantis",
 					configuration.PresetMetaEncryptedPassword: "v1:aes-256-gcm:nonce:ciphertext",
 				},
 			},
@@ -150,6 +151,9 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 	}
 	if _, ok := meta[configuration.PresetMetaEncryptedPassword]; ok {
 		t.Fatal("encrypted password leaked into socket preset metadata")
+	}
+	if _, ok := meta[configuration.PresetMetaPrivateKey]; ok {
+		t.Fatal("private key leaked into socket preset metadata")
 	}
 }
 
@@ -186,6 +190,24 @@ func TestSocketAccessConfigurationListsPrivateKeyFilesOnlyWhenManageable(
 	})
 	if len(cfg.PrivateKeyFiles) != 0 {
 		t.Fatalf("blocked policy PrivateKeyFiles count = %d, want 0", len(cfg.PrivateKeyFiles))
+	}
+
+	cfg = newSocketAccessConfiguration(
+		nil,
+		"",
+		"",
+		false,
+		newPresetManagementPolicy(configuration.Common{
+			SourceFile: configPath,
+			AdminKey:   "admin-secret",
+		}, authRoleUser),
+	)
+	cfg = socketAccessConfigurationWithPrivateKeyFiles(cfg, configuration.Common{
+		SourceFile: configPath,
+		AdminKey:   "admin-secret",
+	})
+	if len(cfg.PrivateKeyFiles) != 0 {
+		t.Fatalf("admin prompt policy PrivateKeyFiles count = %d, want 0", len(cfg.PrivateKeyFiles))
 	}
 
 	cfg = newSocketAccessConfiguration(

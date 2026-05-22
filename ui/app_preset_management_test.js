@@ -293,6 +293,32 @@ describe("savePresetConfigRequest", () => {
     ).rejects.toThrow("Preset config write failed: 500");
   });
 
+  test("includes sanitized response text in full-list save errors", async () => {
+    const headerBuilder = vi.fn(async () => ({}));
+    const xhrPut = vi.fn().mockResolvedValueOnce({
+      status: 400,
+      responseText: "invalid preset\nmetadata",
+    });
+
+    await expect(
+      savePresetConfigRequest({
+        updatedPresets: [],
+        presetData: {
+          management: {
+            can_manage: true,
+          },
+        },
+        presetConfigPassphrase: "shared-key",
+        presetAdminPassphrase: "",
+        presetConfigHeadersForPassphrase: headerBuilder,
+        xhrPut,
+        presetConfigInterface: "/shellport/config/presets",
+      }),
+    ).rejects.toThrow(
+      "Preset config write failed: 400: invalid preset metadata",
+    );
+  });
+
   test("attaches response status to full-list save errors", async () => {
     const headerBuilder = vi.fn(async () => ({}));
     const xhrPut = vi.fn().mockResolvedValueOnce({

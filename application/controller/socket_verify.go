@@ -122,7 +122,8 @@ func sanitizeSocketPresetMeta(meta map[string]string) map[string]string {
 	sanitized := make(map[string]string, len(meta))
 	for key, value := range meta {
 		if key == configuration.PresetMetaPassword ||
-			key == configuration.PresetMetaEncryptedPassword {
+			key == configuration.PresetMetaEncryptedPassword ||
+			key == configuration.PresetMetaPrivateKey {
 			continue
 		}
 		sanitized[key] = value
@@ -303,7 +304,8 @@ func socketAccessConfigurationWithPrivateKeyFiles(
 	accessConfig socketAccessConfiguration,
 	commonCfg configuration.Common,
 ) socketAccessConfiguration {
-	if !accessConfig.PresetManagement.CanManage {
+	if !accessConfig.PresetManagement.CanManage ||
+		accessConfig.PresetManagement.RequiresAdminKey {
 		accessConfig.PrivateKeyFiles = []string{}
 		return accessConfig
 	}

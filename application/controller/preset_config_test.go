@@ -230,14 +230,70 @@ func TestPresetConfigGetDoesNotMigratePrivateKeysForUserRole(t *testing.T) {
 	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
 		t.Fatalf("json Decode returned error: %v", err)
 	}
-	if response.Presets[0].Meta["Private Key"] != "INLINE PRIVATE KEY DATA" {
-		t.Fatal("non-admin GET migrated private key metadata")
+	if _, ok := response.Presets[0].Meta["Private Key"]; ok {
+		t.Fatal("response exposed private key metadata")
 	}
 	if len(response.PrivateKeyFiles) != 0 {
 		t.Fatalf("PrivateKeyFiles count = %d, want 0", len(response.PrivateKeyFiles))
 	}
 	if _, err := os.Stat(filepath.Join(configDir, "private_keys")); !os.IsNotExist(err) {
 		t.Fatalf("private_keys directory stat error = %v, want not exist", err)
+	}
+}
+
+func TestPresetConfigGetListsPrivateKeyFilesOnlyAfterAdminKey(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "shellport.conf.json")
+	writePresetAPIConfig(t, configPath, nil)
+	keyDir := filepath.Join(configDir, "private_keys")
+	if err := os.Mkdir(keyDir, 0o700); err != nil {
+		t.Fatalf("os.Mkdir keyDir returned error: %v", err)
+	}
+	keyPath := filepath.Join(keyDir, "atlantis.key")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+	controller := newAdminTestPresetConfig(t, configPath)
+
+	userRequest := httptest.NewRequest(http.MethodGet, "/shellport/config/presets", nil)
+	authorizePresetConfigRequest(controller, userRequest)
+	userRecorder := httptest.NewRecorder()
+	userWriter := newResponseWriter(userRecorder)
+	if err := controller.Get(&userWriter, userRequest, log.Ditch{}); err != nil {
+		t.Fatalf("user Get returned error: %v", err)
+	}
+	var userResponse presetConfigResponse
+	if err := json.NewDecoder(userRecorder.Body).Decode(&userResponse); err != nil {
+		t.Fatalf("user json Decode returned error: %v", err)
+	}
+	if len(userResponse.PrivateKeyFiles) != 0 {
+		t.Fatalf("user PrivateKeyFiles count = %d, want 0", len(userResponse.PrivateKeyFiles))
+	}
+
+	adminRequest := httptest.NewRequest(http.MethodGet, "/shellport/config/presets", nil)
+	authorizeAdminRequest(controller, adminRequest)
+	adminRecorder := httptest.NewRecorder()
+	adminWriter := newResponseWriter(adminRecorder)
+	if err := controller.Get(&adminWriter, adminRequest, log.Ditch{}); err != nil {
+		t.Fatalf("admin Get returned error: %v", err)
+	}
+	var adminResponse presetConfigResponse
+	if err := json.NewDecoder(adminRecorder.Body).Decode(&adminResponse); err != nil {
+		t.Fatalf("admin json Decode returned error: %v", err)
+	}
+	if len(adminResponse.PrivateKeyFiles) != 1 {
+		t.Fatalf("admin PrivateKeyFiles count = %d, want 1", len(adminResponse.PrivateKeyFiles))
+	}
+	resolvedKeyPath, err := filepath.EvalSymlinks(keyPath)
+	if err != nil {
+		t.Fatalf("filepath.EvalSymlinks returned error: %v", err)
+	}
+	if adminResponse.PrivateKeyFiles[0] != "file://"+resolvedKeyPath {
+		t.Fatalf(
+			"admin PrivateKeyFiles[0] = %q, want file://%s",
+			adminResponse.PrivateKeyFiles[0],
+			resolvedKeyPath,
+		)
 	}
 }
 

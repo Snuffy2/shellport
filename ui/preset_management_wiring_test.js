@@ -56,6 +56,18 @@ describe("preset management UI wiring", () => {
     expect(source).toContain("this.error");
   });
 
+  test("preset editor builds save payload after protected prompt", () => {
+    const source = readProjectFile("ui/widgets/preset_editor.vue");
+
+    expect(source).not.toContain(
+      "const config = buildPresetConfigFromEditorState(this.localState);",
+    );
+    expect(source).toContain("return this.runProtected((adminKey) =>");
+    expect(source).toContain(
+      "config: buildPresetConfigFromEditorState(this.localState),",
+    );
+  });
+
   test("home updates full preset list for save and delete", () => {
     const source = readProjectFile("ui/home.vue");
 

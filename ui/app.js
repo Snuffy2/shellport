@@ -105,7 +105,15 @@ export async function savePresetConfigRequest({
     JSON.stringify({ presets: updatedPresets }),
   );
   if (putResponse.status !== 200) {
-    const err = new Error("Preset config write failed: " + putResponse.status);
+    const responseMessage = String(putResponse.responseText || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .slice(0, 512);
+    const err = new Error(
+      "Preset config write failed: " +
+        putResponse.status +
+        (responseMessage.length > 0 ? ": " + responseMessage : ""),
+    );
     err.status = putResponse.status;
     throw err;
   }

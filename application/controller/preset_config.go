@@ -594,7 +594,7 @@ func (p presetConfig) writePresets(
 }
 
 func (p presetConfig) privateKeyFiles(policy presetManagementPolicy) []string {
-	if !policy.CanManage {
+	if !policy.CanManage || policy.RequiresAdminKey {
 		return []string{}
 	}
 	files, err := configuration.ListPresetPrivateKeyFiles(p.commonCfg.SourceFile)

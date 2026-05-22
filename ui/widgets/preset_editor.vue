@@ -401,10 +401,9 @@ export default {
       }
     },
     save() {
-      const config = buildPresetConfigFromEditorState(this.localState);
       return this.runProtected((adminKey) =>
         this.savePreset({
-          config,
+          config: buildPresetConfigFromEditorState(this.localState),
           state: this.localState,
           adminKey,
         }),

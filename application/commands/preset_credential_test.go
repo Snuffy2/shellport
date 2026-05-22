@@ -115,6 +115,8 @@ func TestPresetPrivateKeyCredentialPreservesEnvironmentReference(t *testing.T) {
 func TestPresetPrivateKeyCredentialTreatsEmptyResolvedReferenceAsMissing(
 	t *testing.T,
 ) {
+	t.Setenv("SHELLPORT_TEST_PRIVATE_KEY", "")
+
 	credential, ok := presetPrivateKeyCredential(
 		command.Configuration{
 			Presets: []configuration.Preset{
