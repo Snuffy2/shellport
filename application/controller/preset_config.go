@@ -588,7 +588,7 @@ func (p presetConfig) writePresets(
 	w.Header().Add("Pragma", "no-store")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	return json.NewEncoder(w).Encode(presetConfigResponse{
-		Presets:         newSocketAccessConfiguration(presets, "", "", false).Presets,
+		Presets:         newSocketAccessConfiguration(presets, "", "", policy.Writable, policy).Presets,
 		PrivateKeyFiles: p.privateKeyFiles(policy),
 	})
 }

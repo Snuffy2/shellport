@@ -150,6 +150,7 @@ describe("preset editor state", () => {
         host: "atlantis.home:22",
         has_saved_private_key: true,
         private_key_file: "file:///config/private_keys/atlantis.key",
+        private_key_filename: "atlantis.key",
         meta: {
           Authentication: "Private Key",
           User: "pi",
@@ -162,6 +163,30 @@ describe("preset editor state", () => {
     expect(state.privateKeyFile).toBe(
       "file:///config/private_keys/atlantis.key",
     );
+    expect(state.privateKeyFilename).toBe("atlantis.key");
+    expect(state.privateKey).toBe("");
+  });
+
+  test("redacted private key filenames show without a full key file reference", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-atlantis",
+        title: "Atlantis",
+        type: "SSH",
+        host: "atlantis.home:22",
+        has_saved_private_key: true,
+        private_key_filename: "atlantis.key",
+        meta: {
+          Authentication: "Private Key",
+          User: "pi",
+        },
+      }),
+    );
+
+    expect(state.savePrivateKey).toBe(true);
+    expect(state.privateKeyMode).toBe("existing");
+    expect(state.privateKeyFile).toBe("");
+    expect(state.privateKeyFilename).toBe("atlantis.key");
     expect(state.privateKey).toBe("");
   });
 
@@ -183,6 +208,7 @@ describe("preset editor state", () => {
     expect(state.savePrivateKey).toBe(true);
     expect(state.privateKeyMode).toBe("existing");
     expect(state.privateKeyFile).toBe("");
+    expect(state.privateKeyFilename).toBe("");
     expect(state.privateKey).toBe("");
   });
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +51,7 @@ type socketRemotePreset struct {
 	HasSavedPassword   bool              `json:"has_saved_password"`
 	HasSavedPrivateKey bool              `json:"has_saved_private_key"`
 	PrivateKeyFile     string            `json:"private_key_file"`
+	PrivateKeyFilename string            `json:"private_key_filename"`
 }
 
 // socketAccessConfiguration is the top-level JSON envelope sent to the client
@@ -110,7 +112,8 @@ func newSocketAccessConfiguration(
 			Meta:               sanitizeSocketPresetMeta(remotes[i].Meta),
 			HasSavedPassword:   presetHasSavedPassword(remotes[i]),
 			HasSavedPrivateKey: presetHasSavedPrivateKey(remotes[i]),
-			PrivateKeyFile:     presetPrivateKeyFile(remotes[i]),
+			PrivateKeyFile:     presetPrivateKeyFile(remotes[i], policy),
+			PrivateKeyFilename: presetPrivateKeyFilename(remotes[i]),
 		}
 	}
 	return socketAccessConfiguration{
@@ -176,10 +179,21 @@ func presetHasSavedPrivateKey(preset configuration.Preset) bool {
 	return preset.Meta[configuration.PresetMetaPrivateKey] != ""
 }
 
-func presetPrivateKeyFile(preset configuration.Preset) string {
+func presetPrivateKeyFile(preset configuration.Preset, policy presetManagementPolicy) string {
+	if !policy.CanManage || policy.RequiresAdminKey {
+		return ""
+	}
 	privateKey := preset.Meta[configuration.PresetMetaPrivateKey]
 	if strings.HasPrefix(privateKey, "file://") {
 		return privateKey
+	}
+	return ""
+}
+
+func presetPrivateKeyFilename(preset configuration.Preset) string {
+	privateKey := preset.Meta[configuration.PresetMetaPrivateKey]
+	if strings.HasPrefix(privateKey, "file://") {
+		return path.Base(strings.TrimPrefix(privateKey, "file://"))
 	}
 	return ""
 }

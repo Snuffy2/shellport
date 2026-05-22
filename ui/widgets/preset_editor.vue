@@ -115,7 +115,13 @@ SPDX-License-Identifier: AGPL-3.0-only
       >
         Server key
         <select v-model="localState.privateKeyFile">
-          <option value="">Select a private key</option>
+          <option value="">
+            {{
+              localState.privateKeyFilename.length > 0
+                ? localState.privateKeyFilename
+                : "Select a private key"
+            }}
+          </option>
           <option
             v-if="showCurrentPrivateKeyReference"
             :value="localState.privateKeyFile"

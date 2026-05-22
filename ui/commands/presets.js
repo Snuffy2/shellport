@@ -28,6 +28,7 @@ const presetItem = {
   has_saved_password: false,
   has_saved_private_key: false,
   private_key_file: "",
+  private_key_filename: "",
 };
 
 /**
@@ -226,6 +227,15 @@ export class Preset {
    */
   privateKeyFile() {
     return this.preset.private_key_file;
+  }
+
+  /**
+   * Return the saved private key filename, if one is available.
+   *
+   * @returns {string}
+   */
+  privateKeyFilename() {
+    return this.preset.private_key_filename;
   }
 
   /**

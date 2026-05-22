@@ -146,10 +146,18 @@ export function buildEditorState(preset, defaults = {}) {
     preset && typeof preset.privateKeyFile === "function"
       ? preset.privateKeyFile()
       : "";
+  const savedPrivateKeyFilename =
+    preset && typeof preset.privateKeyFilename === "function"
+      ? preset.privateKeyFilename()
+      : "";
   const privateKeyFile =
     privateKey.startsWith("file://") || privateKey.startsWith("environment://")
       ? privateKey
       : savedPrivateKeyFile;
+  const privateKeyFilename =
+    privateKeyFile.length > 0
+      ? privateKeyFileLabel(privateKeyFile)
+      : savedPrivateKeyFilename;
 
   return {
     id: presetValue(preset, "id", defaults.id || ""),
@@ -172,6 +180,7 @@ export function buildEditorState(preset, defaults = {}) {
       (isNewPreset && meta.Authentication === "Private Key"),
     privateKeyMode: privateKeyModeForValue(privateKey),
     privateKeyFile,
+    privateKeyFilename,
     confirmDelete: false,
     error: "",
   };
