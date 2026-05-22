@@ -16,7 +16,7 @@ import {
   encodingOptionsForType,
   privateKeyFileLabel,
   typeLocksEncoding,
-  requiresAdminKey,
+  requiresAdminPassword,
 } from "./preset_management.js";
 
 describe("preset management policy", () => {
@@ -26,9 +26,11 @@ describe("preset management policy", () => {
     expect(canManagePresets(null)).toBe(false);
   });
 
-  test("requires admin key only when policy says so", () => {
-    expect(requiresAdminKey({ requires_admin_key: true })).toBe(true);
-    expect(requiresAdminKey({ requires_admin_key: false })).toBe(false);
+  test("requires admin password only when policy says so", () => {
+    expect(requiresAdminPassword({ requires_admin_password: true })).toBe(true);
+    expect(requiresAdminPassword({ requires_admin_password: false })).toBe(
+      false,
+    );
   });
 });
 

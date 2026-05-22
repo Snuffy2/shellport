@@ -51,7 +51,7 @@ const updateIndicatorMaxDisplayTime = 3000;
  * @param {object} args Operation arguments.
  * @param {Array<object>} args.updatedPresets Updated preset list to write.
  * @param {object} args.options Write operation options.
- * @param {string} [args.options.adminKey] Optional admin key string.
+ * @param {string} [args.options.adminPassword] Optional admin password string.
  * @param {Array<string>} [args.options.clearPasswordIDs] IDs of hidden passwords to clear.
  * @param {object} args.presetData Runtime preset metadata.
  * @param {object} args.presetData.management Policy object controlling management permissions.
@@ -62,7 +62,7 @@ const updateIndicatorMaxDisplayTime = 3000;
  * @param {function(string, Object.<string, string>, string): Promise<{status:number,responseText:string}>} args.xhrPut
  *   HTTP PUT function.
  * @param {string} args.presetConfigInterface Endpoint for preset config writes.
- * @returns {Promise<{presets:Array<object>,adminKey:string|null,privateKeyFiles:Array<string>}>} Updated presets and key candidate.
+ * @returns {Promise<{presets:Array<object>,adminPassword:string|null,privateKeyFiles:Array<string>}>} Updated presets and key candidate.
  */
 export async function savePresetConfigRequest({
   updatedPresets,
@@ -78,15 +78,17 @@ export async function savePresetConfigRequest({
     throw new Error("Preset management is not allowed");
   }
 
-  const providedAdminKey =
-    typeof options.adminKey === "string" && options.adminKey.length > 0
-      ? options.adminKey
+  const providedAdminPassword =
+    typeof options.adminPassword === "string" &&
+    options.adminPassword.length > 0
+      ? options.adminPassword
       : null;
-  const adminKeyRequired = presetData.management?.requires_admin_key === true;
+  const adminPasswordRequired =
+    presetData.management?.requires_admin_password === true;
   const passphrase =
-    providedAdminKey !== null
-      ? providedAdminKey
-      : adminKeyRequired && presetAdminPassphrase.length > 0
+    providedAdminPassword !== null
+      ? providedAdminPassword
+      : adminPasswordRequired && presetAdminPassphrase.length > 0
         ? presetAdminPassphrase
         : presetConfigPassphrase;
   const clearPasswordIDs = Array.isArray(options.clearPasswordIDs)
@@ -129,7 +131,7 @@ export async function savePresetConfigRequest({
 
   return {
     presets: body.presets ? body.presets : [],
-    adminKey: providedAdminKey,
+    adminPassword: providedAdminPassword,
     privateKeyFiles: body.private_key_files ? body.private_key_files : [],
   };
 }
@@ -150,7 +152,7 @@ const mainTemplate = `
   :preset-management-policy="presetData.management"
   :preset-private-key-files="presetData.privateKeyFiles"
   :save-preset-config="savePresetConfig"
-  :admin-key-required="presetAdminKeyRequired"
+  :admin-password-required="presetAdminPasswordRequired"
   :save-preset-fingerprint="savePresetFingerprint"
   :refresh-preset-config="refreshPresetConfig"
   :view-port="viewPort"
@@ -256,7 +258,7 @@ function startApp(rootEl) {
           management: {
             writable: false,
             can_manage: false,
-            requires_admin_key: false,
+            requires_admin_password: false,
             blocked_by_preset_restriction: false,
           },
           privateKeyFiles: [],
@@ -394,7 +396,7 @@ function startApp(rootEl) {
        * Derives a 32-byte HMAC-SHA-512 auth key from the private key and the
        * current time truncated to 100-second buckets.
        *
-       * @param {string} privateKey - The configured SharedKey.
+       * @param {string} privateKey - The configured user password.
        * @returns {Promise<Uint8Array>} Resolved with the 32-byte auth key.
        */
       async getSocketAuthKey(privateKey) {
@@ -471,7 +473,7 @@ function startApp(rootEl) {
               can_manage:
                 authData.preset_config_writable === true &&
                 !authResult.onlyAllowPresetRemotes,
-              requires_admin_key: false,
+              requires_admin_password: false,
               blocked_by_preset_restriction:
                 authResult.onlyAllowPresetRemotes === true,
             };
@@ -507,15 +509,15 @@ function startApp(rootEl) {
         );
       },
       /**
-       * Returns true when policy requires admin key and cache is empty.
+       * Returns true when policy requires admin password and cache is empty.
        *
-       * @returns {boolean} `true` when user-supplied admin key is required but
+       * @returns {boolean} `true` when user-supplied admin password is required but
        *   not available in page memory.
        */
-      presetAdminKeyRequired() {
+      presetAdminPasswordRequired() {
         return (
           this.presetData.management &&
-          this.presetData.management.requires_admin_key === true &&
+          this.presetData.management.requires_admin_password === true &&
           this.presetAdminPassphrase.length <= 0
         );
       },
@@ -547,7 +549,7 @@ function startApp(rootEl) {
        *
        * @param {Array<object>} updatedPresets Updated raw preset configurations.
        * @param {object} options Operation options.
-       * @param {string} [options.adminKey] Admin key to unlock write authorization.
+       * @param {string} [options.adminPassword] Admin password to unlock write authorization.
        * @param {Array<string>} [options.clearPasswordIDs] Preset IDs to clear hidden passwords.
        * @returns {Promise<Array<object>>} Updated preset config list.
        */
@@ -572,8 +574,11 @@ function startApp(rootEl) {
           throw e;
         }
 
-        if (typeof result.adminKey === "string" && result.adminKey.length > 0) {
-          this.presetAdminPassphrase = result.adminKey;
+        if (
+          typeof result.adminPassword === "string" &&
+          result.adminPassword.length > 0
+        ) {
+          this.presetAdminPassphrase = result.adminPassword;
         }
         this.replacePresetData(result.presets, result.privateKeyFiles);
 
@@ -666,7 +671,7 @@ function startApp(rootEl) {
        * Delegates the actual HTTP request to `requestAuth`, then persists the
        * `X-Key` header value in `this.key` when the server returns one.
        *
-       * @param {string} privateKey - The SharedKey, or an empty string for
+       * @param {string} privateKey - The user password, or an empty string for
        *   unauthenticated (no-passphrase) mode.
        * @returns {Promise<object>} Auth result object (see `requestAuth`).
        */
@@ -685,9 +690,9 @@ function startApp(rootEl) {
        *
        * When a non-empty `privateKey` and a previously stored `this.key` are
        * present, an HMAC auth token is derived and sent in the `X-Key` header.
-       * The current UI only submits SharedKey values through this path.
+       * The current UI only submits user password values through this path.
        *
-       * @param {string} privateKey - SharedKey used to compute the HMAC token,
+       * @param {string} privateKey - User password used to compute the HMAC token,
        *   or an empty string to skip token computation.
        * @returns {Promise<{ result: number, key: string|null, timeout: string|null,
        *   heartbeat: string|null, date: Date|null, data: string,
@@ -800,12 +805,12 @@ function startApp(rootEl) {
         }
       },
       /**
-       * Handles a user-submitted SharedKey from the auth form.
+       * Handles a user-submitted user password from the auth form.
        *
        * Clears any previous auth error, attempts authentication, and on success
        * transitions to the home app. Sets `this.authErr` on 403 or other errors.
        *
-       * @param {string} passphrase - The SharedKey entered by the user.
+       * @param {string} passphrase - The user password entered by the user.
        * @returns {Promise<void>}
        */
       async submitAuth(passphrase) {
@@ -841,7 +846,7 @@ function startApp(rootEl) {
               break;
 
             case 403:
-              this.authErr = "Authentication has failed. Wrong SharedKey?";
+              this.authErr = "Authentication has failed. Wrong user password?";
               break;
 
             default:

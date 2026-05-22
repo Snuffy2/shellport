@@ -4,11 +4,13 @@ services:
     container_name: shellport
     restart: unless-stopped
     ports:
-      - "8182:8182"
+      - "127.0.0.1:8182:8182"
     volumes:
-      - ./config:/etc/shellport
+      - ./config:/config
     environment:
-      SHELLPORT_CONFIG: /etc/shellport/shellport.conf.json
+      # Optional: override the config file path. By default, this compose file
+      # uses /config/shellport.conf.json from the mounted ./config dir.
+      # SHELLPORT_CONFIG: /config/shellport.conf.json
       # Optional: IANA timezone used for local timestamps in logs.
       TZ: America/New_York
       # Recommended: base64-encoded 32-byte key for encrypted preset passwords.

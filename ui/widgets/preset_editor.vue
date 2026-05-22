@@ -236,21 +236,28 @@ SPDX-License-Identifier: AGPL-3.0-only
         </button>
       </div>
 
-      <div v-else-if="promptingAdminKey" id="preset-editor-admin-key">
+      <div v-else-if="promptingAdminPassword" id="preset-editor-admin-password">
         <label class="field">
-          ShellPort AdminKey
+          Admin password
           <input
-            v-model="adminKey"
+            v-model="adminPassword"
             type="password"
             autocomplete="off"
             autofocus
           />
         </label>
-        <div v-if="adminKeyError.length > 0" id="preset-editor-admin-key-error">
-          {{ adminKeyError }}
+        <div
+          v-if="adminPasswordError.length > 0"
+          id="preset-editor-admin-password-error"
+        >
+          {{ adminPasswordError }}
         </div>
-        <button type="button" @click="submitAdminKey">Continue</button>
-        <button type="button" class="secondary" @click="cancelAdminKeyPrompt">
+        <button type="button" @click="submitAdminPassword">Continue</button>
+        <button
+          type="button"
+          class="secondary"
+          @click="cancelAdminPasswordPrompt"
+        >
           Cancel
         </button>
       </div>
@@ -281,7 +288,7 @@ import {
   cloneEditorState,
   encodingOptionsForType,
   privateKeyFileLabel,
-  requiresAdminKey,
+  requiresAdminPassword,
   typeLocksEncoding,
 } from "../preset_management.js";
 
@@ -299,7 +306,7 @@ export default {
       type: Object,
       default: () => null,
     },
-    adminKeyCached: {
+    adminPasswordCached: {
       type: Boolean,
       default: false,
     },
@@ -327,11 +334,11 @@ export default {
       localState,
       submitting: false,
       error: "",
-      promptingAdminKey: false,
+      promptingAdminPassword: false,
       confirmingDelete: false,
       pendingAction: null,
-      adminKey: "",
-      adminKeyError: "",
+      adminPassword: "",
+      adminPasswordError: "",
     };
   },
   computed: {
@@ -402,20 +409,20 @@ export default {
     async runProtected(action) {
       this.error = "";
       if (
-        requiresAdminKey(this.policy) &&
-        !this.adminKeyCached &&
-        this.adminKey.length <= 0
+        requiresAdminPassword(this.policy) &&
+        !this.adminPasswordCached &&
+        this.adminPassword.length <= 0
       ) {
         this.pendingAction = action;
-        this.promptingAdminKey = true;
-        this.adminKeyError = "";
+        this.promptingAdminPassword = true;
+        this.adminPasswordError = "";
         return;
       }
 
       this.submitting = true;
       try {
-        await action(this.adminKey);
-        this.adminKey = "";
+        await action(this.adminPassword);
+        this.adminPassword = "";
       } catch (e) {
         this.error = String(e);
       } finally {
@@ -423,11 +430,11 @@ export default {
       }
     },
     save() {
-      return this.runProtected((adminKey) =>
+      return this.runProtected((adminPassword) =>
         this.savePreset({
           config: buildPresetConfigFromEditorState(this.localState),
           state: this.localState,
-          adminKey,
+          adminPassword,
         }),
       );
     },
@@ -436,11 +443,11 @@ export default {
     },
     confirmDelete() {
       this.confirmingDelete = false;
-      return this.runProtected((adminKey) =>
+      return this.runProtected((adminPassword) =>
         this.deletePreset({
           id: this.localState.id,
           state: this.localState,
-          adminKey,
+          adminPassword,
         }),
       );
     },
@@ -466,33 +473,33 @@ export default {
       };
       reader.readAsText(fileInput.files[0], "utf-8");
     },
-    submitAdminKey() {
+    submitAdminPassword() {
       const action = this.pendingAction;
       if (action === null) {
         return;
       }
 
       this.error = "";
-      this.adminKeyError = "";
+      this.adminPasswordError = "";
       this.submitting = true;
-      return action(this.adminKey)
+      return action(this.adminPassword)
         .then(() => {
           this.pendingAction = null;
-          this.promptingAdminKey = false;
-          this.adminKey = "";
+          this.promptingAdminPassword = false;
+          this.adminPassword = "";
         })
         .catch((e) => {
-          this.adminKeyError = String(e);
+          this.adminPasswordError = String(e);
         })
         .finally(() => {
           this.submitting = false;
         });
     },
-    cancelAdminKeyPrompt() {
-      this.promptingAdminKey = false;
-      this.adminKeyError = "";
+    cancelAdminPasswordPrompt() {
+      this.promptingAdminPassword = false;
+      this.adminPasswordError = "";
       this.pendingAction = null;
-      this.adminKey = "";
+      this.adminPassword = "";
     },
   },
 };

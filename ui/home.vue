@@ -87,7 +87,7 @@ SPDX-License-Identifier: AGPL-3.0-only
       :preset-editor="presetEditor"
       :preset-management-policy="presetManagementPolicy"
       :private-key-files="presetPrivateKeyFiles"
-      :admin-key-cached="adminKeyCached"
+      :admin-password-cached="adminPasswordCached"
       :preset-save-handler="savePresetFromEditor"
       :preset-delete-handler="deletePresetFromEditor"
       :restricted-to-presets="restrictedToPresets"
@@ -284,7 +284,7 @@ export default {
       type: Function,
       default: () => null,
     },
-    adminKeyRequired: {
+    adminPasswordRequired: {
       type: Function,
       default: () => true,
     },
@@ -382,8 +382,8 @@ export default {
     canManagePresets() {
       return canManagePresets(this.presetManagementPolicy);
     },
-    adminKeyCached() {
-      return !this.adminKeyRequired();
+    adminPasswordCached() {
+      return !this.adminPasswordRequired();
     },
   },
   watch: {
@@ -759,7 +759,7 @@ export default {
       const clearIDs = clearHiddenPasswordIDs([payload.state]);
       const clearPrivateKeyIDs = clearHiddenPrivateKeyIDs([payload.state]);
       const updatedPresets = await this.savePresetConfig(configs, {
-        adminKey: payload.adminKey,
+        adminPassword: payload.adminPassword,
         clearPasswordIDs: clearIDs,
         clearPrivateKeyIDs,
       });
@@ -775,7 +775,7 @@ export default {
         (preset) => preset.id !== payload.id,
       );
       const updatedPresets = await this.savePresetConfig(configs, {
-        adminKey: payload.adminKey,
+        adminPassword: payload.adminPassword,
       });
       this.replacePresets(updatedPresets);
       this.presetEditor = null;

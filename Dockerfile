@@ -43,17 +43,6 @@ FROM debian:trixie-slim
 ARG ET_APT_GPG_SHA256=bcc8b1fb4caa1ba935a2f30f0a51866f607d6f5efe77d8d9e70a87f5919e8b3a
 ARG SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0"
-ENV SHELLPORT_DIALTIMEOUT=10 \
-    SHELLPORT_DEBUG= \
-    SHELLPORT_HOOKTIMEOUT=30 \
-    SHELLPORT_LISTENINTERFACE=0.0.0.0 \
-    SHELLPORT_LISTENPORT=8182 \
-    SHELLPORT_INITIALTIMEOUT=0 \
-    SHELLPORT_READTIMEOUT=0 \
-    SHELLPORT_WRITETIMEOUT=0 \
-    SHELLPORT_HEARTBEATTIMEOUT=0 \
-    SHELLPORT_READDELAY=0 \
-    SHELLPORT_WRITEDELAY=0
 COPY --from=builder /shellport /
 COPY docker-entrypoint.sh /shellport.sh
 RUN set -ex && \
@@ -95,9 +84,10 @@ RUN set -ex && \
     apt-get purge -y --auto-remove curl && \
     rm -rf /var/lib/apt/lists/* && \
     useradd --system --create-home --shell /usr/sbin/nologin shellport && \
+    install -d -m 0700 -o shellport -g shellport /config && \
     chmod +x /shellport && \
     chmod +x /shellport.sh
-USER shellport
 EXPOSE 8182
+USER shellport
 ENTRYPOINT [ "/shellport.sh" ]
 CMD []

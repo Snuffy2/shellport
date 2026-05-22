@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -18,7 +17,41 @@ import (
 // fileTypeName is the loader name reported when configuration is loaded from a
 // JSON file.
 const (
-	fileTypeName = "File"
+	// DefaultConfigFilePath is the default Docker config file path.
+	DefaultConfigFilePath = "/config/shellport.conf.json"
+	fileTypeName          = "File"
+	defaultConfigContent  = `{
+  "HostName": "",
+  "UserPassword": "",
+  "AdminPassword": "",
+  "DialTimeout": 5,
+  "Socks5": "",
+  "Socks5User": "",
+  "Socks5Password": "",
+  "Hooks": {
+    "before_connecting": []
+  },
+  "HookTimeout": 30,
+  "Servers": [
+    {
+      "ListenInterface": "0.0.0.0",
+      "ListenPort": 8182,
+      "InitialTimeout": 10,
+      "ReadTimeout": 120,
+      "WriteTimeout": 120,
+      "HeartbeatTimeout": 15,
+      "ReadDelay": 10,
+      "WriteDelay": 10,
+      "TLSCertificateFile": "",
+      "TLSCertificateKeyFile": "",
+      "ServerTitle": "",
+      "ServerMessage": ""
+    }
+  ],
+  "Presets": [],
+  "OnlyAllowPresetRemotes": false
+}
+`
 )
 
 // loadFile opens filePath, JSON-decodes it into a commonInput, and returns the
@@ -47,9 +80,6 @@ func loadFile(filePath string) (string, Configuration, error) {
 		return fileTypeName, Configuration{}, err
 	}
 	finalCfg, err := cfg.concretize()
-	if adminKey := GetEnv("SHELLPORT_ADMIN_KEY"); adminKey != "" {
-		finalCfg.AdminKey = adminKey
-	}
 	finalCfg.SourceFile = filePath
 	return fileTypeName, finalCfg, err
 }
@@ -73,35 +103,47 @@ func CustomFile(customPath string) Loader {
 	}
 }
 
-// DefaultFile creates a configuration file loader that loads configuration from
-// one of the default file path
-func DefaultFile() Loader {
+func createDefaultConfigFile(filePath string) error {
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.WriteString(defaultConfigContent); err != nil {
+		return err
+	}
+	return nil
+}
+
+// AutoCreateDefaultFile creates and loads the default file-backed
+// configuration when no configured default file exists.
+func AutoCreateDefaultFile(filePath string) Loader {
 	return func(log log.Logger) (string, Configuration, error) {
-		log.Info("Loading configuration from one of the default " +
-			"configuration files ...")
-		fallbackFileSearchList := make([]string, 0, 3)
-
-		// ~/.config/shellport.conf.json
-		if u, userErr := user.Current(); userErr == nil {
-			fallbackFileSearchList = append(
-				fallbackFileSearchList,
-				filepath.Join(u.HomeDir, ".config", "shellport.conf.json"))
+		log.Info("No default configuration file was found; creating %s", filePath)
+		if err := createDefaultConfigFile(filePath); err != nil {
+			if os.IsExist(err) {
+				return loadFile(filePath)
+			}
+			return fileTypeName, Configuration{}, fmt.Errorf(
+				"configuration file was not specified and no fallback files "+
+					"were available; also failed to create %q: %w",
+				filePath,
+				err,
+			)
 		}
+		return loadFile(filePath)
+	}
+}
 
-		// /etc/shellport.conf.json
-		fallbackFileSearchList = append(
-			fallbackFileSearchList,
-			filepath.Join("/", "etc", "shellport.conf.json"),
-		)
+func defaultFileSearchList() []string {
+	return []string{DefaultConfigFilePath}
+}
 
-		// shellport.conf.json located at the same directory as ShellPort bin
-		if ex, exErr := os.Executable(); exErr == nil {
-			fallbackFileSearchList = append(
-				fallbackFileSearchList,
-				filepath.Join(filepath.Dir(ex), "shellport.conf.json"))
-		}
-
-		// Search given locations to select the config file
+func defaultFileFromSearchList(fallbackFileSearchList []string) Loader {
+	return func(log log.Logger) (string, Configuration, error) {
 		for f := range fallbackFileSearchList {
 			if fInfo, fErr := os.Stat(fallbackFileSearchList[f]); fErr != nil {
 				continue
@@ -114,8 +156,17 @@ func DefaultFile() Loader {
 			}
 		}
 		return fileTypeName, Configuration{}, fmt.Errorf(
-			"Configuration file was not specified. Also tried fallback files "+
+			"configuration file was not specified; also tried fallback files "+
 				"\"%s\", but none of them was available",
 			strings.Join(fallbackFileSearchList, "\", \""))
+	}
+}
+
+// DefaultFile creates a configuration file loader that loads configuration from
+// one of the default file path
+func DefaultFile() Loader {
+	return func(log log.Logger) (string, Configuration, error) {
+		log.Info("Loading configuration from the default configuration file")
+		return defaultFileFromSearchList(defaultFileSearchList())(log)
 	}
 }

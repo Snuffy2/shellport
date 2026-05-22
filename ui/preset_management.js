@@ -91,8 +91,8 @@ export function canManagePresets(policy) {
   return !!policy && policy.can_manage === true;
 }
 
-export function requiresAdminKey(policy) {
-  return !!policy && policy.requires_admin_key === true;
+export function requiresAdminPassword(policy) {
+  return !!policy && policy.requires_admin_password === true;
 }
 
 function presetValue(preset, method, defaultValue) {

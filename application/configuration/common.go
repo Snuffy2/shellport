@@ -4,8 +4,7 @@
 
 // Package configuration defines the data types and loader infrastructure used
 // to supply runtime settings to the ShellPort application. It supports multiple
-// configuration sources (environment variables, JSON files, direct injection)
-// through the Loader function type and a Redundant combinator.
+// configuration sources through the Loader function type and loader chain.
 package configuration
 
 import (
@@ -22,11 +21,11 @@ type Common struct {
 	SourceFile string
 	// HostName is the public hostname used in generated links and TLS validation.
 	HostName string
-	// SharedKey is the pre-shared secret required for client authentication;
+	// UserPassword is the password required for client authentication;
 	// an empty value disables authentication.
-	SharedKey string
-	// AdminKey is the pre-shared secret that grants admin-level access.
-	AdminKey string
+	UserPassword string
+	// AdminPassword is the password that grants admin-level access.
+	AdminPassword string
 	// Dialer is the function used to open outbound network connections,
 	// optionally via SOCKS5 or with access-control restrictions.
 	Dialer network.Dial

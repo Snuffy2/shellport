@@ -4,7 +4,13 @@
 
 package main
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/Snuffy2/shellport/application/configuration"
+	"github.com/Snuffy2/shellport/application/log"
+)
 
 func TestShouldPrintVersionAcceptsVersionFlags(t *testing.T) {
 	for _, args := range [][]string{
@@ -42,5 +48,24 @@ func TestDebugLoggingDisabledWhenEnvironmentEmpty(t *testing.T) {
 
 	if debugLoggingEnabled() {
 		t.Fatal("expected empty SHELLPORT_DEBUG to disable debug logging")
+	}
+}
+
+func TestConfigLoadersCreateConfiguredMissingFile(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "custom-shellport.conf.json")
+	t.Setenv("SHELLPORT_CONFIG", configPath)
+
+	_, cfg, err := configuration.Redundant(configLoaders()...)(log.NewDitch())
+	if err != nil {
+		t.Fatalf("config loader returned error: %v", err)
+	}
+	if cfg.SourceFile != configPath {
+		t.Fatalf("SourceFile = %q, want %q", cfg.SourceFile, configPath)
+	}
+	if len(cfg.Servers) == 0 {
+		t.Fatal("expected at least one default server in generated config")
+	}
+	if cfg.Servers[0].ListenInterface != "0.0.0.0" {
+		t.Fatalf("ListenInterface = %q, want 0.0.0.0", cfg.Servers[0].ListenInterface)
 	}
 }

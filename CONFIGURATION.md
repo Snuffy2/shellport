@@ -1,16 +1,21 @@
 # ShellPort Configuration
 
-ShellPort can be configured through either a JSON configuration file or
-environment variables. By default, the configuration loader tries default file
-paths first, then falls back to environment variables.
+ShellPort is configured through a JSON configuration file. By default, the
+Docker image loads `/config/shellport.conf.json`.
 
-Use `SHELLPORT_CONFIG` to specify a configuration file:
+If that file does not exist, ShellPort creates it with a minimal writable
+configuration, then loads it. The generated file listens on `0.0.0.0:8182` and
+starts with no presets so operators can add presets from the UI immediately.
+`UserPassword` and `AdminPassword` are left empty in the generated file; edit the config
+file later to add authentication, admin protection, or other advanced settings.
+
+Use `SHELLPORT_CONFIG` to override the configuration file path:
 
 ```sh
-SHELLPORT_CONFIG=./shellport.conf.json ./shellport
+SHELLPORT_CONFIG=/config/custom.conf.json ./shellport
 ```
 
-This tells ShellPort to load configuration from `./shellport.conf.json`.
+This tells ShellPort to load configuration from `/config/custom.conf.json`.
 
 ## Configuration File
 
@@ -25,10 +30,10 @@ as a starting point for your own configuration.
 
   // Web interface access password. Set to empty to allow public access to the
   // web interface (bypass the Authenticate page)
-  "SharedKey": "WEB_ACCESS_PASSWORD",
+  "UserPassword": "WEB_ACCESS_PASSWORD",
 
-  // Optional admin key for admin-only preset config API writes.
-  "AdminKey": "",
+  // Optional admin password for admin-only preset config API writes.
+  "AdminPassword": "",
 
   // Remote dial timeout. This limits how long of time the backend can spend
   // to connect to a remote host. The max timeout will be determined by
@@ -52,11 +57,6 @@ as a starting point for your own configuration.
   // The operation of a Hook must be completed within the time limit defined
   // by `HookTimeout` set below. Otherwise it will be terminated, and results
   // a failure for the execution
-  //
-  // To determine how much time is still left for the execution, a Hook can
-  // fetch the deadline information from the `SHELLPORT_HOOK_DEADLINE`
-  // environment variable which is a RFC3339 formatted date string indicating
-  // after what time the termination will occur
   //
   // Warning: the process will be launched within the same context and system
   // permission which ShellPort is running under, thus is it crucial that the
@@ -165,9 +165,6 @@ as a starting point for your own configuration.
   //
   // Presets will be displayed in the "Presets" tab on the Connector
   // window
-  //
-  // Notice: You can use the same JSON value for `SHELLPORT_PRESETS` if you are
-  //         configuring your ShellPort through environment variables.
   //
   // Warning: Most Presets Data will be sent to user client WITHOUT any
   //          protection. DO NOT add secret information into Preset except for
@@ -300,9 +297,6 @@ as a starting point for your own configuration.
   // Allow the Preset Remotes only, and refuse to connect to any other remote
   // host
   //
-  // NOTICE: You can only configure OnlyAllowPresetRemotes through a config
-  //         file. This option is not supported when you are configuring with
-  //         environment variables
   "OnlyAllowPresetRemotes": false,
 }
 ```
@@ -324,10 +318,10 @@ rejected.
 When authentication is required, `PUT` uses the same time-windowed `X-Key`
 authentication format as `/shellport/socket/verify`. The UI supports preset
 create, edit, and delete when the active configuration is file-backed and
-`OnlyAllowPresetRemotes` is false. If `AdminKey` is configured, the UI prompts
+`OnlyAllowPresetRemotes` is false. If `AdminPassword` is configured, the UI prompts
 for it on the first protected write and caches it in browser memory until the
-page reloads. If `AdminKey` is blank, authenticated users are admin users for
-preset management. If both `SharedKey` and `AdminKey` are blank, anonymous
+page reloads. If `AdminPassword` is blank, authenticated users are admin users for
+preset management. If both `UserPassword` and `AdminPassword` are blank, anonymous
 visitors can manage presets.
 
 The preset editor never displays hidden saved passwords. It receives a boolean
@@ -335,19 +329,17 @@ that a saved password exists and can keep or clear that password on save.
 Fingerprint editing is intentionally not part of the preset editor; users can
 save fingerprints from the connection-time fingerprint prompt. Fingerprint saves
 require user access and are limited server-side to changing only the selected
-preset's `Fingerprint` metadata. When the active configuration was loaded from
-environment variables, writes are rejected because there is no JSON file to
-update.
+preset's `Fingerprint` metadata.
 
 Key behavior:
 
-- `SharedKey` and `AdminKey` both set: `SharedKey` is normal UI access,
-  `AdminKey` is admin access for protected preset create, edit, and delete.
-- `SharedKey` blank and `AdminKey` set: all visitors are users without
-  authentication; admin actions require `AdminKey`.
-- `SharedKey` set and `AdminKey` blank: anyone who authenticates with
-  `SharedKey` has admin access.
-- `SharedKey` and `AdminKey` both blank: all visitors have admin access without
+- `UserPassword` and `AdminPassword` both set: `UserPassword` is normal UI access,
+  `AdminPassword` is admin access for protected preset create, edit, and delete.
+- `UserPassword` blank and `AdminPassword` set: all visitors are users without
+  authentication; admin actions require `AdminPassword`.
+- `UserPassword` set and `AdminPassword` blank: anyone who authenticates with
+  `UserPassword` has admin access.
+- `UserPassword` and `AdminPassword` both blank: all visitors have admin access without
   authentication.
 
 ### ET Presets
@@ -366,48 +358,21 @@ ET v1 does not support password authentication or SOCKS5 proxying.
 
 ## Environment Variables
 
-Valid environment variables are:
+Environment-only application configuration is not supported. ShellPort requires
+a JSON config file.
+
+Supported runtime environment variables are:
 
 ```text
-SHELLPORT_HOSTNAME
-SHELLPORT_SHAREDKEY
-SHELLPORT_ADMIN_KEY
+TZ
+SHELLPORT_CONFIG
 SHELLPORT_DEBUG
-SHELLPORT_DIALTIMEOUT
-SHELLPORT_SOCKS5
-SHELLPORT_SOCKS5_USER
-SHELLPORT_SOCKS5_PASSWORD
-SHELLPORT_HOOK_BEFORE_CONNECTING
-SHELLPORT_HOOKTIMEOUT
-SHELLPORT_LISTENPORT
-SHELLPORT_INITIALTIMEOUT
-SHELLPORT_READTIMEOUT
-SHELLPORT_WRITETIMEOUT
-SHELLPORT_HEARTBEATTIMEOUT
-SHELLPORT_READDELAY
-SHELLPORT_WRITEDELAY
-SHELLPORT_LISTENINTERFACE
-SHELLPORT_TLSCERTIFICATEFILE
-SHELLPORT_TLSCERTIFICATEKEYFILE
-SHELLPORT_SERVERTITLE
-SHELLPORT_SERVERMESSAGE
-SHELLPORT_PRESETS
-SHELLPORT_ONLYALLOWPRESETREMOTES
 SHELLPORT_PRESET_SECRET_KEY
 ```
-
-These options correspond to their counterparts in the configuration file.
 
 `SHELLPORT_DEBUG` has no JSON counterpart. Set it to any non-empty value to
 enable debug-level logs, including sanitized outbound connection attempts,
 failures, and disconnect reasons. Docker images write these logs to stdout.
-
-`SHELLPORT_PRESETS` must contain valid JSON-encoded preset data. Its format is
-shown in [shellport.conf.example.json](shellport.conf.example.json) and can be loaded with:
-
-```sh
-SHELLPORT_PRESETS="$(cat shellport.conf.example.json)" ./shellport
-```
 
 `SHELLPORT_PRESET_SECRET_KEY` is optional. When unset, plaintext preset
 `Password` values continue to work as before. When set, it must be a
@@ -417,20 +382,6 @@ and decrypts encrypted preset passwords server-side for SSH/Mosh authentication.
 Encrypted preset passwords cannot be used without the same key. The key must be
 set through the environment and is rejected if placed in the JSON config file.
 
-When using environment variables, only one ShellPort HTTP server is allowed. Use
-the configuration file if you need to serve on multiple ports.
-
-Invalid values in these environment variables are silently reset to defaults
-during configuration parsing:
-
-```text
-SHELLPORT_DIALTIMEOUT
-SHELLPORT_INITIALTIMEOUT
-SHELLPORT_READTIMEOUT
-SHELLPORT_WRITETIMEOUT
-SHELLPORT_HEARTBEATTIMEOUT
-SHELLPORT_READDELAY
-SHELLPORT_WRITEDELAY
-```
-
-Verify these values before starting the instance.
+Preset metadata can still reference private keys through `environment://NAME`.
+Those referenced environment variables are resolved while loading the JSON
+config and are not treated as application configuration.

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Snuffy2/shellport/application/log"
 )
 
 func TestLoadFileRejectsPresetSecretKey(t *testing.T) {
@@ -81,5 +83,100 @@ func TestLoadFileReadsServerTitle(t *testing.T) {
 	}
 	if cfg.Servers[0].ServerMessage != "Pick a host" {
 		t.Fatalf("ServerMessage = %q, want Pick a host", cfg.Servers[0].ServerMessage)
+	}
+}
+
+func TestDefaultFileSearchListUsesConfigDirectoryOnly(t *testing.T) {
+	searchList := defaultFileSearchList()
+
+	expected := []string{filepath.Join("/", "config", "shellport.conf.json")}
+	if len(searchList) != len(expected) {
+		t.Fatalf("defaultFileSearchList() length = %d, want %d: %v", len(searchList), len(expected), searchList)
+	}
+	for i := range expected {
+		if searchList[i] != expected[i] {
+			t.Fatalf("defaultFileSearchList()[%d] = %q, want %q", i, searchList[i], expected[i])
+		}
+	}
+}
+
+func TestCreateDefaultConfigFileWritesLoadableConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config", "shellport.conf.json")
+
+	if err := createDefaultConfigFile(configPath); err != nil {
+		t.Fatalf("createDefaultConfigFile returned error: %v", err)
+	}
+
+	info, err := os.Stat(configPath)
+	if err != nil {
+		t.Fatalf("os.Stat returned error: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("created config mode = %v, want 0600", info.Mode().Perm())
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.SourceFile != configPath {
+		t.Fatalf("SourceFile = %q, want %q", cfg.SourceFile, configPath)
+	}
+	if cfg.UserPassword != "" {
+		t.Fatalf("UserPassword = %q, want empty", cfg.UserPassword)
+	}
+	if cfg.AdminPassword != "" {
+		t.Fatalf("AdminPassword = %q, want empty", cfg.AdminPassword)
+	}
+	if len(cfg.Servers) != 1 {
+		t.Fatalf("server count = %d, want 1", len(cfg.Servers))
+	}
+	if cfg.Servers[0].ListenInterface != "0.0.0.0" {
+		t.Fatalf("ListenInterface = %q, want 0.0.0.0", cfg.Servers[0].ListenInterface)
+	}
+	if cfg.Servers[0].ListenPort != 8182 {
+		t.Fatalf("ListenPort = %d, want 8182", cfg.Servers[0].ListenPort)
+	}
+	if len(cfg.Presets) != 0 {
+		t.Fatalf("preset count = %d, want 0", len(cfg.Presets))
+	}
+}
+
+func TestCreateDefaultConfigFileDoesNotOverwriteExistingConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	original := []byte(`{"Servers":[{"ListenInterface":"127.0.0.1","ListenPort":8182}]}`)
+	if err := os.WriteFile(configPath, original, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	if err := createDefaultConfigFile(configPath); err == nil {
+		t.Fatal("createDefaultConfigFile returned nil error, want existing file error")
+	}
+
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile returned error: %v", err)
+	}
+	if string(content) != string(original) {
+		t.Fatalf("config content = %q, want %q", content, original)
+	}
+}
+
+func TestAutoCreateDefaultFileLoadsExistingConfigAfterCreateRace(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	original := []byte(`{"Servers":[{"ListenInterface":"127.0.0.1","ListenPort":8182}]}`)
+	if err := os.WriteFile(configPath, original, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := AutoCreateDefaultFile(configPath)(log.NewDitch())
+	if err != nil {
+		t.Fatalf("AutoCreateDefaultFile returned error: %v", err)
+	}
+	if cfg.SourceFile != configPath {
+		t.Fatalf("SourceFile = %q, want %q", cfg.SourceFile, configPath)
+	}
+	if cfg.Servers[0].ListenInterface != "127.0.0.1" {
+		t.Fatalf("ListenInterface = %q, want 127.0.0.1", cfg.Servers[0].ListenInterface)
 	}
 }

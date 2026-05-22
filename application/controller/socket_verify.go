@@ -70,7 +70,7 @@ type socketAccessConfiguration struct {
 type presetManagementPolicy struct {
 	Writable                   bool `json:"writable"`
 	CanManage                  bool `json:"can_manage"`
-	RequiresAdminKey           bool `json:"requires_admin_key"`
+	RequiresAdminPassword      bool `json:"requires_admin_password"`
 	BlockedByPresetRestriction bool `json:"blocked_by_preset_restriction"`
 }
 
@@ -144,15 +144,15 @@ func newPresetManagementPolicy(
 ) presetManagementPolicy {
 	writable := role >= authRoleUser && commonCfg.PresetConfigWritable()
 	blockedByPresetRestriction := commonCfg.OnlyAllowPresetRemotes
-	requiresAdminKey := writable &&
+	requiresAdminPassword := writable &&
 		!blockedByPresetRestriction &&
-		commonCfg.AdminKey != "" &&
+		commonCfg.AdminPassword != "" &&
 		role < authRoleAdmin
 
 	return presetManagementPolicy{
 		Writable:                   writable,
 		CanManage:                  writable && !blockedByPresetRestriction,
-		RequiresAdminKey:           requiresAdminKey,
+		RequiresAdminPassword:      requiresAdminPassword,
 		BlockedByPresetRestriction: blockedByPresetRestriction,
 	}
 }
@@ -179,7 +179,7 @@ func presetHasSavedPrivateKey(preset configuration.Preset) bool {
 }
 
 func presetPrivateKeyFile(preset configuration.Preset, policy presetManagementPolicy) string {
-	if !policy.CanManage || policy.RequiresAdminKey {
+	if !policy.CanManage || policy.RequiresAdminPassword {
 		return ""
 	}
 	privateKey := preset.Meta[configuration.PresetMetaPrivateKey]
@@ -274,8 +274,8 @@ func (s socketVerification) anonymousAuthRole() authRole {
 }
 
 func anonymousAuthRole(commonCfg configuration.Common) authRole {
-	if commonCfg.SharedKey == "" {
-		if commonCfg.AdminKey == "" {
+	if commonCfg.UserPassword == "" {
+		if commonCfg.AdminPassword == "" {
 			return authRoleAdmin
 		}
 		return authRoleUser
@@ -286,7 +286,7 @@ func anonymousAuthRole(commonCfg configuration.Common) authRole {
 func requestAuthRoleForCommon(
 	commonCfg configuration.Common,
 	r *http.Request,
-	allowAdminKey bool,
+	allowAdminPassword bool,
 ) (authRole, error) {
 	key := r.Header.Get("X-Key")
 	if len(key) <= 0 {
@@ -300,14 +300,14 @@ func requestAuthRoleForCommon(
 	if decodedKeyErr != nil {
 		return authRoleNone, NewError(http.StatusBadRequest, decodedKeyErr.Error())
 	}
-	if allowAdminKey &&
-		commonCfg.AdminKey != "" &&
-		hmac.Equal(authKeyForSecret(commonCfg.AdminKey), decodedKey) {
+	if allowAdminPassword &&
+		commonCfg.AdminPassword != "" &&
+		hmac.Equal(authKeyForSecret(commonCfg.AdminPassword), decodedKey) {
 		return authRoleAdmin, nil
 	}
-	if commonCfg.SharedKey != "" &&
-		hmac.Equal(authKeyForSecret(commonCfg.SharedKey), decodedKey) {
-		if commonCfg.AdminKey == "" {
+	if commonCfg.UserPassword != "" &&
+		hmac.Equal(authKeyForSecret(commonCfg.UserPassword), decodedKey) {
+		if commonCfg.AdminPassword == "" {
 			return authRoleAdmin, nil
 		}
 		return authRoleUser, nil
@@ -349,7 +349,7 @@ func socketAccessConfigurationWithPrivateKeyFiles(
 	commonCfg configuration.Common,
 ) socketAccessConfiguration {
 	if !accessConfig.PresetManagement.CanManage ||
-		accessConfig.PresetManagement.RequiresAdminKey {
+		accessConfig.PresetManagement.RequiresAdminPassword {
 		accessConfig.PrivateKeyFiles = []string{}
 		return accessConfig
 	}
@@ -363,8 +363,8 @@ func socketAccessConfigurationWithPrivateKeyFiles(
 }
 
 // Get handles HTTP GET requests for the socket verification endpoint. When no
-// X-Key header is present and no shared key is configured, it returns the
-// server configuration immediately. When a shared key is configured and no
+// X-Key header is present and no user password is configured, it returns the
+// server configuration immediately. When a user password is configured and no
 // X-Key header is present, it returns ErrSocketInvalidAuthKey. When an X-Key
 // header is present, it base64-decodes the value, applies a 500ms delay to
 // slow brute-force attempts, and compares the decoded bytes against the

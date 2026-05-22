@@ -29,14 +29,14 @@ import (
 // message processing.
 var (
 	// ErrSocketInvalidAuthKey is returned when the client omits the X-Key
-	// header but a shared key is configured, indicating authentication is
+	// header but a user password is configured, indicating authentication is
 	// required.
 	ErrSocketInvalidAuthKey = NewError(
 		http.StatusForbidden,
 		"To use Websocket interface, a valid Auth Key must be provided")
 
 	// ErrSocketAuthFailed is returned when the X-Key value provided by the
-	// client does not match the time-windowed HMAC derived from the shared key.
+	// client does not match the time-windowed HMAC derived from the user password.
 	ErrSocketAuthFailed = NewError(
 		http.StatusForbidden,
 		"Authentication has failed with provided Auth Key")
@@ -247,12 +247,12 @@ func (s socket) createCipher(key []byte) (cipher.AEAD, cipher.AEAD, error) {
 }
 
 // mixerKey derives a per-request mixer value by hashing the client's
-// User-Agent against a combination of the shared key and configured hostname.
+// User-Agent against a combination of the user password and configured hostname.
 // The result is used as a component of the cipher key and as the "X-Key"
 // response value sent back to the client during socket verification.
 func (s socket) mixerKey(r *http.Request) []byte {
 	return hashCombineSocketKeys(
-		r.UserAgent(), s.commonCfg.SharedKey+"+"+s.commonCfg.HostName)
+		r.UserAgent(), s.commonCfg.UserPassword+"+"+s.commonCfg.HostName)
 }
 
 // keyTimeTruncater is the divisor applied to the Unix timestamp before it is
@@ -261,14 +261,14 @@ func (s socket) mixerKey(r *http.Request) []byte {
 const keyTimeTruncater = 100
 
 // buildCipherKey derives a 16-byte AES key for the current request by hashing
-// a truncated Unix timestamp against the mixer key and the shared key. The
+// a truncated Unix timestamp against the mixer key and the user password. The
 // time truncation means the key rotates every keyTimeTruncater seconds,
 // limiting the window in which a captured key remains useful.
 func (s socket) buildCipherKey(r *http.Request) [16]byte {
 	key := [16]byte{}
 	copy(key[:], hashCombineSocketKeys(
 		strconv.FormatInt(time.Now().Unix()/keyTimeTruncater, 10),
-		string(s.mixerKey(r))+"+"+s.commonCfg.SharedKey,
+		string(s.mixerKey(r))+"+"+s.commonCfg.UserPassword,
 	))
 	return key
 }

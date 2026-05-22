@@ -74,7 +74,7 @@ func newAuthenticatedTestPresetConfig(t *testing.T, configPath string) presetCon
 	t.Helper()
 
 	controller := newTestPresetConfig(t, configPath)
-	controller.commonCfg.SharedKey = "test-shared-key"
+	controller.commonCfg.UserPassword = "test-user-password"
 	return controller
 }
 
@@ -82,7 +82,7 @@ func newAdminTestPresetConfig(t *testing.T, configPath string) presetConfig {
 	t.Helper()
 
 	controller := newAuthenticatedTestPresetConfig(t, configPath)
-	controller.commonCfg.AdminKey = "test-admin-key"
+	controller.commonCfg.AdminPassword = "test-admin-password"
 	return controller
 }
 
@@ -90,7 +90,7 @@ func authorizePresetConfigRequest(controller presetConfig, request *http.Request
 	authorizePresetConfigRequestWithKey(
 		controller,
 		request,
-		controller.commonCfg.SharedKey,
+		controller.commonCfg.UserPassword,
 	)
 }
 
@@ -98,7 +98,7 @@ func authorizeAdminRequest(controller presetConfig, request *http.Request) {
 	authorizePresetConfigRequestWithKey(
 		controller,
 		request,
-		controller.commonCfg.AdminKey,
+		controller.commonCfg.AdminPassword,
 	)
 }
 
@@ -247,7 +247,7 @@ func TestPresetConfigGetDoesNotMigratePrivateKeysForUserRole(t *testing.T) {
 	}
 }
 
-func TestPresetConfigGetListsPrivateKeyFilesOnlyAfterAdminKey(t *testing.T) {
+func TestPresetConfigGetListsPrivateKeyFilesOnlyAfterAdminPassword(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, nil)
@@ -437,7 +437,7 @@ func TestPresetConfigPutAllowsAdminWhenBothKeysAreBlank(t *testing.T) {
 	}
 }
 
-func TestPresetConfigPutRequiresAdminKeyForFullReplacement(t *testing.T) {
+func TestPresetConfigPutRequiresAdminPasswordForFullReplacement(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
@@ -497,7 +497,7 @@ func TestPresetConfigPutRejectsFullReplacementWhenRestrictedToPresets(t *testing
 	}
 }
 
-func TestPresetConfigPutPreserveHeaderRequiresAdminKeyWithoutPresetID(t *testing.T) {
+func TestPresetConfigPutPreserveHeaderRequiresAdminPasswordWithoutPresetID(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
@@ -567,7 +567,7 @@ func TestPresetConfigPutRejectsClearHiddenPasswordIDsOnFingerprintSave(t *testin
 	}
 }
 
-func TestPresetConfigPutAllowsSharedKeyAdminWhenAdminKeyIsBlank(t *testing.T) {
+func TestPresetConfigPutAllowsUserPasswordAdminWhenAdminPasswordIsBlank(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newAuthenticatedTestPresetConfig(t, configPath)
@@ -582,11 +582,11 @@ func TestPresetConfigPutAllowsSharedKeyAdminWhenAdminKeyIsBlank(t *testing.T) {
 	}
 }
 
-func TestPresetConfigPutAllowsAnonymousUserButNotAdminWhenSharedKeyBlank(t *testing.T) {
+func TestPresetConfigPutAllowsAnonymousUserButNotAdminWhenUserPasswordBlank(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newTestPresetConfig(t, configPath)
-	controller.commonCfg.AdminKey = "test-admin-key"
+	controller.commonCfg.AdminPassword = "test-admin-password"
 	body := []byte(`{"presets":[{"id":"preset-columbia","title":"Columbia","type":"SSH","host":"columbia.home"}]}`)
 	request := httptest.NewRequest(http.MethodPut, "/shellport/config/presets", bytes.NewReader(body))
 	recorder := httptest.NewRecorder()
@@ -603,7 +603,7 @@ func TestPresetConfigPutAllowsAnonymousUserButNotAdminWhenSharedKeyBlank(t *test
 	writer = newResponseWriter(recorder)
 
 	if err := controller.Put(&writer, request, log.Ditch{}); err != nil {
-		t.Fatalf("Put with AdminKey returned error: %v", err)
+		t.Fatalf("Put with AdminPassword returned error: %v", err)
 	}
 }
 
@@ -1506,8 +1506,8 @@ func TestPresetConfigPutSerializesConcurrentFingerprintSaves(t *testing.T) {
 		},
 	})
 	controllers := newTestPresetConfigPair(t, configPath)
-	controllers[0].commonCfg.SharedKey = "test-shared-key"
-	controllers[1].commonCfg.SharedKey = "test-shared-key"
+	controllers[0].commonCfg.UserPassword = "test-user-password"
+	controllers[1].commonCfg.UserPassword = "test-user-password"
 	bodies := [][]byte{
 		[]byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home:22","meta":{"User":"pi","Fingerprint":"SHA256:atlantis"}},{"id":"preset-columbia","title":"Columbia","type":"SSH","host":"columbia.home:22","meta":{"User":"pi"}}]}`),
 		[]byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home:22","meta":{"User":"pi"}},{"id":"preset-columbia","title":"Columbia","type":"SSH","host":"columbia.home:22","meta":{"User":"pi","Fingerprint":"SHA256:columbia"}}]}`),
@@ -1819,18 +1819,18 @@ func TestSocketVerificationAdvertisesPresetConfigWritableWhenConfigIsWritable(t 
 	}
 }
 
-func TestSocketVerificationTreatsBlankSharedKeyAsAnonymousUser(t *testing.T) {
+func TestSocketVerificationTreatsBlankUserPasswordAsAnonymousUser(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetAPIConfig(t, configPath, nil)
 	verification := newSocketVerification(
 		socket{commonCfg: configuration.Common{
-			SourceFile: configPath,
-			AdminKey:   "test-admin-key",
+			SourceFile:    configPath,
+			AdminPassword: "test-admin-password",
 		}},
 		configuration.Server{},
 		configuration.Common{
-			SourceFile: configPath,
-			AdminKey:   "test-admin-key",
+			SourceFile:    configPath,
+			AdminPassword: "test-admin-password",
 		},
 	)
 	request := httptest.NewRequest(http.MethodGet, "/shellport/socket/verify", nil)
@@ -1850,10 +1850,10 @@ func TestSocketVerificationTreatsBlankSharedKeyAsAnonymousUser(t *testing.T) {
 	}
 }
 
-func TestSocketVerificationRejectsAdminKeyForSocketBootstrap(t *testing.T) {
+func TestSocketVerificationRejectsAdminPasswordForSocketBootstrap(t *testing.T) {
 	commonCfg := configuration.Common{
-		SharedKey: "test-shared-key",
-		AdminKey:  "test-admin-key",
+		UserPassword:  "test-user-password",
+		AdminPassword: "test-admin-password",
 	}
 	verification := newSocketVerification(
 		socket{commonCfg: commonCfg},
@@ -1864,14 +1864,14 @@ func TestSocketVerificationRejectsAdminKeyForSocketBootstrap(t *testing.T) {
 	request.Header.Set(
 		"X-Key",
 		base64.StdEncoding.EncodeToString(
-			verification.authKeyForSecret(request, commonCfg.AdminKey),
+			verification.authKeyForSecret(request, commonCfg.AdminPassword),
 		),
 	)
 	recorder := httptest.NewRecorder()
 	writer := newResponseWriter(recorder)
 
 	if err := verification.Get(&writer, request, log.Ditch{}); err == nil {
-		t.Fatal("Get returned nil error, want admin key rejection")
+		t.Fatal("Get returned nil error, want admin password rejection")
 	}
 }
 

@@ -129,10 +129,10 @@ func TestNormalizeStartupPresetsPersistsMetaCleanupAndDefaults(t *testing.T) {
 	}
 }
 
-func TestNormalizeStartupPresetsKeepsBlankAdminKeyWhenSharedKeyIsSet(t *testing.T) {
+func TestNormalizeStartupPresetsKeepsBlankAdminPasswordWhenUserPasswordIsSet(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	configData := map[string]any{
-		"SharedKey": "test-shared-key",
+		"UserPassword": "test-user-password",
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
 		},
@@ -156,24 +156,24 @@ func TestNormalizeStartupPresetsKeepsBlankAdminKeyWhenSharedKeyIsSet(t *testing.
 	if err != nil {
 		t.Fatalf("normalizeStartupPresets returned error: %v", err)
 	}
-	if normalized.AdminKey != "" {
-		t.Fatalf("normalized AdminKey = %q, want empty", normalized.AdminKey)
+	if normalized.AdminPassword != "" {
+		t.Fatalf("normalized AdminPassword = %q, want empty", normalized.AdminPassword)
 	}
 
 	_, reloaded, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
 		t.Fatalf("second CustomFile returned error: %v", err)
 	}
-	if reloaded.AdminKey != "" {
-		t.Fatalf("persisted AdminKey = %q, want empty", reloaded.AdminKey)
+	if reloaded.AdminPassword != "" {
+		t.Fatalf("persisted AdminPassword = %q, want empty", reloaded.AdminPassword)
 	}
 }
 
-func TestNormalizeStartupPresetsKeepsExplicitAdminKey(t *testing.T) {
+func TestNormalizeStartupPresetsKeepsExplicitAdminPassword(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	configData := map[string]any{
-		"SharedKey": "test-shared-key",
-		"AdminKey":  "existing-admin-key",
+		"UserPassword":  "test-user-password",
+		"AdminPassword": "existing-admin-password",
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
 		},
@@ -197,18 +197,18 @@ func TestNormalizeStartupPresetsKeepsExplicitAdminKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalizeStartupPresets returned error: %v", err)
 	}
-	if normalized.AdminKey != "existing-admin-key" {
+	if normalized.AdminPassword != "existing-admin-password" {
 		t.Fatalf(
-			"normalized AdminKey = %q, want existing-admin-key",
-			normalized.AdminKey,
+			"normalized AdminPassword = %q, want existing-admin-password",
+			normalized.AdminPassword,
 		)
 	}
 }
 
-func TestNormalizeStartupPresetsKeepsEnvAdminKeyOutOfFile(t *testing.T) {
+func TestNormalizeStartupPresetsKeepsEnvAdminPasswordOutOfFile(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	configData := map[string]any{
-		"SharedKey": "test-shared-key",
+		"UserPassword": "test-user-password",
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
 		},
@@ -228,15 +228,15 @@ func TestNormalizeStartupPresetsKeepsEnvAdminKeyOutOfFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CustomFile returned error: %v", err)
 	}
-	cfg.AdminKey = "env-admin-key"
+	cfg.AdminPassword = "env-admin-password"
 	normalized, err := normalizeStartupPresets(cfg, commands.New())
 	if err != nil {
 		t.Fatalf("normalizeStartupPresets returned error: %v", err)
 	}
-	if normalized.AdminKey != "env-admin-key" {
+	if normalized.AdminPassword != "env-admin-password" {
 		t.Fatalf(
-			"normalized AdminKey = %q, want env-admin-key",
-			normalized.AdminKey,
+			"normalized AdminPassword = %q, want env-admin-password",
+			normalized.AdminPassword,
 		)
 	}
 
@@ -244,8 +244,8 @@ func TestNormalizeStartupPresetsKeepsEnvAdminKeyOutOfFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second CustomFile returned error: %v", err)
 	}
-	if reloaded.AdminKey != "" {
-		t.Fatalf("persisted AdminKey = %q, want empty", reloaded.AdminKey)
+	if reloaded.AdminPassword != "" {
+		t.Fatalf("persisted AdminPassword = %q, want empty", reloaded.AdminPassword)
 	}
 }
 

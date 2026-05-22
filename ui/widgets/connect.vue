@@ -28,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
         :mode="presetEditor.mode"
         :state="presetEditor.state"
         :policy="presetManagementPolicy"
-        :admin-key-cached="adminKeyCached"
+        :admin-password-cached="adminPasswordCached"
         :private-key-files="privateKeyFiles"
         :save-preset="presetSaveHandler"
         :delete-preset="presetDeleteHandler"
@@ -149,7 +149,7 @@ export default {
       type: Function,
       required: true,
     },
-    adminKeyCached: {
+    adminPasswordCached: {
       type: Boolean,
       default: false,
     },
