@@ -512,7 +512,14 @@ class Wizard {
       },
       "@inband"(_rd) {},
       close() {},
-      "@completed"() {},
+      "@completed"() {
+        resolveTerminalStep(
+          self.stepErrorDone(
+            "Operation has failed",
+            "Connection has been cancelled",
+          ),
+        );
+      },
     });
   }
 

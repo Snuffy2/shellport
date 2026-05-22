@@ -52,16 +52,43 @@ describe("home socket status controller", () => {
   });
 
   it("resets per-session counters when reconnecting", () => {
-    const ctl = build(buildContext());
+    const ctx = buildContext();
+    const ctl = build(ctx);
 
     ctl.traffic(100, 50);
     ctl.echo(200);
     ctl.close(null);
     ctl.connected();
+
+    assert.strictEqual(ctl.status.inbound, 0);
+    assert.strictEqual(ctl.status.outbound, 0);
+    assert.strictEqual(ctl.status.delay, -1);
+    assert.strictEqual(ctx.resets, 1);
+
     ctl.update(new Date(Date.now() + 20000));
 
     assert.strictEqual(ctl.status.inbound, 0);
     assert.strictEqual(ctl.status.outbound, 0);
     assert.strictEqual(ctl.status.delayHistory[31].data, 0);
+  });
+
+  it("schedules reconnect and marks the UI when dialing fails", () => {
+    const ctx = buildContext();
+    const ctl = build(ctx);
+    const error = {
+      code: 1006,
+      toString() {
+        return "WebSocket Error";
+      },
+    };
+
+    ctl.failed(error);
+
+    assert.strictEqual(ctx.connector.inputting, false);
+    assert.strictEqual(ctx.reconnects, 1);
+    assert.strictEqual(ctl.message, "E1006");
+    assert.strictEqual(ctl.classStyle, "red flash");
+    assert.strictEqual(ctl.windowClass, "red");
+    assert.match(ctl.status.description, /Error: WebSocket Error/);
   });
 });

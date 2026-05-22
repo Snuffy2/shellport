@@ -143,6 +143,41 @@ describe("ConnectionRequestLifecycle", () => {
     assert.deepStrictEqual(resolved, [{ title: "connected" }]);
   });
 
+  it("ignores late request send rejections after completion", async () => {
+    const resolved = [];
+    let closed = 0;
+    let rejectResult = null;
+    const result = new Promise((_, reject) => {
+      rejectResult = reject;
+    });
+    const lifecycle = new ConnectionRequestLifecycle(
+      {
+        resolve(step) {
+          resolved.push(step);
+        },
+      },
+      (title, message) => ({ title, message }),
+    );
+
+    lifecycle.start(() => ({
+      result,
+      stream: {
+        close() {
+          closed++;
+        },
+      },
+    }));
+
+    assert.strictEqual(lifecycle.resolve({ title: "connected" }), true);
+    assert.strictEqual(lifecycle.complete(), true);
+    rejectResult(new Error("late send failed"));
+    await Promise.resolve();
+
+    assert.strictEqual(closed, 0);
+    assert.strictEqual(lifecycle.request, null);
+    assert.deepStrictEqual(resolved, [{ title: "connected" }]);
+  });
+
   it("cancels the active request stream", () => {
     const resolved = [];
     let closed = 0;

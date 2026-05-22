@@ -96,6 +96,8 @@ describe("Streams", () => {
 
   it("does not complete streams whose command close fails during clear", async () => {
     const events = [];
+    const expectedError = new Error("close failed");
+    let clearedError = null;
     const st = new streams.Streams(
       {
         close() {},
@@ -111,7 +113,9 @@ describe("Streams", () => {
       {
         echoInterval: 1000,
         echoUpdater() {},
-        cleared() {},
+        cleared(e) {
+          clearedError = e;
+        },
       },
     );
     const streamID = 7;
@@ -125,7 +129,7 @@ describe("Streams", () => {
         initialize() {},
         close() {
           events.push("close");
-          return Promise.reject(new Error("close failed"));
+          return Promise.reject(expectedError);
         },
         completed() {
           events.push("completed");
@@ -137,6 +141,67 @@ describe("Streams", () => {
     await st.clear(null);
 
     assert.deepStrictEqual(events, ["close"]);
+    assert.strictEqual(clearedError, expectedError);
+  });
+
+  it("reports sender close failures during clean clear", async () => {
+    const expectedError = new Error("sender close failed");
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.reject(expectedError);
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+
+    await st.clear(null);
+
+    assert.strictEqual(clearedError, expectedError);
+  });
+
+  it("reports reader close failures during clean clear", async () => {
+    const expectedError = new Error("reader close failed");
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {
+          throw expectedError;
+        },
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+
+    await st.clear(null);
+
+    assert.strictEqual(clearedError, expectedError);
   });
 
   it("acknowledges a late remote close after local close starts", async () => {
@@ -388,6 +453,7 @@ describe("Streams", () => {
 
   it("clears the stream after repeated missed heartbeats", async () => {
     let clearedError = null;
+    const echoUpdates = [];
     const st = new streams.Streams(
       {
         close() {},
@@ -402,7 +468,9 @@ describe("Streams", () => {
       },
       {
         echoInterval: 1000,
-        echoUpdater() {},
+        echoUpdater(delay) {
+          echoUpdates.push(delay);
+        },
         cleared(e) {
           clearedError = e;
         },
@@ -413,6 +481,7 @@ describe("Streams", () => {
     await new Promise((resolve) => {
       setTimeout(resolve, 0);
     });
+    assert.deepStrictEqual(echoUpdates, []);
     st.sendEcho();
     await new Promise((resolve) => {
       setTimeout(resolve, 0);
@@ -423,6 +492,7 @@ describe("Streams", () => {
     });
 
     assert.match(clearedError.message, /missed heartbeat responses/);
+    assert.deepStrictEqual(echoUpdates, [streams.ECHO_FAILED]);
   });
 
   it("handles clear callback failures after missed heartbeats", async () => {

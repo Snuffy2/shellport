@@ -129,7 +129,8 @@ export class Streams {
    *
    * Running streams are closed, the sender is awaited so buffered outbound data
    * can flush, the reader is closed, and the configured clear callback is
-   * invoked with the original error when one triggered shutdown.
+   * invoked with the original error when one triggered shutdown, or the first
+   * cleanup error when shutdown started cleanly.
    *
    * @param {?Exception} e Error that caused the clear, or null for normal
    *   shutdown.
@@ -139,6 +140,8 @@ export class Streams {
     if (this.stop) {
       return;
     }
+
+    let clearErr = e;
 
     this.stop = true;
 
@@ -155,8 +158,11 @@ export class Streams {
       let closeErr = null;
       try {
         await this.streams[i].close();
-      } catch (e) {
-        closeErr = e;
+      } catch (streamCloseErr) {
+        closeErr = streamCloseErr;
+        if (clearErr === null) {
+          clearErr = streamCloseErr;
+        }
       }
 
       if (closeErr === null) {
@@ -170,17 +176,23 @@ export class Streams {
 
     try {
       await this.sender.close();
-    } catch (e) {
-      process.env.NODE_ENV === "development" && console.trace(e);
+    } catch (senderCloseErr) {
+      if (clearErr === null) {
+        clearErr = senderCloseErr;
+      }
+      process.env.NODE_ENV === "development" && console.trace(senderCloseErr);
     }
 
     try {
       this.reader.close();
-    } catch (e) {
-      process.env.NODE_ENV === "development" && console.trace(e);
+    } catch (readerCloseErr) {
+      if (clearErr === null) {
+        clearErr = readerCloseErr;
+      }
+      process.env.NODE_ENV === "development" && console.trace(readerCloseErr);
     }
 
-    this.config.cleared(e);
+    this.config.cleared(clearErr);
   }
 
   /**
@@ -263,10 +275,10 @@ export class Streams {
           this.lastEchoTime = null;
           this.lastEchoData = null;
 
-          this.config.echoUpdater(ECHO_FAILED);
           this.missedEchoResponses++;
 
           if (this.missedEchoResponses >= this.maxMissedEchoResponses) {
+            this.config.echoUpdater(ECHO_FAILED);
             this.clear(
               new Exception("Streams missed heartbeat responses", false),
             ).catch(traceUnhandledClearError);

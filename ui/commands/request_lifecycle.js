@@ -131,7 +131,7 @@ export class ConnectionRequestLifecycle {
    * @returns {void}
    */
   fail(title, message) {
-    if (this.failed) {
+    if (!this.active()) {
       return;
     }
 
