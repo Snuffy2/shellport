@@ -5,8 +5,11 @@
 package commands
 
 import (
+	"context"
+	"net"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/Snuffy2/shellport/application/command"
 	"github.com/Snuffy2/shellport/application/configuration"
@@ -38,5 +41,41 @@ func TestTelnetCommandKeepsBufferPoolScopedToSession(t *testing.T) {
 			poolPtr,
 			client.bufferPool,
 		)
+	}
+}
+
+// TestTelnetCloseCancelsBeforeWaitingForRemote verifies Close can unblock
+// remote startup paths that only exit after the base context is cancelled.
+func TestTelnetCloseCancelsBeforeWaitingForRemote(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &telnetClient{
+		baseCtx:       ctx,
+		baseCtxCancel: cancel,
+		remoteChan:    make(chan net.Conn),
+	}
+	client.closeWait.Add(1)
+
+	go func() {
+		<-ctx.Done()
+		close(client.remoteChan)
+		client.closeWait.Done()
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		_ = client.Close()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Close did not cancel base context before waiting for remote")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Close did not return after remote shutdown")
 	}
 }

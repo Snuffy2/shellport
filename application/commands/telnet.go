@@ -274,12 +274,13 @@ func (d *telnetClient) client(
 }
 
 func (d *telnetClient) Close() error {
+	d.baseCtxCancel()
+
 	remoteConn, remoteConnErr := d.getRemote()
 	if remoteConnErr == nil {
 		remoteConn.Close()
 	}
 
-	d.baseCtxCancel()
 	d.closeWait.Wait()
 	return nil
 }

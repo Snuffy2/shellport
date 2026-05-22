@@ -64,10 +64,39 @@ export class ConnectionRequestLifecycle {
   /**
    * Marks the backend request as accepted.
    *
-   * @returns {void}
+   * @returns {boolean} True when the request is still active.
    */
   accepted() {
+    if (!this.active()) {
+      return false;
+    }
+
     this.clearTimeout();
+    return true;
+  }
+
+  /**
+   * Returns whether backend startup callbacks may still update the UI.
+   *
+   * @returns {boolean} True while the request has not failed or been cancelled.
+   */
+  active() {
+    return !this.failed && this.request !== null;
+  }
+
+  /**
+   * Resolves a UI step only while the startup request is still active.
+   *
+   * @param {object} step Step to publish.
+   * @returns {boolean} True when the step was published.
+   */
+  resolve(step) {
+    if (!this.active()) {
+      return false;
+    }
+
+    this.step.resolve(step);
+    return true;
   }
 
   /**

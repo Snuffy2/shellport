@@ -910,12 +910,13 @@ func (d *sshClient) Close() error {
 		d.fingerprintVerifyResultReceiveClosed = true
 	}
 
+	d.baseCtxCancel()
+
 	remote, remoteErr := d.getRemote()
 	if remoteErr == nil {
 		remote.closer()
 	}
 
-	d.baseCtxCancel()
 	d.remoteCloseWait.Wait()
 
 	return nil

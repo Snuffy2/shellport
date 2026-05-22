@@ -66,11 +66,58 @@ describe("ConnectionRequestLifecycle", () => {
         },
       },
     }));
-    lifecycle.accepted();
+    assert.strictEqual(lifecycle.accepted(), true);
     vi.advanceTimersByTime(CONNECTION_REQUEST_TIMEOUT_MS);
 
     assert.strictEqual(closed, 0);
     assert.deepStrictEqual(resolved, []);
+  });
+
+  it("rejects late backend acceptance after timeout", () => {
+    vi.useFakeTimers();
+    const lifecycle = new ConnectionRequestLifecycle(
+      {
+        resolve() {},
+      },
+      (title, message) => ({ title, message }),
+    );
+
+    lifecycle.start(() => ({
+      stream: {
+        close() {},
+      },
+    }));
+    vi.advanceTimersByTime(CONNECTION_REQUEST_TIMEOUT_MS);
+
+    assert.strictEqual(lifecycle.accepted(), false);
+    assert.strictEqual(lifecycle.active(), false);
+  });
+
+  it("does not publish late steps after cancellation", () => {
+    const resolved = [];
+    const lifecycle = new ConnectionRequestLifecycle(
+      {
+        resolve(step) {
+          resolved.push(step);
+        },
+      },
+      (title, message) => ({ title, message }),
+    );
+
+    lifecycle.start(() => ({
+      stream: {
+        close() {},
+      },
+    }));
+    lifecycle.cancel();
+
+    assert.strictEqual(lifecycle.resolve({ title: "late" }), false);
+    assert.deepStrictEqual(resolved, [
+      {
+        title: "Action cancelled",
+        message: "Action has been cancelled without success",
+      },
+    ]);
   });
 
   it("cancels the active request stream", () => {

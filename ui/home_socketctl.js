@@ -278,6 +278,8 @@ export function build(ctx) {
       if (e === null) {
         this.message = "";
         this.classStyle = "";
+        this.windowClass = "";
+        this.status.delay = -1;
         this.status.description = connectionStatusDisconnected;
 
         return;

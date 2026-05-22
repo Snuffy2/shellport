@@ -53,6 +53,13 @@ describe("home socket monitoring", () => {
     );
   });
 
+  test("home closes the active backend socket on unmount", () => {
+    const source = readProjectFile("ui/home.vue");
+
+    expect(source).toContain("if (this.connection === null) {");
+    expect(source).toContain("this.connection.close().catch");
+  });
+
   test("socket reuses a pending backend stream dial", () => {
     const source = readProjectFile("ui/socket.js");
 
@@ -75,5 +82,25 @@ describe("home socket monitoring", () => {
 
     expect(source).toContain("sendFlowControl");
     expect(source).toContain("self.streamHandler.clear(e);");
+  });
+
+  test("socket waits for the initial nonce send during dialing", () => {
+    const source = readProjectFile("ui/socket.js");
+
+    expect(source).toContain("await sd.send(senderNonce);");
+  });
+
+  test("socket exposes a close method for active stream teardown", () => {
+    const source = readProjectFile("ui/socket.js");
+
+    expect(source).toContain("close()");
+    expect(source).toContain("return this.streamHandler.clear(null);");
+  });
+
+  test("clean socket close resets stale status metrics and styling", () => {
+    const source = readProjectFile("ui/home_socketctl.js");
+
+    expect(source).toContain("this.status.delay = -1;");
+    expect(source).toContain('this.windowClass = "";');
   });
 });

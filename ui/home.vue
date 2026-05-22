@@ -434,6 +434,14 @@ export default {
       clearInterval(this.ticker);
       this.ticker = null;
     }
+
+    if (this.connection === null) {
+      return;
+    }
+
+    this.connection.close().catch((e) => {
+      process.env.NODE_ENV === "development" && console.trace(e);
+    });
   },
   methods: {
     /**

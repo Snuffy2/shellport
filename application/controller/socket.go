@@ -187,7 +187,7 @@ func (s socket) buildWSFetcher(c *websocket.Conn) rw.FetchReaderFetcher {
 			if mt != websocket.BinaryMessage {
 				return nil, NewError(
 					http.StatusBadRequest,
-					fmt.Sprintf("Received unknown type of data: %d", message))
+					fmt.Sprintf("Received unknown type of data: %d", mt))
 			}
 			return message, nil
 		}

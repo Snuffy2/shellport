@@ -5,7 +5,9 @@
 package commands
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/Snuffy2/shellport/application/command"
 	"github.com/Snuffy2/shellport/application/configuration"
@@ -36,5 +38,45 @@ func TestSSHCommandKeepsBufferPoolScopedToSession(t *testing.T) {
 			poolPtr,
 			client.bufferPool,
 		)
+	}
+}
+
+// TestSSHCloseCancelsBeforeWaitingForRemote verifies Close can unblock remote
+// startup paths that only exit after the base context is cancelled.
+func TestSSHCloseCancelsBeforeWaitingForRemote(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &sshClient{
+		baseCtx:                              ctx,
+		baseCtxCancel:                        cancel,
+		credentialReceive:                    make(chan []byte),
+		fingerprintVerifyResultReceive:       make(chan bool),
+		remoteConnReceive:                    make(chan sshRemoteConn),
+		credentialReceiveClosed:              false,
+		fingerprintVerifyResultReceiveClosed: false,
+	}
+	client.remoteCloseWait.Add(1)
+
+	go func() {
+		<-ctx.Done()
+		close(client.remoteConnReceive)
+		client.remoteCloseWait.Done()
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		_ = client.Close()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Close did not cancel base context before waiting for remote")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Close did not return after remote shutdown")
 	}
 }

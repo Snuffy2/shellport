@@ -425,20 +425,24 @@ class Wizard {
 
     // Copy the keptSessions from the record so it will not be overwritten here
     let keptSessions = self.keptSessions ? [].concat(...self.keptSessions) : [];
+    const resolveStep = (step) => self.requestLifecycle.resolve(step);
 
     return new Telnet(sender, parsedConfig, {
       "initialization.failed"(streamInitialHeader) {
-        self.requestLifecycle.accepted();
+        if (!self.requestLifecycle.accepted()) {
+          return;
+        }
+
         switch (streamInitialHeader.data()) {
           case SERVER_INITIAL_ERROR_BAD_ADDRESS:
-            self.step.resolve(
+            resolveStep(
               self.stepErrorDone("Request rejected", "Invalid address"),
             );
 
             return;
         }
 
-        self.step.resolve(
+        resolveStep(
           self.stepErrorDone(
             "Request rejected",
             "Unknown error code: " + streamInitialHeader.data(),
@@ -446,19 +450,28 @@ class Wizard {
         );
       },
       initialized(_streamInitialHeader) {
-        self.requestLifecycle.accepted();
-        self.step.resolve(self.stepWaitForEstablishWait(configInput.host));
+        if (!self.requestLifecycle.accepted()) {
+          return;
+        }
+
+        resolveStep(self.stepWaitForEstablishWait(configInput.host));
       },
       async "hook.before_connected"(rd) {
+        if (!self.requestLifecycle.active()) {
+          return;
+        }
+
         const d = new TextDecoder("utf-8").decode(
           await reader.readCompletely(rd),
         );
-        self.step.resolve(
-          self.stepHookOutputPrompt("Waiting for server hook", d),
-        );
+        resolveStep(self.stepHookOutputPrompt("Waiting for server hook", d));
       },
       "connect.succeed"(rd, commandHandler) {
-        self.step.resolve(
+        if (!self.requestLifecycle.active()) {
+          return;
+        }
+
+        resolveStep(
           self.stepSuccessfulDone(
             new command.Result(
               configInput.host,
@@ -483,10 +496,14 @@ class Wizard {
         void keptSessions;
       },
       async "connect.failed"(rd) {
+        if (!self.requestLifecycle.active()) {
+          return;
+        }
+
         let readed = await reader.readCompletely(rd),
           message = new TextDecoder("utf-8").decode(readed.buffer);
 
-        self.step.resolve(self.stepErrorDone("Connection failed", message));
+        resolveStep(self.stepErrorDone("Connection failed", message));
       },
       "@inband"(_rd) {},
       close() {},

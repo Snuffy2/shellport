@@ -228,7 +228,7 @@ class Dial {
         );
 
       let senderNonce = crypt.generateNonce();
-      sd.send(senderNonce);
+      await sd.send(senderNonce);
 
       let receiverNonce = await reader.readN(rd, crypt.GCMNonceSize);
 
@@ -340,6 +340,19 @@ export class Socket {
     } finally {
       this.streamHandlerPromise = null;
     }
+  }
+
+  /**
+   * Closes the active stream handler, if one is connected.
+   *
+   * @returns {Promise<void>} Resolves once the active stream clear completes.
+   */
+  close() {
+    if (this.streamHandler === null) {
+      return Promise.resolve();
+    }
+
+    return this.streamHandler.clear(null);
   }
 
   /**

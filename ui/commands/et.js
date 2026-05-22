@@ -686,25 +686,29 @@ class Wizard {
     };
 
     let keptSessions = self.keptSessions ? [].concat(...self.keptSessions) : [];
+    const resolveStep = (step) => self.requestLifecycle.resolve(step);
 
     return new ET(sender, config, {
       "initialization.failed"(hd) {
-        self.requestLifecycle.accepted();
+        if (!self.requestLifecycle.accepted()) {
+          return;
+        }
+
         switch (hd.data()) {
           case SERVER_REQUEST_ERROR_BAD_USERNAME:
-            self.step.resolve(
+            resolveStep(
               self.stepErrorDone("Request failed", "Invalid username"),
             );
             return;
 
           case SERVER_REQUEST_ERROR_BAD_ADDRESS:
-            self.step.resolve(
+            resolveStep(
               self.stepErrorDone("Request failed", "Invalid address"),
             );
             return;
 
           case SERVER_REQUEST_ERROR_BAD_AUTHMETHOD:
-            self.step.resolve(
+            resolveStep(
               self.stepErrorDone(
                 "Request failed",
                 "ET v1 supports Private Key authentication only",
@@ -713,7 +717,7 @@ class Wizard {
             return;
 
           case SERVER_REQUEST_ERROR_UNSUPPORTED_PROXY:
-            self.step.resolve(
+            resolveStep(
               self.stepErrorDone(
                 "Request failed",
                 "ET does not support SOCKS5 proxying in this version",
@@ -722,40 +726,53 @@ class Wizard {
             return;
 
           case SERVER_REQUEST_ERROR_BAD_METADATA:
-            self.step.resolve(
+            resolveStep(
               self.stepErrorDone("Request failed", "Invalid ET metadata"),
             );
             return;
         }
 
-        self.step.resolve(
+        resolveStep(
           self.stepErrorDone("Request failed", "Unknown error: " + hd.data()),
         );
       },
       initialized() {
-        self.requestLifecycle.accepted();
-        self.step.resolve(self.stepWaitForEstablishWait(configInput.host));
+        if (!self.requestLifecycle.accepted()) {
+          return;
+        }
+
+        resolveStep(self.stepWaitForEstablishWait(configInput.host));
       },
       async "connect.failed"(rd) {
+        if (!self.requestLifecycle.active()) {
+          return;
+        }
+
         let d = new TextDecoder("utf-8").decode(
           await reader.readCompletely(rd),
         );
-        self.step.resolve(self.stepErrorDone("Connection failed", d));
+        resolveStep(self.stepErrorDone("Connection failed", d));
       },
       async "hook.before_connected"(rd) {
+        if (!self.requestLifecycle.active()) {
+          return;
+        }
+
         const d = new TextDecoder("utf-8").decode(
           await reader.readCompletely(rd),
         );
-        self.step.resolve(
-          self.stepHookOutputPrompt("Waiting for server hook", d),
-        );
+        resolveStep(self.stepHookOutputPrompt("Waiting for server hook", d));
       },
       "connect.succeed"(rd, commandHandler) {
         void rd;
 
+        if (!self.requestLifecycle.active()) {
+          return;
+        }
+
         self.connectionSucceed = true;
 
-        self.step.resolve(
+        resolveStep(
           self.stepSuccessfulDone(
             new command.Result(
               configInput.user + "@" + configInput.host,
@@ -783,7 +800,11 @@ class Wizard {
         void keptSessions;
       },
       async "connect.fingerprint"(rd, sd) {
-        self.step.resolve(
+        if (!self.requestLifecycle.active()) {
+          return;
+        }
+
+        resolveStep(
           await self.stepFingerprintPrompt(
             rd,
             sd,
@@ -806,7 +827,11 @@ class Wizard {
         );
       },
       async "connect.credential"(rd, sd) {
-        self.step.resolve(
+        if (!self.requestLifecycle.active()) {
+          return;
+        }
+
+        resolveStep(
           self.stepCredentialPrompt(rd, sd, config, (newCred, fromPreset) => {
             sessionData.credential = newCred;
 
@@ -819,7 +844,7 @@ class Wizard {
       "@stdout"(_rd) {},
       close() {},
       "@completed"() {
-        self.step.resolve(
+        resolveStep(
           self.stepErrorDone(
             "Operation has failed",
             "Connection has been cancelled",
