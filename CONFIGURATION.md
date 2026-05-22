@@ -16,6 +16,12 @@ presets so operators can add presets from the UI immediately. `SharedKey` and
 `AdminKey` are left empty in the generated file; edit the config file later to
 add authentication, admin protection, or other advanced settings.
 
+Explicit environment-variable configuration still takes precedence over
+auto-creation when no default file exists. If the legacy
+`/etc/shellport.conf.json` path exists, ShellPort does not load it as a default
+fallback and does not create a blank replacement; move the file to
+`/etc/shellport/shellport.conf.json` or set `SHELLPORT_CONFIG`.
+
 Use `SHELLPORT_CONFIG` to override the configuration file path:
 
 ```sh

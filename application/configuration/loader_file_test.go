@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Snuffy2/shellport/application/log"
 )
 
 func TestLoadFileRejectsPresetSecretKey(t *testing.T) {
@@ -102,6 +104,55 @@ func TestDefaultFileSearchListPrefersEtcShellportDirectory(t *testing.T) {
 	}
 }
 
+func TestExplicitEnvironmentConfigurationWinsBeforeAutoCreate(t *testing.T) {
+	t.Setenv("SHELLPORT_SHAREDKEY", "env-shared-key")
+	defaultPath := filepath.Join(t.TempDir(), "etc", "shellport", "shellport.conf.json")
+	legacyPath := filepath.Join(t.TempDir(), "etc", "shellport.conf.json")
+	loader := Redundant(
+		defaultFileFromSearchList([]string{defaultPath}),
+		EnvironIfConfigured(),
+		AutoCreateDefaultFile(defaultPath, legacyPath),
+	)
+
+	name, cfg, err := loader(log.NewDitch())
+	if err != nil {
+		t.Fatalf("loader returned error: %v", err)
+	}
+	if name != environTypeName {
+		t.Fatalf("loader name = %q, want %q", name, environTypeName)
+	}
+	if cfg.SharedKey != "env-shared-key" {
+		t.Fatalf("SharedKey = %q, want env-shared-key", cfg.SharedKey)
+	}
+	if _, err := os.Stat(defaultPath); !os.IsNotExist(err) {
+		t.Fatalf("default config stat error = %v, want not exist", err)
+	}
+}
+
+func TestAutoCreateDefaultFileCreatesConfigWhenNoFileOrEnvironmentExists(t *testing.T) {
+	defaultPath := filepath.Join(t.TempDir(), "etc", "shellport", "shellport.conf.json")
+	legacyPath := filepath.Join(t.TempDir(), "etc", "shellport.conf.json")
+	loader := Redundant(
+		defaultFileFromSearchList([]string{defaultPath}),
+		EnvironIfConfigured(),
+		AutoCreateDefaultFile(defaultPath, legacyPath),
+	)
+
+	name, cfg, err := loader(log.NewDitch())
+	if err != nil {
+		t.Fatalf("loader returned error: %v", err)
+	}
+	if name != fileTypeName {
+		t.Fatalf("loader name = %q, want %q", name, fileTypeName)
+	}
+	if cfg.SourceFile != defaultPath {
+		t.Fatalf("SourceFile = %q, want %q", cfg.SourceFile, defaultPath)
+	}
+	if _, err := os.Stat(defaultPath); err != nil {
+		t.Fatalf("os.Stat returned error: %v", err)
+	}
+}
+
 func TestCreateDefaultConfigFileWritesLoadableConfig(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "etc", "shellport", "shellport.conf.json")
 
@@ -161,5 +212,28 @@ func TestCreateDefaultConfigFileDoesNotOverwriteExistingConfig(t *testing.T) {
 	}
 	if string(content) != string(original) {
 		t.Fatalf("config content = %q, want %q", content, original)
+	}
+}
+
+func TestAutoCreateDefaultFileRejectsLegacyConfigPath(t *testing.T) {
+	dir := t.TempDir()
+	defaultPath := filepath.Join(dir, "etc", "shellport", "shellport.conf.json")
+	legacyPath := filepath.Join(dir, "etc", "shellport.conf.json")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatalf("os.MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, []byte(`{"Servers":[]}`), 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, _, err := AutoCreateDefaultFile(defaultPath, legacyPath)(log.NewDitch())
+	if err == nil {
+		t.Fatal("AutoCreateDefaultFile returned nil error, want legacy path error")
+	}
+	if !strings.Contains(err.Error(), legacyPath) {
+		t.Fatalf("error = %q, want legacy path %q", err, legacyPath)
+	}
+	if _, err := os.Stat(defaultPath); !os.IsNotExist(err) {
+		t.Fatalf("default config stat error = %v, want not exist", err)
 	}
 }

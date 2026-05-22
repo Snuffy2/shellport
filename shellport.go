@@ -35,7 +35,11 @@ func main() {
 		configLoaders = append(configLoaders, configuration.CustomFile(cfgFile))
 	} else {
 		configLoaders = append(configLoaders, configuration.DefaultFile())
-		configLoaders = append(configLoaders, configuration.Environ())
+		configLoaders = append(configLoaders, configuration.EnvironIfConfigured())
+		configLoaders = append(configLoaders, configuration.AutoCreateDefaultFile(
+			"/etc/shellport/shellport.conf.json",
+			"/etc/shellport.conf.json",
+		))
 	}
 	e := application.
 		New(os.Stdout, log.NewDebugOrNonDebugWriter(

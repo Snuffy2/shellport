@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/Snuffy2/shellport/application/log"
 )
@@ -18,6 +19,7 @@ import (
 // JSON file.
 const (
 	defaultConfigFilePath = "/etc/shellport/shellport.conf.json"
+	legacyConfigFilePath  = "/etc/shellport.conf.json"
 	fileTypeName          = "File"
 	defaultConfigContent  = `{
   "HostName": "",
@@ -52,6 +54,31 @@ const (
 }
 `
 )
+
+var environmentConfigNames = []string{
+	"SHELLPORT_HOSTNAME",
+	"SHELLPORT_SHAREDKEY",
+	"SHELLPORT_DIALTIMEOUT",
+	"SHELLPORT_SOCKS5",
+	"SHELLPORT_SOCKS5_USER",
+	"SHELLPORT_SOCKS5_PASSWORD",
+	"SHELLPORT_HOOK_BEFORE_CONNECTING",
+	"SHELLPORT_HOOKTIMEOUT",
+	"SHELLPORT_LISTENINTERFACE",
+	"SHELLPORT_LISTENPORT",
+	"SHELLPORT_INITIALTIMEOUT",
+	"SHELLPORT_READTIMEOUT",
+	"SHELLPORT_WRITETIMEOUT",
+	"SHELLPORT_HEARTBEATTIMEOUT",
+	"SHELLPORT_READDELAY",
+	"SHELLPORT_WRITEDELAY",
+	"SHELLPORT_TLSCERTIFICATEFILE",
+	"SHELLPORT_TLSCERTIFICATEKEYFILE",
+	"SHELLPORT_SERVERTITLE",
+	"SHELLPORT_SERVERMESSAGE",
+	"SHELLPORT_PRESETS",
+	"SHELLPORT_ONLYALLOWPRESETREMOTES",
+}
 
 // loadFile opens filePath, JSON-decodes it into a commonInput, and returns the
 // resulting Configuration. It returns the fileTypeName string along with the
@@ -105,6 +132,30 @@ func CustomFile(customPath string) Loader {
 	}
 }
 
+func environmentConfigurationPresent() bool {
+	for _, name := range environmentConfigNames {
+		if strings.TrimSpace(GetEnv(name)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// EnvironIfConfigured loads environment configuration only when a user supplied
+// at least one environment-backed setting. Environment-only deployments should
+// still win over auto-created file config, while empty environments should fall
+// through to first-run file creation.
+func EnvironIfConfigured() Loader {
+	return func(log log.Logger) (string, Configuration, error) {
+		if !environmentConfigurationPresent() {
+			return environTypeName, Configuration{}, fmt.Errorf(
+				"no ShellPort environment configuration was specified",
+			)
+		}
+		return Environ()(log)
+	}
+}
+
 func createDefaultConfigFile(filePath string) error {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		return err
@@ -118,6 +169,33 @@ func createDefaultConfigFile(filePath string) error {
 		return err
 	}
 	return nil
+}
+
+// AutoCreateDefaultFile creates and loads the default file-backed
+// configuration when no configured default file or explicit environment config
+// exists. A legacy default path blocks creation so an upgrade cannot silently
+// replace a previously secured file-backed deployment with a blank generated
+// config.
+func AutoCreateDefaultFile(filePath string, legacyPath string) Loader {
+	return func(log log.Logger) (string, Configuration, error) {
+		if fileInfo, err := os.Stat(legacyPath); err == nil && !fileInfo.IsDir() {
+			return fileTypeName, Configuration{}, fmt.Errorf(
+				"legacy configuration file %q exists; move it to %q or set SHELLPORT_CONFIG",
+				legacyPath,
+				filePath,
+			)
+		}
+		log.Info("No default configuration file was found; creating %s", filePath)
+		if err := createDefaultConfigFile(filePath); err != nil {
+			return fileTypeName, Configuration{}, fmt.Errorf(
+				"configuration file was not specified and no fallback files "+
+					"were available; also failed to create %q: %w",
+				filePath,
+				err,
+			)
+		}
+		return loadFile(filePath)
+	}
 }
 
 func defaultFileSearchList(homeDir string, executablePath string) []string {
@@ -146,6 +224,26 @@ func defaultFileSearchList(homeDir string, executablePath string) []string {
 	return fallbackFileSearchList
 }
 
+func defaultFileFromSearchList(fallbackFileSearchList []string) Loader {
+	return func(log log.Logger) (string, Configuration, error) {
+		for f := range fallbackFileSearchList {
+			if fInfo, fErr := os.Stat(fallbackFileSearchList[f]); fErr != nil {
+				continue
+			} else if fInfo.IsDir() {
+				continue
+			} else {
+				log.Info("Configuration file \"%s\" has been selected",
+					fallbackFileSearchList[f])
+				return loadFile(fallbackFileSearchList[f])
+			}
+		}
+		return fileTypeName, Configuration{}, fmt.Errorf(
+			"configuration file was not specified; also tried fallback files "+
+				"\"%s\", but none of them was available",
+			strings.Join(fallbackFileSearchList, "\", \""))
+	}
+}
+
 // DefaultFile creates a configuration file loader that loads configuration from
 // one of the default file path
 func DefaultFile() Loader {
@@ -163,29 +261,6 @@ func DefaultFile() Loader {
 		}
 
 		fallbackFileSearchList := defaultFileSearchList(homeDir, executablePath)
-
-		// Search given locations to select the config file
-		for f := range fallbackFileSearchList {
-			if fInfo, fErr := os.Stat(fallbackFileSearchList[f]); fErr != nil {
-				continue
-			} else if fInfo.IsDir() {
-				continue
-			} else {
-				log.Info("Configuration file \"%s\" has been selected",
-					fallbackFileSearchList[f])
-				return loadFile(fallbackFileSearchList[f])
-			}
-		}
-		defaultPath := fallbackFileSearchList[0]
-		log.Info("No default configuration file was found; creating %s", defaultPath)
-		if err := createDefaultConfigFile(defaultPath); err != nil {
-			return fileTypeName, Configuration{}, fmt.Errorf(
-				"configuration file was not specified and no fallback files "+
-					"were available; also failed to create %q: %w",
-				defaultPath,
-				err,
-			)
-		}
-		return loadFile(defaultPath)
+		return defaultFileFromSearchList(fallbackFileSearchList)(log)
 	}
 }
