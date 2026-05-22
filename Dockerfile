@@ -84,7 +84,7 @@ RUN set -ex && \
     apt-get purge -y --auto-remove curl && \
     rm -rf /var/lib/apt/lists/* && \
     useradd --system --create-home --shell /usr/sbin/nologin shellport && \
-    install -d -m 0755 -o shellport -g shellport /etc/shellport && \
+    install -d -m 0755 -o shellport -g shellport /config && \
     chmod +x /shellport && \
     chmod +x /shellport.sh
 USER shellport

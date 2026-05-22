@@ -21,11 +21,11 @@ services:
     ports:
       - "8182:8182"
     volumes:
-      - ./config:/etc/shellport
+      - ./config:/config
     environment:
       # Optional: override the config file path. By default, this compose file
-      # uses /etc/shellport/shellport.conf.json from the mounted ./config dir.
-      # SHELLPORT_CONFIG: /etc/shellport/shellport.conf.json
+      # uses /config/shellport.conf.json from the mounted ./config dir.
+      # SHELLPORT_CONFIG: /config/shellport.conf.json
       # Optional: IANA timezone used for local timestamps in logs.
       TZ: America/New_York
       # Recommended: base64-encoded 32-byte key for encrypted preset passwords.
@@ -46,9 +46,9 @@ ports:
 
 ## Configuration
 
-ShellPort can be configured with a JSON configuration file or environment variables. See [CONFIGURATION.md](CONFIGURATION.md) for the full configuration reference.
+ShellPort is configured with a JSON configuration file. See [CONFIGURATION.md](CONFIGURATION.md) for the full configuration reference.
 
-The Docker Compose example above mounts `./config` as a writable configuration directory. By default, ShellPort loads `/etc/shellport/shellport.conf.json`, creating it with a minimal `0.0.0.0:8182` configuration if no default config file exists and no explicit environment-variable configuration is present. That generated file leaves `SharedKey` and `AdminKey` empty so you can add presets from the UI first, then edit the config file later for authentication, admin protection, or other advanced settings. `SHELLPORT_CONFIG` is only needed when you want to override the config path.
+The Docker Compose example above mounts `./config` as the writable `/config` directory. By default, ShellPort loads `/config/shellport.conf.json`, creating it with a minimal `0.0.0.0:8182` configuration if the file does not exist. That generated file leaves `SharedKey` and `AdminKey` empty so you can add presets from the UI first, then edit the config file later for authentication, admin protection, or other advanced settings. `SHELLPORT_CONFIG` is only needed when you want to override the config file path.
 
 Writable file-backed configuration enables preset updates from the UI, such as saving SSH/Mosh fingerprints. If `SHELLPORT_PRESET_SECRET_KEY` is set, plaintext preset `Password` values are migrated on startup to `Encrypted Password` and the plaintext value is removed from the JSON file. That key must be set through the environment, not in JSON. Without that key, plaintext password presets continue
 to work as before. Full preset add/edit/remove API writes require admin access. The UI prompts for `AdminKey` before the first protected preset create, edit, or delete action and remembers a successful AdminKey only for the current browser page session. If `AdminKey` is blank, anyone with UI access can manage presets. If both `SharedKey` and `AdminKey` are blank, everyone gets admin access without authentication. Fingerprint saves remain available only from the connection-time fingerprint prompt.

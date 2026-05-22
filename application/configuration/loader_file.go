@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -18,8 +17,7 @@ import (
 // fileTypeName is the loader name reported when configuration is loaded from a
 // JSON file.
 const (
-	defaultConfigFilePath = "/etc/shellport/shellport.conf.json"
-	legacyConfigFilePath  = "/etc/shellport.conf.json"
+	defaultConfigFilePath = "/config/shellport.conf.json"
 	fileTypeName          = "File"
 	defaultConfigContent  = `{
   "HostName": "",
@@ -55,31 +53,6 @@ const (
 `
 )
 
-var environmentConfigNames = []string{
-	"SHELLPORT_HOSTNAME",
-	"SHELLPORT_SHAREDKEY",
-	"SHELLPORT_DIALTIMEOUT",
-	"SHELLPORT_SOCKS5",
-	"SHELLPORT_SOCKS5_USER",
-	"SHELLPORT_SOCKS5_PASSWORD",
-	"SHELLPORT_HOOK_BEFORE_CONNECTING",
-	"SHELLPORT_HOOKTIMEOUT",
-	"SHELLPORT_LISTENINTERFACE",
-	"SHELLPORT_LISTENPORT",
-	"SHELLPORT_INITIALTIMEOUT",
-	"SHELLPORT_READTIMEOUT",
-	"SHELLPORT_WRITETIMEOUT",
-	"SHELLPORT_HEARTBEATTIMEOUT",
-	"SHELLPORT_READDELAY",
-	"SHELLPORT_WRITEDELAY",
-	"SHELLPORT_TLSCERTIFICATEFILE",
-	"SHELLPORT_TLSCERTIFICATEKEYFILE",
-	"SHELLPORT_SERVERTITLE",
-	"SHELLPORT_SERVERMESSAGE",
-	"SHELLPORT_PRESETS",
-	"SHELLPORT_ONLYALLOWPRESETREMOTES",
-}
-
 // loadFile opens filePath, JSON-decodes it into a commonInput, and returns the
 // resulting Configuration. It returns the fileTypeName string along with the
 // configuration or the first error encountered.
@@ -106,9 +79,6 @@ func loadFile(filePath string) (string, Configuration, error) {
 		return fileTypeName, Configuration{}, err
 	}
 	finalCfg, err := cfg.concretize()
-	if adminKey := GetEnv("SHELLPORT_ADMIN_KEY"); adminKey != "" {
-		finalCfg.AdminKey = adminKey
-	}
 	finalCfg.SourceFile = filePath
 	return fileTypeName, finalCfg, err
 }
@@ -132,30 +102,6 @@ func CustomFile(customPath string) Loader {
 	}
 }
 
-func environmentConfigurationPresent() bool {
-	for _, name := range environmentConfigNames {
-		if strings.TrimSpace(GetEnv(name)) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// EnvironIfConfigured loads environment configuration only when a user supplied
-// at least one environment-backed setting. Environment-only deployments should
-// still win over auto-created file config, while empty environments should fall
-// through to first-run file creation.
-func EnvironIfConfigured() Loader {
-	return func(log log.Logger) (string, Configuration, error) {
-		if !environmentConfigurationPresent() {
-			return environTypeName, Configuration{}, fmt.Errorf(
-				"no ShellPort environment configuration was specified",
-			)
-		}
-		return Environ()(log)
-	}
-}
-
 func createDefaultConfigFile(filePath string) error {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		return err
@@ -172,19 +118,9 @@ func createDefaultConfigFile(filePath string) error {
 }
 
 // AutoCreateDefaultFile creates and loads the default file-backed
-// configuration when no configured default file or explicit environment config
-// exists. A legacy default path blocks creation so an upgrade cannot silently
-// replace a previously secured file-backed deployment with a blank generated
-// config.
-func AutoCreateDefaultFile(filePath string, legacyPath string) Loader {
+// configuration when no configured default file exists.
+func AutoCreateDefaultFile(filePath string) Loader {
 	return func(log log.Logger) (string, Configuration, error) {
-		if fileInfo, err := os.Stat(legacyPath); err == nil && !fileInfo.IsDir() {
-			return fileTypeName, Configuration{}, fmt.Errorf(
-				"legacy configuration file %q exists; move it to %q or set SHELLPORT_CONFIG",
-				legacyPath,
-				filePath,
-			)
-		}
 		log.Info("No default configuration file was found; creating %s", filePath)
 		if err := createDefaultConfigFile(filePath); err != nil {
 			return fileTypeName, Configuration{}, fmt.Errorf(
@@ -198,30 +134,8 @@ func AutoCreateDefaultFile(filePath string, legacyPath string) Loader {
 	}
 }
 
-func defaultFileSearchList(homeDir string, executablePath string) []string {
-	fallbackFileSearchList := make([]string, 0, 4)
-
-	// /etc/shellport/shellport.conf.json
-	fallbackFileSearchList = append(
-		fallbackFileSearchList,
-		defaultConfigFilePath,
-	)
-
-	// ~/.config/shellport.conf.json
-	if homeDir != "" {
-		fallbackFileSearchList = append(
-			fallbackFileSearchList,
-			filepath.Join(homeDir, ".config", "shellport.conf.json"))
-	}
-
-	// shellport.conf.json located at the same directory as ShellPort bin
-	if executablePath != "" {
-		fallbackFileSearchList = append(
-			fallbackFileSearchList,
-			filepath.Join(filepath.Dir(executablePath), "shellport.conf.json"))
-	}
-
-	return fallbackFileSearchList
+func defaultFileSearchList() []string {
+	return []string{defaultConfigFilePath}
 }
 
 func defaultFileFromSearchList(fallbackFileSearchList []string) Loader {
@@ -248,19 +162,7 @@ func defaultFileFromSearchList(fallbackFileSearchList []string) Loader {
 // one of the default file path
 func DefaultFile() Loader {
 	return func(log log.Logger) (string, Configuration, error) {
-		log.Info("Loading configuration from one of the default " +
-			"configuration files ...")
-		homeDir := ""
-		if u, userErr := user.Current(); userErr == nil {
-			homeDir = u.HomeDir
-		}
-
-		executablePath := ""
-		if ex, exErr := os.Executable(); exErr == nil {
-			executablePath = ex
-		}
-
-		fallbackFileSearchList := defaultFileSearchList(homeDir, executablePath)
-		return defaultFileFromSearchList(fallbackFileSearchList)(log)
+		log.Info("Loading configuration from the default configuration file ...")
+		return defaultFileFromSearchList(defaultFileSearchList())(log)
 	}
 }

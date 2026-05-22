@@ -13,25 +13,9 @@ import (
 	"strings"
 )
 
-// environRenamePrefix is the sentinel value prefix that, when found at the
-// start of an environment variable's value, causes GetEnv to treat the
-// remainder as the name of a second variable to look up instead.
-// environRenamePrefixLen caches the length of the prefix.
-const (
-	environRenamePrefix    = "SHELLPORT_ENV_RENAMED:"
-	environRenamePrefixLen = len(environRenamePrefix)
-)
-
-// GetEnv looks up the environment variable named name. If the variable's value
-// starts with SHELLPORT_ENV_RENAMED: the remainder is treated as an alias and
-// the alias variable is returned instead, supporting secret injection via
-// environment variable indirection.
+// GetEnv looks up the environment variable named name.
 func GetEnv(name string) string {
-	if v := os.Getenv(name); !strings.HasPrefix(v, environRenamePrefix) {
-		return v
-	} else {
-		return os.Getenv(v[environRenamePrefixLen:])
-	}
+	return os.Getenv(name)
 }
 
 // String is a configuration string that may contain a URI scheme to indicate

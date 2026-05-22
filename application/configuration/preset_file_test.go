@@ -60,8 +60,8 @@ func TestLoadFileRecordsSourceFile(t *testing.T) {
 	}
 }
 
-func TestLoadFileAppliesAdminKeyEnvironmentOverride(t *testing.T) {
-	t.Setenv("SHELLPORT_ADMIN_KEY", "env-admin-key")
+func TestLoadFileDoesNotReadAdminKeyFromEnvironment(t *testing.T) {
+	t.Setenv("ADMIN_KEY", "env-admin-key")
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	writePresetConfig(t, configPath, []map[string]any{
 		{"ID": "preset-existing", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
@@ -71,8 +71,8 @@ func TestLoadFileAppliesAdminKeyEnvironmentOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadFile returned error: %v", err)
 	}
-	if cfg.AdminKey != "env-admin-key" {
-		t.Fatalf("AdminKey = %q, want env-admin-key", cfg.AdminKey)
+	if cfg.AdminKey != "" {
+		t.Fatalf("AdminKey = %q, want empty", cfg.AdminKey)
 	}
 }
 
