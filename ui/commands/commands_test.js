@@ -6,6 +6,7 @@ import assert from "assert";
 import { describe, it } from "vitest";
 import * as command from "./commands.js";
 import * as presets from "./presets.js";
+import * as ssh from "./ssh.js";
 
 describe("Command prompts", () => {
   it("exposes secondary prompt actions", () => {
@@ -187,6 +188,28 @@ describe("Command prompts", () => {
       merged.map((preset) => preset.preset.title()),
       ["alpha telnet", "bravo ssh", "zulu ssh"],
     );
+  });
+
+  it("merges saved SSH presets that already include Host metadata", () => {
+    const commands = new command.Commands([new ssh.Command()]);
+    const merged = commands.mergePresets(
+      new presets.Presets([
+        {
+          id: "preset-atlantis",
+          title: "Atlantis",
+          type: "SSH",
+          host: "atlantis.home:22",
+          tab_color: "",
+          meta: {
+            Host: "atlantis.home:22",
+            User: "pi",
+          },
+        },
+      ]),
+    );
+
+    assert.strictEqual(merged.length, 1);
+    assert.strictEqual(merged[0].preset.meta("Host"), "atlantis.home:22");
   });
 });
 

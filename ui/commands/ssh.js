@@ -1414,7 +1414,7 @@ export class Command {
     const host = preset.host();
 
     if (host.length > 0) {
-      preset.insertMeta("Host", host);
+      preset.insertMetaDefault("Host", host);
     }
 
     return preset;
