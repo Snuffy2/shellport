@@ -46,7 +46,7 @@ func PersistPresetIDs(filePath string, presets []Preset) error {
 
 // ReplaceFilePresets atomically updates the Presets list in a JSON config file.
 func ReplaceFilePresets(filePath string, presets []Preset) error {
-	return replaceFilePresets(filePath, presets, nil, nil)
+	return replaceFilePresets(filePath, presets, nil, nil, nil)
 }
 
 // ReplaceFilePresetsWithRuntime atomically updates a JSON config file using
@@ -58,11 +58,28 @@ func ReplaceFilePresetsWithRuntime(
 	runtimePresets []Preset,
 	clearPresetPasswordPresetIDs map[string]struct{},
 ) error {
+	return ReplaceFilePresetsWithRuntimeSecrets(
+		filePath,
+		presets,
+		runtimePresets,
+		clearPresetPasswordPresetIDs,
+		nil,
+	)
+}
+
+func ReplaceFilePresetsWithRuntimeSecrets(
+	filePath string,
+	presets []Preset,
+	runtimePresets []Preset,
+	clearPresetPasswordPresetIDs map[string]struct{},
+	clearPresetPrivateKeyPresetIDs map[string]struct{},
+) error {
 	return replaceFilePresets(
 		filePath,
 		presets,
 		runtimePresets,
 		clearPresetPasswordPresetIDs,
+		clearPresetPrivateKeyPresetIDs,
 	)
 }
 
@@ -71,6 +88,7 @@ func replaceFilePresets(
 	presets []Preset,
 	runtimePresets []Preset,
 	clearPresetPasswordPresetIDs map[string]struct{},
+	clearPresetPrivateKeyPresetIDs map[string]struct{},
 ) error {
 	if filePath == "" {
 		return fmt.Errorf("preset config updates require a file-backed configuration")
@@ -98,6 +116,7 @@ func replaceFilePresets(
 		presets,
 		runtimePresets,
 		clearPresetPasswordPresetIDs,
+		clearPresetPrivateKeyPresetIDs,
 	)
 	return writeCommonInputFileDocument(resolvedPath, doc)
 }
@@ -167,6 +186,7 @@ func mergePresetInputs(
 	presets []Preset,
 	runtimePresets []Preset,
 	clearPresetPasswordPresetIDs map[string]struct{},
+	clearPresetPrivateKeyPresetIDs map[string]struct{},
 ) presetInputs {
 	rawByID := presetInputIndexByID(raw)
 	concreteByID := presetMapByID(concrete)
@@ -184,6 +204,10 @@ func mergePresetInputs(
 			if _, ok := clearPresetPasswordPresetIDs[id]; ok {
 				clearPresetPassword = true
 			}
+			clearPresetPrivateKey := false
+			if _, ok := clearPresetPrivateKeyPresetIDs[id]; ok {
+				clearPresetPrivateKey = true
+			}
 			merged = append(
 				merged,
 				mergePresetInput(
@@ -191,6 +215,7 @@ func mergePresetInputs(
 					current,
 					preset,
 					clearPresetPassword,
+					clearPresetPrivateKey,
 				),
 			)
 			continue
@@ -219,6 +244,7 @@ func mergePresetInput(
 	current Preset,
 	preset Preset,
 	clearPresetPassword bool,
+	clearPresetPrivateKey bool,
 ) presetInput {
 	merged := raw
 	merged.ID = preset.ID
@@ -232,6 +258,7 @@ func mergePresetInput(
 		current.Meta,
 		preset.Meta,
 		clearPresetPassword,
+		clearPresetPrivateKey,
 	)
 	return merged
 }
@@ -249,6 +276,7 @@ func mergePresetMeta(
 	current map[string]string,
 	next map[string]string,
 	clearPresetPassword bool,
+	clearPresetPrivateKey bool,
 ) Meta {
 	merged := Meta{}
 	for key, value := range next {
@@ -271,6 +299,10 @@ func mergePresetMeta(
 		if _, ok := merged[key]; !ok {
 			if isPresetPasswordMeta(key) &&
 				(next["Authentication"] != "Password" || clearPresetPassword) {
+				continue
+			}
+			if key == PresetMetaPrivateKey &&
+				(next["Authentication"] != "Private Key" || clearPresetPrivateKey) {
 				continue
 			}
 			if isKnownPresetMeta(key) && !presetMetaAllowedForType(presetType, key) {

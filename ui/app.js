@@ -92,11 +92,18 @@ export async function savePresetConfigRequest({
   const clearPasswordIDs = Array.isArray(options.clearPasswordIDs)
     ? options.clearPasswordIDs
     : [];
+  const clearPrivateKeyIDs = Array.isArray(options.clearPrivateKeyIDs)
+    ? options.clearPrivateKeyIDs
+    : [];
   const headers = await presetConfigHeadersForPassphrase(passphrase);
   headers["X-Preserve-Hidden-Preset-Passwords"] = "yes";
   if (clearPasswordIDs.length > 0) {
     headers["X-Clear-Hidden-Preset-Passwords"] =
       JSON.stringify(clearPasswordIDs);
+  }
+  if (clearPrivateKeyIDs.length > 0) {
+    headers["X-Clear-Hidden-Preset-Private-Keys"] =
+      JSON.stringify(clearPrivateKeyIDs);
   }
 
   const putResponse = await xhrPut(

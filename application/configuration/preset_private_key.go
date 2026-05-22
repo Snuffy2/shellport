@@ -5,6 +5,7 @@ package configuration
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,6 +122,84 @@ func MigratePresetPrivateKeysToFiles(
 		return nil, false, err
 	}
 	return migrated, true, nil
+}
+
+func PreservePresetPrivateKeyReferencesFromFile(
+	filePath string,
+	presets []Preset,
+	clearPresetPrivateKeyPresetIDs map[string]struct{},
+) ([]Preset, error) {
+	if filePath == "" {
+		return presets, nil
+	}
+	resolvedPath, err := resolveConfigFilePath(filePath)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := readCommonInputFileDocument(resolvedPath)
+	if err != nil {
+		return nil, err
+	}
+	rawByID := presetInputIndexByID(doc.input.Presets)
+	preserved := make([]Preset, len(presets))
+	for i, preset := range presets {
+		preserved[i] = copyPreset(preset)
+		if preserved[i].Meta == nil {
+			preserved[i].Meta = map[string]string{}
+		}
+		id := strings.TrimSpace(preserved[i].ID)
+		rawIndex, rawOK := rawByID[id]
+		if rawOK && rawIndex < len(doc.input.Presets) {
+			preservePresetFingerprintFromRaw(&preserved[i], doc.input.Presets[rawIndex])
+		}
+		if _, clear := clearPresetPrivateKeyPresetIDs[id]; clear ||
+			preserved[i].Meta["Authentication"] != "Private Key" {
+			delete(preserved[i].Meta, PresetMetaPrivateKey)
+			continue
+		}
+		if preserved[i].Meta[PresetMetaPrivateKey] != "" {
+			continue
+		}
+		if !rawOK || rawIndex >= len(doc.input.Presets) {
+			continue
+		}
+		rawValue := strings.TrimSpace(
+			string(doc.input.Presets[rawIndex].Meta[PresetMetaPrivateKey]),
+		)
+		if rawValue == "" {
+			continue
+		}
+		preserved[i].Meta[PresetMetaPrivateKey] = rawValue
+	}
+	return preserved, nil
+}
+
+func preservePresetFingerprintFromRaw(preset *Preset, raw presetInput) {
+	if preset.Meta["Fingerprint"] != "" || raw.Meta["Fingerprint"] == "" {
+		return
+	}
+	rawHost := strings.TrimSpace(raw.Host)
+	if rawMetaHost := strings.TrimSpace(string(raw.Meta["Host"])); rawMetaHost != "" {
+		rawHost = rawMetaHost
+	}
+	nextHost := strings.TrimSpace(preset.Host)
+	if nextMetaHost := strings.TrimSpace(preset.Meta["Host"]); nextMetaHost != "" {
+		nextHost = nextMetaHost
+	}
+	if rawHost != "" && nextHost != "" && !samePresetFingerprintHost(rawHost, nextHost) {
+		return
+	}
+	preset.Meta["Fingerprint"] = strings.TrimSpace(string(raw.Meta["Fingerprint"]))
+}
+
+func samePresetFingerprintHost(rawHost string, nextHost string) bool {
+	if rawHost == nextHost {
+		return true
+	}
+	if _, _, err := net.SplitHostPort(rawHost); err == nil {
+		return false
+	}
+	return net.JoinHostPort(rawHost, "22") == nextHost
 }
 
 func shouldUseRawPrivateKeyValue(rawValue String, runtimeValue string) bool {

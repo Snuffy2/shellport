@@ -12,6 +12,7 @@ import {
   canManagePresets,
   cloneEditorState,
   clearHiddenPasswordIDs,
+  clearHiddenPrivateKeyIDs,
   encodingOptionsForType,
   privateKeyFileLabel,
   typeLocksEncoding,
@@ -488,6 +489,43 @@ describe("preset editor state", () => {
     state.savePassword = false;
 
     expect(clearHiddenPasswordIDs([state])).toEqual(["preset-clear"]);
+  });
+
+  test("clearHiddenPrivateKeyIDs clears hidden private key when unchecked", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-clear-key",
+        title: "Clear key",
+        type: "SSH",
+        host: "clear.home:22",
+        has_saved_private_key: true,
+        private_key_filename: "clear.key",
+        meta: {
+          Authentication: "Private Key",
+        },
+      }),
+    );
+    state.savePrivateKey = false;
+
+    expect(clearHiddenPrivateKeyIDs([state])).toEqual(["preset-clear-key"]);
+  });
+
+  test("clearHiddenPrivateKeyIDs keeps checked hidden private key presets", () => {
+    const state = buildEditorState(
+      new Preset({
+        id: "preset-keep-key",
+        title: "Keep key",
+        type: "SSH",
+        host: "keep.home:22",
+        has_saved_private_key: true,
+        private_key_filename: "keep.key",
+        meta: {
+          Authentication: "Private Key",
+        },
+      }),
+    );
+
+    expect(clearHiddenPrivateKeyIDs([state])).toEqual([]);
   });
 
   test("buildPresetConfigFromWizardFields maps SSH connection fields", () => {

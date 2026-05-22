@@ -178,6 +178,7 @@ export function buildEditorState(preset, defaults = {}) {
       privateKey.length > 0 ||
       hasSavedPrivateKey ||
       (isNewPreset && meta.Authentication === "Private Key"),
+    hasSavedPrivateKey,
     privateKeyMode: privateKeyModeForValue(privateKey),
     privateKeyFile,
     privateKeyFilename,
@@ -278,6 +279,22 @@ export function clearHiddenPasswordIDs(states) {
         state.meta.Authentication === "Password";
 
       return !usesPassword || !state.savePassword;
+    })
+    .map((state) => state.id);
+}
+
+export function clearHiddenPrivateKeyIDs(states) {
+  return states
+    .filter((state) => {
+      if (state.id.length <= 0 || !state.hasSavedPrivateKey) {
+        return false;
+      }
+
+      const usesPrivateKey =
+        typeUsesAuthentication(state.type) &&
+        state.meta.Authentication === "Private Key";
+
+      return !usesPrivateKey || !state.savePrivateKey;
     })
     .map((state) => state.id);
 }

@@ -18,6 +18,7 @@ import (
 const (
 	preserveHiddenPresetPasswordsHeader = "X-Preserve-Hidden-Preset-Passwords"
 	clearHiddenPresetPasswordsHeader    = "X-Clear-Hidden-Preset-Passwords"
+	clearHiddenPresetPrivateKeysHeader  = "X-Clear-Hidden-Preset-Private-Keys"
 	presetFingerprintIDHeader           = "X-Preset-Fingerprint-ID"
 	maxPresetConfigRequestBytes         = 256 * 1024
 	maxPresetConfigPresets              = 512
@@ -110,17 +111,22 @@ func (p presetConfig) Put(
 
 	currentPresets := p.commonCfg.CurrentPresets()
 	clearPresetIDs := parsePresetIDSet(r.Header.Get(clearHiddenPresetPasswordsHeader))
+	clearPrivateKeyPresetIDs := parsePresetIDSet(
+		r.Header.Get(clearHiddenPresetPrivateKeysHeader),
+	)
 	fingerprintOnly := r.Header.Get(preserveHiddenPresetPasswordsHeader) == "yes" && targetPresetID != ""
 	var presets []configuration.Preset
 	clearPresetIDsForPersistence := clearPresetIDs
+	clearPrivateKeyPresetIDsForPersistence := clearPrivateKeyPresetIDs
 	if fingerprintOnly {
-		if len(clearPresetIDs) > 0 {
+		if len(clearPresetIDs) > 0 || len(clearPrivateKeyPresetIDs) > 0 {
 			return NewError(
 				http.StatusBadRequest,
-				"cannot clear hidden passwords on fingerprint-only preset save",
+				"cannot clear hidden secrets on fingerprint-only preset save",
 			)
 		}
 		clearPresetIDsForPersistence = nil
+		clearPrivateKeyPresetIDsForPersistence = nil
 		var err error
 		if isCompactFingerprintRequest(request, targetPresetID) {
 			presets, err = applyCompactFingerprintUpdate(
@@ -180,6 +186,14 @@ func (p presetConfig) Put(
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
 	}
+	normalized, err = configuration.PreservePresetPrivateKeyReferencesFromFile(
+		p.commonCfg.SourceFile,
+		normalized,
+		clearPrivateKeyPresetIDs,
+	)
+	if err != nil {
+		return NewError(http.StatusInternalServerError, err.Error())
+	}
 	normalized, _, err = configuration.ApplyPresetSecrets(normalized)
 	if err != nil {
 		return NewError(http.StatusBadRequest, err.Error())
@@ -195,11 +209,12 @@ func (p presetConfig) Put(
 	if err != nil {
 		return NewError(http.StatusInternalServerError, err.Error())
 	}
-	if err := configuration.ReplaceFilePresetsWithRuntime(
+	if err := configuration.ReplaceFilePresetsWithRuntimeSecrets(
 		p.commonCfg.SourceFile,
 		normalized,
 		currentPresets,
 		clearPresetIDsForPersistence,
+		clearPrivateKeyPresetIDsForPersistence,
 	); err != nil {
 		return NewError(http.StatusInternalServerError, err.Error())
 	}
