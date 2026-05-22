@@ -19,7 +19,7 @@ services:
     container_name: shellport
     restart: unless-stopped
     ports:
-      - "8182:8182"
+      - "127.0.0.1:8182:8182"
     volumes:
       - ./config:/config
     environment:
@@ -37,12 +37,10 @@ services:
 
 Then open `http://localhost:8182`.
 
-For reverse proxy deployments, publish the service only on localhost:
-
-```yaml
-ports:
-  - "127.0.0.1:8182:8182"
-```
+The example publishes ShellPort only on localhost so a first-run instance is not
+exposed on the network before you add authentication to the generated config
+file. For direct LAN access, change the port mapping after setting
+`UserPassword` or `AdminPassword`.
 
 ## Configuration
 
