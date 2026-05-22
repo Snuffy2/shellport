@@ -167,8 +167,8 @@
 }
 
 #conn-status-delay-chart-background {
-  --color-start: #e43989;
-  --color-stop: #9a5fca;
+  --color-start: var(--shellport-royal-blue);
+  --color-stop: var(--shellport-logo-purple);
 }
 
 #conn-status-delay-chart > g {
@@ -181,8 +181,8 @@
 }
 
 #conn-status-traffic-chart-in-background {
-  --color-start: #0287a8;
-  --color-stop: #06e7b6;
+  --color-start: var(--shellport-chart-traffic-in-start);
+  --color-stop: var(--shellport-chart-traffic-in-stop);
 }
 
 #conn-status-traffic-chart-in > g {
@@ -190,8 +190,8 @@
 }
 
 #conn-status-traffic-chart-out-background {
-  --color-start: #e46226;
-  --color-stop: #da356c;
+  --color-start: var(--shellport-chart-traffic-out-start);
+  --color-stop: var(--shellport-chart-traffic-out-stop);
 }
 
 #conn-status-traffic-chart-out > g {

@@ -6,7 +6,7 @@ Browser-based remote shell access over SSH, Telnet, Mosh, and Eternal Terminal (
 
 ## Supported browsers
 
-ES2020-era browsers and newer, including Chrome 80+, Edge 80+, Firefox 78+, and Safari 14+.
+Most browsers over the past few years, including Chrome 80+, Edge 80+, Firefox 78+, and Safari 14+.
 
 ## Docker
 
@@ -26,11 +26,11 @@ services:
       SHELLPORT_CONFIG: /etc/shellport/shellport.conf.json
       # Optional: IANA timezone used for local timestamps in logs.
       TZ: America/New_York
+      # Recommended: base64-encoded 32-byte key for encrypted preset passwords.
+      # Generate with: openssl rand -base64 32
+      SHELLPORT_PRESET_SECRET_KEY: "replace-with-generated-key"
       # Optional: set to "1" to enable debug-level logs on Docker stdout.
       # SHELLPORT_DEBUG: "1"
-      # Optional: base64-encoded 32-byte key for encrypted preset passwords.
-      # Generate with: openssl rand -base64 32
-      # SHELLPORT_PRESET_SECRET_KEY: "replace-with-generated-key"
 ```
 
 Then open `http://localhost:8182`.
@@ -121,7 +121,6 @@ go test ./...
 ## Fork
 
 This repository is a fork of [nirui/sshwifty](https://github.com/nirui/sshwifty). The original project and its design are the work of [@nirui](https://github.com/nirui), whose excellent work made this possible.
-
 
 ## License
 

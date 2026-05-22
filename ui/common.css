@@ -9,6 +9,14 @@
 :root {
   --shellport-royal-blue: #4169e1;
   --shellport-logo-purple: #5b21b6;
+  --shellport-warning-color: #e11;
+  --shellport-anim-mid-1: #4f3fc8;
+  --shellport-anim-mid-2: #2b3f8c;
+  --shellport-anim-mid-3: #3356c7;
+  --shellport-chart-traffic-in-start: #0287a8;
+  --shellport-chart-traffic-in-stop: #06e7b6;
+  --shellport-chart-traffic-out-start: var(--shellport-logo-purple);
+  --shellport-chart-traffic-out-stop: var(--shellport-anim-mid-3);
 }
 
 html,
@@ -275,7 +283,7 @@ body {
 .icon.icon-warning1::after {
   content: "!";
   font-weight: bold;
-  background: #e11;
+  background: var(--shellport-warning-color);
   padding: 3px 13px;
 }
 
@@ -674,7 +682,7 @@ body {
 }
 
 .form1 > fieldset .field > ul.input-suggestions > li > .sugt-value {
-  color: #fdd;
+  color: #dfe6ff;
   font-size: 0.9em;
   margin: 0 5px;
 }
