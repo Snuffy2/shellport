@@ -62,6 +62,9 @@ func TestConfigLoadersCreateConfiguredMissingFile(t *testing.T) {
 	if cfg.SourceFile != configPath {
 		t.Fatalf("SourceFile = %q, want %q", cfg.SourceFile, configPath)
 	}
+	if len(cfg.Servers) == 0 {
+		t.Fatal("expected at least one default server in generated config")
+	}
 	if cfg.Servers[0].ListenInterface != "0.0.0.0" {
 		t.Fatalf("ListenInterface = %q, want 0.0.0.0", cfg.Servers[0].ListenInterface)
 	}

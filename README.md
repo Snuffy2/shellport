@@ -40,7 +40,7 @@ Then open `http://localhost:8182`.
 The example publishes ShellPort only on localhost so a first-run instance is not
 exposed on the network before you add authentication to the generated config
 file. For direct LAN access, change the port mapping after setting
-`UserPassword` or `AdminPassword`.
+`UserPassword` and, optionally, `AdminPassword` for preset-management protection.
 
 ## Configuration
 
