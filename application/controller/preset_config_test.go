@@ -790,6 +790,68 @@ func TestPresetConfigPutAllowsFingerprintSaveWhenRestrictedToPresets(t *testing.
 	}
 }
 
+func TestPresetConfigPutPreservesHiddenPrivateKeyOnFullFingerprintSave(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	keyPath := filepath.Join(t.TempDir(), "atlantis.key")
+	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile key returned error: %v", err)
+	}
+	writePresetAPIConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home",
+			"Meta": map[string]string{
+				"User":           "pi",
+				"Authentication": "Private Key",
+				"Private Key":    "file://" + keyPath,
+			},
+		},
+	})
+	controller := newAuthenticatedTestPresetConfig(t, configPath)
+	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home:22","meta":{"User":"pi","Authentication":"Private Key","Fingerprint":"SHA256:abc"}}]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/shellport/config/presets",
+		bytes.NewReader(body),
+	)
+	authorizePresetConfigRequest(controller, request)
+	request.Header.Set(preserveHiddenPresetPasswordsHeader, "yes")
+	request.Header.Set(presetFingerprintIDHeader, "preset-atlantis")
+	recorder := httptest.NewRecorder()
+	writer := newResponseWriter(recorder)
+
+	if err := controller.Put(&writer, request, log.Ditch{}); err != nil {
+		t.Fatalf("Put returned error: %v", err)
+	}
+
+	live := controller.commonCfg.CurrentPresets()
+	livePrivateKey, err := configuration.String(
+		live[0].Meta[configuration.PresetMetaPrivateKey],
+	).Parse()
+	if err != nil {
+		t.Fatalf("live private key parse returned error: %v", err)
+	}
+	if livePrivateKey != "PRIVATE KEY DATA" {
+		t.Fatal("live preset lost hidden private key")
+	}
+	if live[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatal("live preset missing fingerprint")
+	}
+
+	_, reloaded, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("CustomFile returned error: %v", err)
+	}
+	if reloaded.Presets[0].Meta[configuration.PresetMetaPrivateKey] != "PRIVATE KEY DATA" {
+		t.Fatal("persisted config lost private key")
+	}
+	if reloaded.Presets[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatal("persisted config missing fingerprint")
+	}
+}
+
 func TestPresetConfigPutPreservesHiddenPasswordOnFullAdminReplacement(t *testing.T) {
 	t.Setenv(
 		configuration.PresetSecretKeyEnv,

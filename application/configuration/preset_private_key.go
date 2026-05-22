@@ -193,13 +193,16 @@ func preservePresetFingerprintFromRaw(preset *Preset, raw presetInput) {
 }
 
 func samePresetFingerprintHost(rawHost string, nextHost string) bool {
-	if rawHost == nextHost {
-		return true
+	return normalizePresetFingerprintHost(rawHost) == normalizePresetFingerprintHost(nextHost)
+}
+
+func normalizePresetFingerprintHost(host string) string {
+	name, port, err := net.SplitHostPort(host)
+	if err != nil {
+		name = host
+		port = "22"
 	}
-	if _, _, err := net.SplitHostPort(rawHost); err == nil {
-		return false
-	}
-	return net.JoinHostPort(rawHost, "22") == nextHost
+	return net.JoinHostPort(name, port)
 }
 
 func shouldUseRawPrivateKeyValue(rawValue String, runtimeValue string) bool {

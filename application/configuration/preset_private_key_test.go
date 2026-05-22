@@ -9,6 +9,44 @@ import (
 	"testing"
 )
 
+func TestPreservePresetPrivateKeyReferencesNormalizesFingerprintHosts(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	writePresetConfig(t, configPath, []map[string]any{
+		{
+			"ID":    "preset-atlantis",
+			"Title": "Atlantis",
+			"Type":  "SSH",
+			"Host":  "atlantis.home:22",
+			"Meta": map[string]any{
+				"User":        "pi",
+				"Fingerprint": "SHA256:abc",
+			},
+		},
+	})
+
+	presets, err := PreservePresetPrivateKeyReferencesFromFile(
+		configPath,
+		[]Preset{
+			{
+				ID:    "preset-atlantis",
+				Title: "Atlantis",
+				Type:  "SSH",
+				Host:  "atlantis.home",
+				Meta: map[string]string{
+					"User": "pi",
+				},
+			},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("PreservePresetPrivateKeyReferencesFromFile returned error: %v", err)
+	}
+	if presets[0].Meta["Fingerprint"] != "SHA256:abc" {
+		t.Fatal("fingerprint was not preserved for equivalent default-port hosts")
+	}
+}
+
 func TestMigratePresetPrivateKeysToFilesReplacesExistingFileReferenceWithPastedKey(
 	t *testing.T,
 ) {

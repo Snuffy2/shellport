@@ -142,11 +142,21 @@ func (p presetConfig) Put(
 				return NewError(http.StatusBadRequest, err.Error())
 			}
 			presets = presetConfigRequestPresets(request)
+			requestFingerprintIDs := presetRequestMetaKeyIDs(request.Presets, "Fingerprint")
 			presets = preserveHiddenPresetPasswordsExcept(
 				presets,
 				currentPresets,
 				clearPresetIDs,
 			)
+			presets, err = configuration.PreservePresetPrivateKeyReferencesFromFile(
+				p.commonCfg.SourceFile,
+				presets,
+				clearPrivateKeyPresetIDs,
+			)
+			if err != nil {
+				return NewError(http.StatusInternalServerError, err.Error())
+			}
+			removeRestoredFingerprintsExcept(presets, requestFingerprintIDs)
 		}
 		presets, err = p.commands.Reconfigure(presets)
 		if err != nil {
@@ -273,6 +283,32 @@ func presetConfigRequestPresets(
 		}
 	}
 	return presets
+}
+
+func presetRequestMetaKeyIDs(
+	presets []socketRemotePreset,
+	key string,
+) map[string]struct{} {
+	ids := map[string]struct{}{}
+	for _, preset := range presets {
+		if _, ok := preset.Meta[key]; !ok {
+			continue
+		}
+		ids[strings.TrimSpace(preset.ID)] = struct{}{}
+	}
+	return ids
+}
+
+func removeRestoredFingerprintsExcept(
+	presets []configuration.Preset,
+	keepIDs map[string]struct{},
+) {
+	for i := range presets {
+		if _, keep := keepIDs[presets[i].ID]; keep {
+			continue
+		}
+		delete(presets[i].Meta, "Fingerprint")
+	}
 }
 
 func validatePresetConfigRequest(request presetConfigRequest) error {
@@ -462,7 +498,7 @@ func samePresetMetaExceptFingerprint(
 		if key == "Fingerprint" {
 			continue
 		}
-		if currentValue, ok := current[key]; !ok || currentValue != value {
+		if currentValue, ok := current[key]; !ok || !samePresetMetaValue(key, value, currentValue) {
 			return false
 		}
 	}
@@ -470,11 +506,23 @@ func samePresetMetaExceptFingerprint(
 		if key == "Fingerprint" {
 			continue
 		}
-		if nextValue, ok := next[key]; !ok || nextValue != value {
+		if nextValue, ok := next[key]; !ok || !samePresetMetaValue(key, nextValue, value) {
 			return false
 		}
 	}
 	return true
+}
+
+func samePresetMetaValue(key string, nextValue string, currentValue string) bool {
+	if nextValue == currentValue {
+		return true
+	}
+	if key != configuration.PresetMetaPrivateKey {
+		return false
+	}
+	parsedNext, nextErr := configuration.String(nextValue).Parse()
+	parsedCurrent, currentErr := configuration.String(currentValue).Parse()
+	return nextErr == nil && currentErr == nil && parsedNext == parsedCurrent
 }
 
 func parsePresetIDSet(raw string) map[string]struct{} {
