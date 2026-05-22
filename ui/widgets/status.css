@@ -167,8 +167,8 @@
 }
 
 #conn-status-delay-chart-background {
-  --color-start: #e43989;
-  --color-stop: #9a5fca;
+  --color-start: var(--shellport-royal-blue);
+  --color-stop: var(--shellport-logo-purple);
 }
 
 #conn-status-delay-chart > g {
@@ -190,8 +190,8 @@
 }
 
 #conn-status-traffic-chart-out-background {
-  --color-start: #e46226;
-  --color-stop: #da356c;
+  --color-start: var(--shellport-logo-purple);
+  --color-stop: #3356c7;
 }
 
 #conn-status-traffic-chart-out > g {

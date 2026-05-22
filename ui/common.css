@@ -275,7 +275,7 @@ body {
 .icon.icon-warning1::after {
   content: "!";
   font-weight: bold;
-  background: #e11;
+  background: var(--shellport-logo-purple);
   padding: 3px 13px;
 }
 
@@ -674,7 +674,7 @@ body {
 }
 
 .form1 > fieldset .field > ul.input-suggestions > li > .sugt-value {
-  color: #fdd;
+  color: #dfe6ff;
   font-size: 0.9em;
   margin: 0 5px;
 }
