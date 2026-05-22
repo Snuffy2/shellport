@@ -4,8 +4,7 @@
 
 // Package configuration defines the data types and loader infrastructure used
 // to supply runtime settings to the ShellPort application. It supports multiple
-// configuration sources (environment variables, JSON files, direct injection)
-// through the Loader function type and a Redundant combinator.
+// configuration sources through the Loader function type and loader chain.
 package configuration
 
 import (

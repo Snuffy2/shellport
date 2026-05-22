@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	redundantTypeName = "Redundant"
+	loaderChainTypeName = "LoaderChain"
 )
 
 // Redundant creates a group of loaders. They will be executed one by one until
 // one of it successfully returned a configuration
 func Redundant(loaders ...Loader) Loader {
 	return func(log log.Logger) (string, Configuration, error) {
-		ll := log.Context("Redundant")
+		ll := log.Context(loaderChainTypeName)
 		for i := range loaders {
 			if lLoaderName, lCfg, lErr := loaders[i](ll); lErr != nil {
 				ll.Warning("Unable to load configuration from \"%s\": %s",
@@ -28,7 +28,7 @@ func Redundant(loaders ...Loader) Loader {
 				return lLoaderName, lCfg, nil
 			}
 		}
-		return redundantTypeName, Configuration{}, fmt.Errorf(
-			"all existing redundant loader has failed")
+		return loaderChainTypeName, Configuration{}, fmt.Errorf(
+			"all configuration loaders failed")
 	}
 }

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Snuffy2/shellport/application/log"
 )
 
 func TestLoadFileRejectsPresetSecretKey(t *testing.T) {
@@ -157,5 +159,24 @@ func TestCreateDefaultConfigFileDoesNotOverwriteExistingConfig(t *testing.T) {
 	}
 	if string(content) != string(original) {
 		t.Fatalf("config content = %q, want %q", content, original)
+	}
+}
+
+func TestAutoCreateDefaultFileLoadsExistingConfigAfterCreateRace(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	original := []byte(`{"Servers":[{"ListenInterface":"127.0.0.1","ListenPort":8182}]}`)
+	if err := os.WriteFile(configPath, original, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := AutoCreateDefaultFile(configPath)(log.NewDitch())
+	if err != nil {
+		t.Fatalf("AutoCreateDefaultFile returned error: %v", err)
+	}
+	if cfg.SourceFile != configPath {
+		t.Fatalf("SourceFile = %q, want %q", cfg.SourceFile, configPath)
+	}
+	if cfg.Servers[0].ListenInterface != "127.0.0.1" {
+		t.Fatalf("ListenInterface = %q, want 127.0.0.1", cfg.Servers[0].ListenInterface)
 	}
 }

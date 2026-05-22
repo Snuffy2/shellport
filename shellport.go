@@ -22,6 +22,20 @@ func debugLoggingEnabled() bool {
 	return len(configuration.GetEnv("SHELLPORT_DEBUG")) > 0
 }
 
+func configLoaders() []configuration.Loader {
+	configLoaders := make([]configuration.Loader, 0, 2)
+	if cfgFile := configuration.GetEnv("SHELLPORT_CONFIG"); len(cfgFile) > 0 {
+		configLoaders = append(configLoaders, configuration.CustomFile(cfgFile))
+		configLoaders = append(configLoaders, configuration.AutoCreateDefaultFile(cfgFile))
+		return configLoaders
+	}
+	configLoaders = append(configLoaders, configuration.DefaultFile())
+	configLoaders = append(configLoaders, configuration.AutoCreateDefaultFile(
+		configuration.DefaultConfigFilePath,
+	))
+	return configLoaders
+}
+
 func main() {
 	if shouldPrintVersion(os.Args) {
 		if _, err := os.Stdout.WriteString(application.Banner()); err != nil {
@@ -30,22 +44,13 @@ func main() {
 		return
 	}
 
-	configLoaders := make([]configuration.Loader, 0, 2)
-	if cfgFile := configuration.GetEnv("SHELLPORT_CONFIG"); len(cfgFile) > 0 {
-		configLoaders = append(configLoaders, configuration.CustomFile(cfgFile))
-	} else {
-		configLoaders = append(configLoaders, configuration.DefaultFile())
-		configLoaders = append(configLoaders, configuration.AutoCreateDefaultFile(
-			configuration.DefaultConfigFilePath,
-		))
-	}
 	e := application.
 		New(os.Stdout, log.NewDebugOrNonDebugWriter(
 			debugLoggingEnabled(),
 			application.Name,
 			os.Stdout,
 		)).
-		Run(configuration.Redundant(configLoaders...),
+		Run(configuration.Redundant(configLoaders()...),
 			application.DefaultProccessSignallerBuilder,
 			commands.New(),
 			controller.Builder,

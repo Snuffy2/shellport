@@ -124,6 +124,9 @@ func AutoCreateDefaultFile(filePath string) Loader {
 	return func(log log.Logger) (string, Configuration, error) {
 		log.Info("No default configuration file was found; creating %s", filePath)
 		if err := createDefaultConfigFile(filePath); err != nil {
+			if os.IsExist(err) {
+				return loadFile(filePath)
+			}
 			return fileTypeName, Configuration{}, fmt.Errorf(
 				"configuration file was not specified and no fallback files "+
 					"were available; also failed to create %q: %w",
@@ -163,7 +166,7 @@ func defaultFileFromSearchList(fallbackFileSearchList []string) Loader {
 // one of the default file path
 func DefaultFile() Loader {
 	return func(log log.Logger) (string, Configuration, error) {
-		log.Info("Loading configuration from the default configuration file ...")
+		log.Info("Loading configuration from the default configuration file")
 		return defaultFileFromSearchList(defaultFileSearchList())(log)
 	}
 }
