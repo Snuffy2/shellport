@@ -83,9 +83,11 @@ RUN set -ex && \
         > /SOURCE.md && \
     apt-get purge -y --auto-remove curl && \
     rm -rf /var/lib/apt/lists/* && \
-    install -d -m 0700 /config && \
+    useradd --system --create-home --shell /usr/sbin/nologin shellport && \
+    install -d -m 0700 -o shellport -g shellport /config && \
     chmod +x /shellport && \
     chmod +x /shellport.sh
 EXPOSE 8182
+USER shellport
 ENTRYPOINT [ "/shellport.sh" ]
 CMD []
