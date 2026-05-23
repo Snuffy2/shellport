@@ -19,7 +19,7 @@ id = "check-yaml"
 
 [[repos.hooks]]
 id = "check-json"
-exclude = "^shellport\\.conf\\.example\\.json$"
+exclude = "^(shellport\\.conf\\.example\\.json|scripts/shellport\\.dev\\.conf\\.json)$"
 
 [[repos.hooks]]
 id = "check-toml"
