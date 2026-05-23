@@ -46,6 +46,37 @@ func requireRawPresetCount(t *testing.T, presets presetInputs, want int) {
 	}
 }
 
+func TestSafePresetInputCapacity(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	tests := []struct {
+		name      string
+		rawLen    int
+		presetLen int
+		want      int
+	}{
+		{
+			name:      "adds safe lengths",
+			rawLen:    2,
+			presetLen: 3,
+			want:      5,
+		},
+		{
+			name:      "drops capacity hint before overflow",
+			rawLen:    maxInt,
+			presetLen: 1,
+			want:      0,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := safePresetInputCapacity(test.rawLen, test.presetLen)
+			if got != test.want {
+				t.Fatalf("safePresetInputCapacity() = %d, want %d", got, test.want)
+			}
+		})
+	}
+}
+
 func TestLoadFileRecordsSourceFile(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{

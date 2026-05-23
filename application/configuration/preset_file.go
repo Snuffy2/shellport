@@ -192,7 +192,7 @@ func mergePresetInputs(
 	rawByID := presetInputIndexByID(raw)
 	concreteByID := presetMapByID(concrete)
 	runtimeByID := presetMapByID(runtimePresets)
-	merged := make(presetInputs, 0, len(raw)+len(presets))
+	merged := make(presetInputs, 0, safePresetInputCapacity(len(raw), len(presets)))
 	touched := make(map[string]struct{}, len(presets))
 
 	for _, preset := range presets {
@@ -238,6 +238,14 @@ func mergePresetInputs(
 	}
 
 	return merged
+}
+
+func safePresetInputCapacity(rawLen int, presetLen int) int {
+	maxInt := int(^uint(0) >> 1)
+	if rawLen > maxInt-presetLen {
+		return 0
+	}
+	return rawLen + presetLen
 }
 
 func mergePresetInput(
