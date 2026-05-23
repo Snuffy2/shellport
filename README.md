@@ -2,19 +2,73 @@
 
 ShellPort is a browser-based remote shell for SSH, Telnet, Mosh, and Eternal Terminal (ET).
 
-## Quick Start
-
-The easiest way to run ShellPort is with Docker and a writable config directory.
-
 ![Screenshot](screenshot.png)
 
-1. Create a config directory:
+## Table Of Contents
+
+- [Quick Start With Docker Compose](#quick-start-with-docker-compose)
+- [Docker Run](#docker-run)
+- [First Launch Checklist](#first-launch-checklist)
+- [Create Presets In The UI](#create-presets-in-the-ui)
+- [Configuration](#configuration)
+- [Browser Support](#browser-support)
+- [Running From Source](#running-from-source)
+- [Fork](#fork)
+- [License](#license)
+
+## Quick Start With Docker Compose
+
+The easiest way to run ShellPort is with Docker Compose and a writable config
+directory.
+
+1. Create a working directory and a config directory:
 
 ```sh
+mkdir shellport
+cd shellport
 mkdir -p config
 ```
 
-2. Start the container:
+2. Create `docker-compose.yaml`:
+
+```yaml
+services:
+  shellport:
+    image: ghcr.io/snuffy2/shellport:latest
+    container_name: shellport
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8182:8182"
+    volumes:
+      - ./config:/config
+    environment:
+      TZ: America/New_York
+      SHELLPORT_PRESET_SECRET_KEY: "replace-with-generated-key"
+```
+
+Generate `SHELLPORT_PRESET_SECRET_KEY` once with `openssl rand -base64 32` and
+reuse the same value for every restart. ShellPort needs the same key to read
+encrypted saved preset passwords later.
+
+3. Start ShellPort:
+
+```sh
+docker compose up -d
+```
+
+4. Open `http://localhost:8182`.
+
+If `config/shellport.conf.json` does not exist, ShellPort creates it on first
+boot. Use the repository's `shellport.conf.example.json` as an annotated
+reference while you edit the live file.
+
+The example only publishes ShellPort on `127.0.0.1`. Keep it there until you
+have added the passwords or access controls you want. To expose it on your LAN
+or behind a reverse proxy, change the port mapping after hardening the config.
+
+The repository also includes `docker-compose.example.yaml` with the same layout.
+
+## Docker Run
 
 ```sh
 docker run -d \
@@ -27,15 +81,16 @@ docker run -d \
   ghcr.io/snuffy2/shellport:latest
 ```
 
-3. Open `http://localhost:8182`.
+## First Launch Checklist
 
-If `config/shellport.conf.json` does not exist, ShellPort creates it on first boot. The file keeps the `.json` extension, but ShellPort accepts JSONC-style comments and trailing commas. Use `shellport.conf.example.json` as a loadable annotated reference while you edit the live file.
-
-Keep the service on `127.0.0.1` until you have added the passwords or access controls you want.
-
-Generate `SHELLPORT_PRESET_SECRET_KEY` once with `openssl rand -base64 32` and reuse the same value for every restart if you want encrypted preset passwords to remain readable.
-
-If you prefer Docker Compose, the repository also includes `docker-compose.example.yaml` with the same layout.
+1. Open the UI while it is still bound to `127.0.0.1`.
+2. Create one or more presets from the Connector view.
+3. Edit `config/shellport.conf.json` and set `UserPassword` before exposing the
+   service to other machines.
+4. Set `AdminPassword` if preset create, edit, and delete actions should require
+   a separate admin password.
+5. Restart the container after changing top-level config values such as
+   passwords, listeners, TLS, SOCKS5, hooks, or preset-only restrictions.
 
 ## Create Presets In The UI
 
@@ -60,7 +115,11 @@ For SSH and Mosh presets, you can choose password or private key authentication.
 
 If the preset already has a saved password or private key, the editor lets you keep it, replace it, or clear it. Fingerprints can be saved from the connection-time fingerprint prompt.
 
-Preset create, edit, and delete actions require a writable file-backed configuration. If `AdminPassword` is set, the UI will prompt for it before protected preset changes. If `AdminPassword` is blank and `UserPassword` is set, any authenticated user can manage presets. If both passwords are blank, preset management is open to anyone who can reach the UI.
+Preset create, edit, and delete actions require a writable file-backed
+configuration. If `AdminPassword` is set, the UI prompts for it before protected
+preset changes. If `AdminPassword` is blank and `UserPassword` is set, any
+authenticated user can manage presets. If both passwords are blank, preset
+management is open to anyone who can reach the UI.
 
 ## Configuration
 
@@ -74,6 +133,10 @@ The important setup choices are:
 - `TLSCertificateFile` and `TLSCertificateKeyFile` enable HTTPS for a server listener.
 - `Socks5` routes outbound connections through a SOCKS5 proxy.
 - `OnlyAllowPresetRemotes` limits outbound connections to hosts that are already defined as presets.
+
+Mosh uses SSH only to start the remote session; the Mosh data path uses UDP
+between the ShellPort container and the remote host. ET uses the local `et`
+client in the container and the remote `etserver` TCP port.
 
 ## Browser Support
 

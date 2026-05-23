@@ -1,12 +1,17 @@
 # ShellPort Configuration
 
-ShellPort reads its runtime settings from a `.json` file. The file may use JSONC-style `//` comments, `/* ... */` comments, and trailing commas. In the Docker image, the default path is `/config/shellport.conf.json`.
+ShellPort reads its runtime settings from a `.json` file. In the Docker image, the default path is `/config/shellport.conf.json`.
 
 If that file does not exist, ShellPort creates a minimal writable config and then loads it. The generated file listens on `0.0.0.0:8182`, starts with no presets, and leaves `UserPassword` and `AdminPassword` blank so you can reach the UI on first boot and add presets before tightening access.
 
 You can point ShellPort at a different file with `SHELLPORT_CONFIG`.
 
 The checked-in `shellport.conf.example.json` is an annotated reference file and is loadable by ShellPort.
+
+Most top-level config changes are read at startup. Restart ShellPort after
+changing passwords, listeners, TLS, SOCKS5, hooks, or preset-only restrictions.
+Preset edits made through the UI are written back to the config file without a
+full restart.
 
 ## Config File Location
 
@@ -23,7 +28,7 @@ The runtime environment variables are:
 
 ## Preset Management
 
-Preset updates require a writable file-backed configuration. ShellPort can read presets from an in-memory or environment-loaded config, but UI writes only persist when the active config comes from disk and the file is writable.
+Preset updates require a writable file-backed configuration. UI writes only persist when the active config comes from disk and the file is writable.
 
 The UI can create, edit, and delete presets when the current access policy allows it. `AdminPassword` controls protected preset writes when you want separate user and admin access. If `AdminPassword` is blank and `UserPassword` is set, authenticated users get admin-level preset management. If both passwords are blank, anyone who can reach the UI can manage presets.
 
@@ -39,9 +44,18 @@ When `OnlyAllowPresetRemotes` is enabled, ShellPort only allows connections to h
 
 `DialTimeout` limits how long ShellPort waits when opening an outbound connection. If it is omitted, ShellPort uses a 5 second default in the file loader path.
 
-`Socks5` enables outbound SOCKS5 proxying. Use `Socks5User` and `Socks5Password` when the proxy needs credentials.
+`Socks5` enables outbound SOCKS5 proxying for supported outbound connection types. Use `Socks5User` and `Socks5Password` when the proxy needs credentials.
 
 `Hooks` lets you run server-side commands during connection lifecycle events. The `before_connecting` hook runs before ShellPort dials the remote host. A non-zero exit status aborts the connection. Hook inputs are not sanitized by ShellPort, so only use trusted commands and validate the values inside your hook scripts.
+
+Each hook command is an array of arguments. ShellPort does not run the command
+through a shell unless you explicitly use a shell as the command, such as
+`/bin/sh` with `-c`. Multiple hooks run in order.
+
+`before_connecting` receives `SHELLPORT_HOOK_REMOTE_TYPE` and
+`SHELLPORT_HOOK_REMOTE_ADDRESS` in the hook environment. Text written to stdout
+is sent back to the browser so the user can see it. Text written to stderr is
+captured in the server logs.
 
 `HookTimeout` limits how long each hook may run before ShellPort terminates it.
 
@@ -71,6 +85,10 @@ Each entry in `Servers` defines one listener.
 
 `TLSCertificateFile` and `TLSCertificateKeyFile` enable HTTPS. Both fields must be set together; ShellPort rejects a config that sets only one of them.
 
+In Docker, certificate paths are paths inside the container. Mount the
+certificate and key into the container, then point these fields at the mounted
+paths.
+
 `ServerTitle` appears as a custom title on the home page.
 
 `ServerMessage` appears on the home page as short text. It supports Markdown-style links.
@@ -91,6 +109,10 @@ Each preset has `ID`, `Title`, `Type`, `Host`, `TabColor`, and a `Meta` map.
 
 `Meta` stores the type-specific fields. The UI exposes the common ones directly, but the file format can also carry imported or advanced values.
 
+When a metadata field is present in a preset, ShellPort pre-fills that value for
+the connection. Leave a metadata field out when users should supply it
+themselves at connection time.
+
 The shared preset metadata fields are:
 
 - `User`
@@ -108,6 +130,16 @@ SSH and Mosh presets support `Password`, `Private Key`, or `None` authentication
 `Encrypted Password` is the server-side encrypted form of a saved password. Do not hand-edit it.
 
 `Private Key` can contain the literal private-key text or a reference such as `file://...` or `environment://...`. File references are useful when you want ShellPort to keep the key material outside the main config file.
+
+Metadata values support three source schemes:
+
+- `literal://value` stores `value` directly. This is also the default when no
+  scheme is present.
+- `file:///path/to/file` reads the value from a server-side file at startup.
+- `environment://NAME` reads the value from an environment variable at startup.
+
+Scheme-backed values are resolved when ShellPort loads the config. They are not
+refreshed until the config is loaded again.
 
 `Fingerprint` stores the SSH host key fingerprint. You can save it from the connection-time fingerprint prompt, and the UI preserves it during preset edits.
 
