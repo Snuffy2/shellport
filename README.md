@@ -168,7 +168,7 @@ Run the development server:
 npm run dev
 ```
 
-`npm run dev` starts the Go backend with `shellport.conf.example.json` and serves the frontend through Vite with HMR and backend proxying.
+`npm run dev` starts the Go backend with a writable local config copied from `scripts/shellport.dev.conf.json` into `.tmp/dev/shellport.conf.json`, then serves the frontend through Vite with HMR and backend proxying.
 
 Useful checks while developing:
 

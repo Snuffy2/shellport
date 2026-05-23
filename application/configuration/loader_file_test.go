@@ -100,6 +100,24 @@ func TestExampleConfigFileIsLoadable(t *testing.T) {
 	}
 }
 
+func TestDevConfigTemplateIsLoadable(t *testing.T) {
+	configPath := filepath.Join("..", "..", "scripts", "shellport.dev.conf.json")
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if len(cfg.Servers) != 1 {
+		t.Fatalf("server count = %d, want 1", len(cfg.Servers))
+	}
+	if cfg.Servers[0].ListenInterface != "127.0.0.1" {
+		t.Fatalf(
+			"ListenInterface = %q, want 127.0.0.1",
+			cfg.Servers[0].ListenInterface,
+		)
+	}
+}
+
 func TestLoadFileReadsServerTitle(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	content := []byte(`{
