@@ -21,6 +21,7 @@ const (
 	// DefaultConfigFilePath is the default Docker config file path.
 	DefaultConfigFilePath = "/config/shellport.conf.yml"
 	fileTypeName          = "File"
+	legacyJSONConfigName  = "shellport.conf.json"
 	defaultConfigContent  = `HostName: ""
 UserPassword: ""
 AdminPassword: ""
@@ -96,9 +97,38 @@ func commonInputFromYAMLMap(raw map[string]any) (commonInput, error) {
 func normalizeYAMLMap(raw map[string]any) map[string]any {
 	normalized := make(map[string]any, len(raw))
 	for key, value := range raw {
+		if key == "Meta" {
+			normalized[key] = normalizeYAMLMeta(value)
+			continue
+		}
 		normalized[key] = normalizeYAMLValue(value)
 	}
 	return normalized
+}
+
+func normalizeYAMLMeta(value any) any {
+	typed, ok := value.(map[string]any)
+	if !ok {
+		return normalizeYAMLValue(value)
+	}
+	normalized := make(map[string]any, len(typed))
+	for key, metaValue := range typed {
+		normalized[key] = normalizeYAMLMetaValue(metaValue)
+	}
+	return normalized
+}
+
+func normalizeYAMLMetaValue(value any) any {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case map[string]any, []any:
+		return normalizeYAMLValue(typed)
+	default:
+		return fmt.Sprint(typed)
+	}
 }
 
 func normalizeYAMLValue(value any) any {
@@ -136,6 +166,15 @@ func CustomFile(customPath string) Loader {
 }
 
 func createDefaultConfigFile(filePath string) error {
+	if legacyPath, ok, err := legacyJSONConfigConflict(filePath); err != nil {
+		return err
+	} else if ok {
+		return fmt.Errorf(
+			"refusing to create blank YAML config %q because legacy JSON config %q exists; migrate the existing config or set SHELLPORT_CONFIG explicitly",
+			filePath,
+			legacyPath,
+		)
+	}
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		return err
 	}
@@ -148,6 +187,21 @@ func createDefaultConfigFile(filePath string) error {
 		return err
 	}
 	return nil
+}
+
+func legacyJSONConfigConflict(filePath string) (string, bool, error) {
+	if filepath.Base(filePath) != filepath.Base(DefaultConfigFilePath) {
+		return "", false, nil
+	}
+	legacyPath := filepath.Join(filepath.Dir(filePath), legacyJSONConfigName)
+	info, err := os.Stat(legacyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return legacyPath, false, err
+	}
+	return legacyPath, !info.IsDir(), nil
 }
 
 // AutoCreateDefaultFile creates and loads the default file-backed

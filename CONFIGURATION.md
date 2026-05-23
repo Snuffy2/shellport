@@ -18,6 +18,11 @@ full restart.
 
 The default file path is convenient for Docker volume mounts, but it is not required. Any writable `.yml` or `.yaml` config file can be used as long as ShellPort can read it at startup.
 
+If ShellPort is about to create `/config/shellport.conf.yml` and a legacy
+`/config/shellport.conf.json` file is already present in the same directory, it
+refuses to create a new blank config. Rename or migrate the existing file, or
+set `SHELLPORT_CONFIG` to the exact file you want ShellPort to load.
+
 The runtime environment variables are:
 
 - `TZ`, which sets the timezone used for timestamps in logs.
@@ -109,6 +114,9 @@ Each preset has `ID`, `Title`, `Type`, `Host`, `TabColor`, and a `Meta` map.
 `TabColor` tints the preset tab in the UI.
 
 `Meta` stores the type-specific fields. The UI exposes the common ones directly, but the file format can also carry imported or advanced values.
+
+Metadata values are treated as strings when ShellPort loads YAML, so unquoted
+scalar values such as `ET Server Port: 2022` are accepted as `"2022"`.
 
 When a metadata field is present in a preset, ShellPort pre-fills that value for
 the connection. Leave a metadata field out when users should supply it

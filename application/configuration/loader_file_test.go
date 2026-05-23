@@ -137,6 +137,36 @@ Servers:
 	}
 }
 
+func TestLoadFileAcceptsUnquotedYAMLMetaScalarsAsStrings(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets:
+  - Title: Atlantis
+    Type: ET
+    Host: atlantis.home
+    Meta:
+      User: pi
+      ET Server Port: 2022
+      Password: 1234
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.Presets[0].Meta["ET Server Port"] != "2022" {
+		t.Fatalf("ET Server Port = %q, want 2022", cfg.Presets[0].Meta["ET Server Port"])
+	}
+	if cfg.Presets[0].Meta["Password"] != "1234" {
+		t.Fatalf("Password = %q, want 1234", cfg.Presets[0].Meta["Password"])
+	}
+}
+
 func TestDefaultFileSearchListUsesConfigDirectoryOnly(t *testing.T) {
 	searchList := defaultFileSearchList()
 
@@ -148,6 +178,28 @@ func TestDefaultFileSearchListUsesConfigDirectoryOnly(t *testing.T) {
 		if searchList[i] != expected[i] {
 			t.Fatalf("defaultFileSearchList()[%d] = %q, want %q", i, searchList[i], expected[i])
 		}
+	}
+}
+
+func TestAutoCreateDefaultFileRefusesLegacyJSONConfigSibling(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config", "shellport.conf.yml")
+	legacyPath := filepath.Join(filepath.Dir(configPath), "shellport.conf.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("os.MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, []byte(`{"Servers":[{"ListenInterface":"127.0.0.1","ListenPort":8182}]}`), 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, _, err := AutoCreateDefaultFile(configPath)(log.NewDitch())
+	if err == nil {
+		t.Fatal("AutoCreateDefaultFile returned nil error, want legacy JSON conflict")
+	}
+	if !strings.Contains(err.Error(), legacyPath) {
+		t.Fatalf("AutoCreateDefaultFile error = %q, want legacy path %q", err, legacyPath)
+	}
+	if _, statErr := os.Stat(configPath); !os.IsNotExist(statErr) {
+		t.Fatalf("new YAML config stat error = %v, want not exist", statErr)
 	}
 }
 
