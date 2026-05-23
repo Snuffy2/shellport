@@ -58,6 +58,41 @@ func TestNormalizeStartupPresetIDsPersistsFileBackedIDs(t *testing.T) {
 	}
 }
 
+func TestNormalizeStartupPresetsAcceptsCommentedFileBackedConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	content := []byte(`{
+  // Startup normalization should use the same commented JSON handling as load.
+  "Servers": [
+    {
+      "ListenInterface": "127.0.0.1",
+      "ListenPort": 8182,
+    },
+  ],
+  "Presets": [
+    {
+      "Title": "Atlantis",
+      "Type": "SSH",
+      "Host": "atlantis.home",
+    },
+  ],
+}`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
+	if err != nil {
+		t.Fatalf("CustomFile returned error: %v", err)
+	}
+	normalized, err := normalizeStartupPresets(cfg, commands.New())
+	if err != nil {
+		t.Fatalf("normalizeStartupPresets returned error: %v", err)
+	}
+	if normalized.Presets[0].ID == "" {
+		t.Fatal("normalized preset ID is empty")
+	}
+}
+
 func TestNormalizeStartupPresetsPersistsMetaCleanupAndDefaults(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	configData := map[string]any{

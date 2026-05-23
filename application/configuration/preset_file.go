@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/natefinch/atomic"
+	"github.com/tailscale/hujson"
 )
 
 // PersistPresetIDs writes generated preset IDs back to a JSON configuration file.
@@ -382,6 +383,7 @@ type commonInputFileDocument struct {
 	input      commonInput
 	raw        map[string]json.RawMessage
 	rawPresets []map[string]json.RawMessage
+	syntax     hujson.Value
 	mode       os.FileMode
 }
 
@@ -395,13 +397,20 @@ func readCommonInputFileDocument(filePath string) (commonInputFileDocument, erro
 	if readErr != nil {
 		return commonInputFileDocument{}, readErr
 	}
+	syntax, parseErr := hujson.Parse(data)
+	if parseErr != nil {
+		return commonInputFileDocument{}, parseErr
+	}
+	standardSyntax := syntax.Clone()
+	standardSyntax.Standardize()
+	standardJSON := standardSyntax.Pack()
 
 	cfg := commonInput{}
-	if decodeErr := json.Unmarshal(data, &cfg); decodeErr != nil {
+	if decodeErr := json.Unmarshal(standardJSON, &cfg); decodeErr != nil {
 		return commonInputFileDocument{}, decodeErr
 	}
 	raw := map[string]json.RawMessage{}
-	if decodeErr := json.Unmarshal(data, &raw); decodeErr != nil {
+	if decodeErr := json.Unmarshal(standardJSON, &raw); decodeErr != nil {
 		return commonInputFileDocument{}, decodeErr
 	}
 	var rawPresets []map[string]json.RawMessage
@@ -414,6 +423,7 @@ func readCommonInputFileDocument(filePath string) (commonInputFileDocument, erro
 		input:      cfg,
 		raw:        raw,
 		rawPresets: rawPresets,
+		syntax:     syntax,
 		mode:       info.Mode(),
 	}, nil
 }
@@ -450,7 +460,66 @@ func writeCommonInputFileDocument(
 		return marshalErr
 	}
 	raw["Presets"] = presets
+	if doc.syntax.Value != nil {
+		updates := map[string]json.RawMessage{
+			"Presets": presets,
+		}
+		if adminPassword, ok := raw["AdminPassword"]; ok {
+			updates["AdminPassword"] = adminPassword
+		}
+		return writeCommonInputFileSyntax(filePath, doc.syntax, updates, doc.mode)
+	}
 	return writeCommonInputFile(filePath, raw, doc.mode)
+}
+
+func writeCommonInputFileSyntax(
+	filePath string,
+	syntax hujson.Value,
+	updates map[string]json.RawMessage,
+	mode os.FileMode,
+) error {
+	root, ok := syntax.Value.(*hujson.Object)
+	if !ok {
+		return writeCommonInputFile(filePath, updates, mode)
+	}
+	for key, value := range updates {
+		if err := setObjectMemberValue(root, key, value); err != nil {
+			return err
+		}
+	}
+	syntax.Format()
+	return writeCommonInputFileBytes(filePath, syntax.Pack(), mode)
+}
+
+func setObjectMemberValue(
+	object *hujson.Object,
+	key string,
+	data json.RawMessage,
+) error {
+	next, err := hujson.Parse(data)
+	if err != nil {
+		return err
+	}
+	for i := range object.Members {
+		if object.Members[i].Name.Value.(hujson.Literal).String() != key {
+			continue
+		}
+		next.BeforeExtra = object.Members[i].Value.BeforeExtra
+		next.AfterExtra = object.Members[i].Value.AfterExtra
+		object.Members[i].Value = next
+		return nil
+	}
+	object.Members = append(object.Members, hujson.ObjectMember{
+		Name: hujson.Value{
+			BeforeExtra: hujson.Extra("\n  "),
+			Value:       hujson.String(key),
+		},
+		Value: hujson.Value{
+			BeforeExtra: hujson.Extra(" "),
+			Value:       next.Value,
+		},
+	})
+	return nil
 }
 
 func marshalPresetInputsPreservingRaw(
@@ -546,6 +615,19 @@ func writeCommonInputFile(
 	cfg map[string]json.RawMessage,
 	mode os.FileMode,
 ) error {
+	data, marshalErr := json.MarshalIndent(cfg, "", "  ")
+	if marshalErr != nil {
+		return marshalErr
+	}
+	data = append(data, '\n')
+	return writeCommonInputFileBytes(filePath, data, mode)
+}
+
+func writeCommonInputFileBytes(
+	filePath string,
+	data []byte,
+	mode os.FileMode,
+) error {
 	tmp, createErr := os.CreateTemp(filepath.Dir(filePath), filepath.Base(filePath)+".*.tmp")
 	if createErr != nil {
 		return createErr
@@ -553,12 +635,9 @@ func writeCommonInputFile(
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
 
-	encoder := json.NewEncoder(tmp)
-	encoder.SetIndent("", "  ")
-	encoder.SetEscapeHTML(false)
-	if encodeErr := encoder.Encode(cfg); encodeErr != nil {
+	if _, writeErr := tmp.Write(data); writeErr != nil {
 		tmp.Close()
-		return encodeErr
+		return writeErr
 	}
 	if syncErr := tmp.Sync(); syncErr != nil {
 		tmp.Close()

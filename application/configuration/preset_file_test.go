@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -316,6 +317,55 @@ func TestReplaceFilePresetsPreservesUnknownTopLevelFields(t *testing.T) {
 	}
 	if _, ok := raw["FutureTopLevel"]; !ok {
 		t.Fatal("unknown top-level field was not preserved")
+	}
+}
+
+func TestReplaceFilePresetsPreservesUnchangedConfigComments(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	content := []byte(`{
+  // listener settings should keep this operator note
+  "Servers": [
+    {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
+  ],
+  "Presets": [
+    {"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home:22"}
+  ],
+  // future setting should keep this operator note
+  "FutureTopLevel": {"enabled": true}
+}`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	if err := ReplaceFilePresets(configPath, []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "atlantis.home:22",
+			Meta: map[string]string{
+				"Fingerprint": "SHA256:abc",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("ReplaceFilePresets returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile returned error: %v", err)
+	}
+	if !strings.Contains(
+		string(data),
+		"// listener settings should keep this operator note",
+	) {
+		t.Fatalf("listener comment was not preserved:\n%s", data)
+	}
+	if !strings.Contains(
+		string(data),
+		"// future setting should keep this operator note",
+	) {
+		t.Fatal("future setting comment was not preserved")
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Snuffy2/shellport/application/log"
+	"github.com/tailscale/hujson"
 )
 
 // fileTypeName is the loader name reported when configuration is loaded from a
@@ -58,15 +59,17 @@ const (
 // resulting Configuration. It returns the fileTypeName string along with the
 // configuration or the first error encountered.
 func loadFile(filePath string) (string, Configuration, error) {
-	f, fErr := os.Open(filePath)
-	if fErr != nil {
-		return fileTypeName, Configuration{}, fErr
+	data, readErr := os.ReadFile(filePath)
+	if readErr != nil {
+		return fileTypeName, Configuration{}, readErr
 	}
-	defer f.Close()
+	standardJSON, err := standardizeJSONC(data)
+	if err != nil {
+		return fileTypeName, Configuration{}, err
+	}
 	cfg := commonInput{}
-	jDecoder := json.NewDecoder(f)
 	raw := map[string]json.RawMessage{}
-	if jDecodeErr := jDecoder.Decode(&raw); jDecodeErr != nil {
+	if jDecodeErr := json.Unmarshal(standardJSON, &raw); jDecodeErr != nil {
 		return fileTypeName, Configuration{}, jDecodeErr
 	}
 	if err := rejectFilePresetSecretKey(raw); err != nil {
@@ -82,6 +85,15 @@ func loadFile(filePath string) (string, Configuration, error) {
 	finalCfg, err := cfg.concretize()
 	finalCfg.SourceFile = filePath
 	return fileTypeName, finalCfg, err
+}
+
+func standardizeJSONC(data []byte) ([]byte, error) {
+	value, err := hujson.Parse(data)
+	if err != nil {
+		return nil, err
+	}
+	value.Standardize()
+	return value.Pack(), nil
 }
 
 func rejectFilePresetSecretKey(raw map[string]json.RawMessage) error {

@@ -57,6 +57,67 @@ func TestLoadFileRejectsPresetSecretKeyEnvName(t *testing.T) {
 	}
 }
 
+func TestLoadFileAcceptsJSONCInJSONFile(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	content := []byte(`{
+  // ShellPort accepts comments in .json config files.
+  "HostName": "localhost",
+  "Servers": [
+    {
+      "ListenInterface": "127.0.0.1",
+      "ListenPort": 8182,
+    },
+  ],
+}`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.HostName != "localhost" {
+		t.Fatalf("HostName = %q, want localhost", cfg.HostName)
+	}
+	if cfg.Servers[0].ListenPort != 8182 {
+		t.Fatalf("ListenPort = %d, want 8182", cfg.Servers[0].ListenPort)
+	}
+}
+
+func TestExampleConfigFileIsLoadable(t *testing.T) {
+	configPath := filepath.Join("..", "..", "shellport.conf.example.json")
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if len(cfg.Servers) != 1 {
+		t.Fatalf("server count = %d, want 1", len(cfg.Servers))
+	}
+	if len(cfg.Presets) <= 0 {
+		t.Fatal("preset count = 0, want example presets")
+	}
+}
+
+func TestDevConfigTemplateIsLoadable(t *testing.T) {
+	configPath := filepath.Join("..", "..", "scripts", "shellport.dev.conf.json")
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if len(cfg.Servers) != 1 {
+		t.Fatalf("server count = %d, want 1", len(cfg.Servers))
+	}
+	if cfg.Servers[0].ListenInterface != "127.0.0.1" {
+		t.Fatalf(
+			"ListenInterface = %q, want 127.0.0.1",
+			cfg.Servers[0].ListenInterface,
+		)
+	}
+}
+
 func TestLoadFileReadsServerTitle(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
 	content := []byte(`{

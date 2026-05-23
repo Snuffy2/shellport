@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -13,7 +14,12 @@ const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const devConfig = path.join(repoRoot, "shellport.conf.example.json");
+const devConfigTemplate = path.join(
+  repoRoot,
+  "scripts",
+  "shellport.dev.conf.json",
+);
+const devConfig = path.join(repoRoot, ".tmp", "dev", "shellport.conf.json");
 
 let shuttingDown = false;
 let goProcess = null;
@@ -52,7 +58,18 @@ function forwardOutput(child, label) {
 }
 
 /**
- * Start the Go backend with the example development configuration.
+ * Prepare a writable runtime config for local development.
+ */
+function prepareDevConfig() {
+  if (fs.existsSync(devConfig)) {
+    return;
+  }
+  fs.mkdirSync(path.dirname(devConfig), { recursive: true });
+  fs.copyFileSync(devConfigTemplate, devConfig);
+}
+
+/**
+ * Start the Go backend with the local development configuration.
  */
 function startGo() {
   const child = spawn("go", ["run", "shellport.go"], {
@@ -268,6 +285,7 @@ process.on(
 
 try {
   cleanupDevStaticAssets = prepareDevStaticAssets(repoRoot);
+  prepareDevConfig();
   startGo();
   await startVite();
 } catch (error) {
