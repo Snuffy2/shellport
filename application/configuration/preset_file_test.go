@@ -399,6 +399,51 @@ Presets:
 	}
 }
 
+func TestReplaceFilePresetsMaterializesUnknownPresetAliases(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+FutureDefaults: &futureDefaults
+  enabled: true
+Presets:
+  - ID: preset-atlantis
+    Title: Atlantis
+    Type: SSH
+    Host: atlantis.home:22
+    FuturePresetField: *futureDefaults
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	if err := ReplaceFilePresets(configPath, []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "atlantis.home:22",
+			Meta: map[string]string{
+				"Fingerprint": "SHA256:abc",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("ReplaceFilePresets returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile returned error: %v", err)
+	}
+	if strings.Contains(string(data), "FuturePresetField: *futureDefaults") {
+		t.Fatalf("unknown preset alias was not materialized:\n%s", data)
+	}
+	if !strings.Contains(string(data), "FuturePresetField:") ||
+		!strings.Contains(string(data), "enabled: true") {
+		t.Fatalf("materialized unknown preset field was not preserved:\n%s", data)
+	}
+}
+
 func TestReplaceFilePresetsPreservesUnknownTopLevelFields(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	content := []byte(`{

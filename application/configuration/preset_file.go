@@ -668,20 +668,25 @@ func rawPresetMapFromYAMLNode(node *yaml.Node, fallback map[string]any) map[stri
 		if key == "<<" {
 			continue
 		}
-		rawPreset[key] = cloneYAMLNode(node.Content[i+1])
+		rawPreset[key] = cloneYAMLNodeMaterializingAliases(node.Content[i+1])
 	}
 	return rawPreset
 }
 
-func cloneYAMLNode(node *yaml.Node) *yaml.Node {
+func cloneYAMLNodeMaterializingAliases(node *yaml.Node) *yaml.Node {
 	if node == nil {
 		return nil
 	}
+	if node.Kind == yaml.AliasNode {
+		return cloneYAMLNodeMaterializingAliases(node.Alias)
+	}
 	cloned := *node
+	cloned.Alias = nil
+	cloned.Anchor = ""
 	if len(node.Content) > 0 {
 		cloned.Content = make([]*yaml.Node, len(node.Content))
 		for i, child := range node.Content {
-			cloned.Content[i] = cloneYAMLNode(child)
+			cloned.Content[i] = cloneYAMLNodeMaterializingAliases(child)
 		}
 	}
 	return &cloned
