@@ -87,6 +87,25 @@ func decodeYAMLMap(data []byte) (map[string]any, error) {
 	return normalized, nil
 }
 
+var yamlStringFieldNames = map[string]struct{}{
+	"AdminPassword":         {},
+	"Host":                  {},
+	"HostName":              {},
+	"ID":                    {},
+	"ListenInterface":       {},
+	"ServerMessage":         {},
+	"ServerTitle":           {},
+	"Socks5":                {},
+	"Socks5Password":        {},
+	"Socks5User":            {},
+	"TLSCertificateFile":    {},
+	"TLSCertificateKeyFile": {},
+	"TabColor":              {},
+	"Title":                 {},
+	"Type":                  {},
+	"UserPassword":          {},
+}
+
 func commonInputFromYAMLMap(raw map[string]any) (commonInput, error) {
 	data, err := json.Marshal(raw)
 	if err != nil {
@@ -157,6 +176,10 @@ func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
 				typed[key] = yamlMetaScalarText(child, typed[key])
 				continue
 			}
+			if _, ok := yamlStringFieldNames[key]; ok && child.Kind == yaml.ScalarNode {
+				typed[key] = yamlScalarValue(child, typed[key])
+				continue
+			}
 			preserveYAMLMetaScalarText(typed[key], child)
 		}
 	case yaml.SequenceNode:
@@ -196,7 +219,7 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 			}
 			valueNode := node.Content[i+1]
 			if valueNode.Kind == yaml.ScalarNode {
-				typed[key] = yamlMetaScalarValue(valueNode, typed[key])
+				typed[key] = yamlScalarValue(valueNode, typed[key])
 				continue
 			}
 			typed[key] = yamlMetaScalarText(valueNode, typed[key])
@@ -212,14 +235,14 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 				return typed
 			}
 			if child.Kind == yaml.ScalarNode {
-				typed[i] = yamlMetaScalarValue(child, typed[i])
+				typed[i] = yamlScalarValue(child, typed[i])
 				continue
 			}
 			typed[i] = yamlMetaScalarText(child, typed[i])
 		}
 		return typed
 	case yaml.ScalarNode:
-		return yamlMetaScalarValue(node, fallback)
+		return yamlScalarValue(node, fallback)
 	default:
 		return fallback
 	}
@@ -243,8 +266,8 @@ func yamlMetaMergedScalarText(node *yaml.Node, fallback map[string]any) map[stri
 		}
 		return merged
 	case yaml.SequenceNode:
-		for _, child := range node.Content {
-			fallback = yamlMetaMergedScalarText(child, fallback)
+		for i := len(node.Content) - 1; i >= 0; i-- {
+			fallback = yamlMetaMergedScalarText(node.Content[i], fallback)
 		}
 		return fallback
 	default:
@@ -252,7 +275,7 @@ func yamlMetaMergedScalarText(node *yaml.Node, fallback map[string]any) map[stri
 	}
 }
 
-func yamlMetaScalarValue(node *yaml.Node, fallback any) any {
+func yamlScalarValue(node *yaml.Node, fallback any) any {
 	if node.Tag == "!!null" {
 		if fallback == nil {
 			return ""
