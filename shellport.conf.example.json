@@ -10,6 +10,10 @@
   // actions.
   "AdminPassword": "",
 
+  // When enabled, ShellPort only allows outbound connections to presets
+  // and disables preset management.
+  "OnlyAllowPresetRemotes": false,
+
   // Maximum time ShellPort waits while opening an outbound connection, in
   // seconds.
   "DialTimeout": 5,
@@ -129,8 +133,8 @@
         "Encoding": "utf-8",
 
         // Private keys can be embedded directly, or stored as file:// or
-        // environment:// references. Do not put secret key material in shared
-        // presets unless you intend it to be distributed to clients.
+        // environment:// references. Embedded keys will be converted to file://
+        // when ShellPort runs
         "Private Key": "-----BEGIN RSA !!!Will be sent to client in plain-text!!! -END RSA PRI...\n",
 
         "Authentication": "Private Key",
@@ -189,9 +193,5 @@
         "Private Key": "-----BEGIN RSA !!!Will be sent to client in plain-text!!! -END RSA PRIVATE KEY-----"
       }
     }
-  ],
-
-  // When enabled, ShellPort only allows outbound connections to preset hosts
-  // and disables preset management.
-  "OnlyAllowPresetRemotes": false
+  ]
 }
