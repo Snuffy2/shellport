@@ -9,8 +9,8 @@ services:
       - ./config:/config
     environment:
       # Optional: override the config file path. By default, this compose file
-      # uses /config/shellport.conf.json from the mounted ./config dir.
-      # SHELLPORT_CONFIG: /config/shellport.conf.json
+      # uses /config/shellport.conf.yml from the mounted ./config dir.
+      # SHELLPORT_CONFIG: /config/shellport.conf.yml
       # Optional: IANA timezone used for local timestamps in logs.
       TZ: America/New_York
       # Recommended: base64-encoded 32-byte key for encrypted preset passwords.

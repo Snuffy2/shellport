@@ -17,9 +17,9 @@ const repoRoot = path.resolve(
 const devConfigTemplate = path.join(
   repoRoot,
   "scripts",
-  "shellport.dev.conf.json",
+  "shellport.dev.conf.yml",
 );
-const devConfig = path.join(repoRoot, ".tmp", "dev", "shellport.conf.json");
+const devConfig = path.join(repoRoot, ".tmp", "dev", "shellport.conf.yml");
 
 let shuttingDown = false;
 let goProcess = null;

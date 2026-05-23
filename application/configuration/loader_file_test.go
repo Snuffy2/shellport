@@ -14,14 +14,13 @@ import (
 )
 
 func TestLoadFileRejectsPresetSecretKey(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  "HostName": "localhost",
-  "PresetSecretKey": "not-allowed",
-  "Servers": [
-    {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
-  ]
-}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`HostName: localhost
+PresetSecretKey: not-allowed
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -36,14 +35,13 @@ func TestLoadFileRejectsPresetSecretKey(t *testing.T) {
 }
 
 func TestLoadFileRejectsPresetSecretKeyEnvName(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  "HostName": "localhost",
-  "SHELLPORT_PRESET_SECRET_KEY": "not-allowed",
-  "Servers": [
-    {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
-  ]
-}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`HostName: localhost
+SHELLPORT_PRESET_SECRET_KEY: not-allowed
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -57,18 +55,14 @@ func TestLoadFileRejectsPresetSecretKeyEnvName(t *testing.T) {
 	}
 }
 
-func TestLoadFileAcceptsJSONCInJSONFile(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  // ShellPort accepts comments in .json config files.
-  "HostName": "localhost",
-  "Servers": [
-    {
-      "ListenInterface": "127.0.0.1",
-      "ListenPort": 8182,
-    },
-  ],
-}`)
+func TestLoadFileAcceptsYAMLConfigFile(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`# ShellPort accepts comments in YAML config files.
+HostName: localhost
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -86,7 +80,7 @@ func TestLoadFileAcceptsJSONCInJSONFile(t *testing.T) {
 }
 
 func TestExampleConfigFileIsLoadable(t *testing.T) {
-	configPath := filepath.Join("..", "..", "shellport.conf.example.json")
+	configPath := filepath.Join("..", "..", "shellport.conf.example.yml")
 
 	_, cfg, err := loadFile(configPath)
 	if err != nil {
@@ -101,7 +95,7 @@ func TestExampleConfigFileIsLoadable(t *testing.T) {
 }
 
 func TestDevConfigTemplateIsLoadable(t *testing.T) {
-	configPath := filepath.Join("..", "..", "scripts", "shellport.dev.conf.json")
+	configPath := filepath.Join("..", "..", "scripts", "shellport.dev.conf.yml")
 
 	_, cfg, err := loadFile(configPath)
 	if err != nil {
@@ -119,18 +113,14 @@ func TestDevConfigTemplateIsLoadable(t *testing.T) {
 }
 
 func TestLoadFileReadsServerTitle(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  "HostName": "localhost",
-  "Servers": [
-    {
-      "ListenInterface": "127.0.0.1",
-      "ListenPort": 8182,
-      "ServerTitle": "Homelab Shells",
-      "ServerMessage": "Pick a host"
-    }
-  ]
-}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`HostName: localhost
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+    ServerTitle: Homelab Shells
+    ServerMessage: Pick a host
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -150,7 +140,7 @@ func TestLoadFileReadsServerTitle(t *testing.T) {
 func TestDefaultFileSearchListUsesConfigDirectoryOnly(t *testing.T) {
 	searchList := defaultFileSearchList()
 
-	expected := []string{filepath.Join("/", "config", "shellport.conf.json")}
+	expected := []string{filepath.Join("/", "config", "shellport.conf.yml")}
 	if len(searchList) != len(expected) {
 		t.Fatalf("defaultFileSearchList() length = %d, want %d: %v", len(searchList), len(expected), searchList)
 	}
@@ -162,7 +152,7 @@ func TestDefaultFileSearchListUsesConfigDirectoryOnly(t *testing.T) {
 }
 
 func TestCreateDefaultConfigFileWritesLoadableConfig(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "config", "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "config", "shellport.conf.yml")
 
 	if err := createDefaultConfigFile(configPath); err != nil {
 		t.Fatalf("createDefaultConfigFile returned error: %v", err)
@@ -204,8 +194,8 @@ func TestCreateDefaultConfigFileWritesLoadableConfig(t *testing.T) {
 }
 
 func TestCreateDefaultConfigFileDoesNotOverwriteExistingConfig(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	original := []byte(`{"Servers":[{"ListenInterface":"127.0.0.1","ListenPort":8182}]}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	original := []byte("Servers:\n  - ListenInterface: 127.0.0.1\n    ListenPort: 8182\n")
 	if err := os.WriteFile(configPath, original, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -224,8 +214,8 @@ func TestCreateDefaultConfigFileDoesNotOverwriteExistingConfig(t *testing.T) {
 }
 
 func TestAutoCreateDefaultFileLoadsExistingConfigAfterCreateRace(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	original := []byte(`{"Servers":[{"ListenInterface":"127.0.0.1","ListenPort":8182}]}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	original := []byte("Servers:\n  - ListenInterface: 127.0.0.1\n    ListenPort: 8182\n")
 	if err := os.WriteFile(configPath, original, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}

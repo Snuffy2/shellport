@@ -17,7 +17,7 @@ import (
 func TestWarnIfPresetConfigNotWritableLogsForUnwritableFileBackedConfig(
 	t *testing.T,
 ) {
-	configPath := filepath.Join(t.TempDir(), "missing-shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "missing-shellport.conf.yml")
 	var output bytes.Buffer
 
 	warnIfPresetConfigNotWritable(
@@ -40,7 +40,7 @@ func TestWarnIfPresetConfigNotWritableLogsForUnwritableFileBackedConfig(
 func TestWarnIfPresetConfigNotWritableSkipsWritableFileBackedConfig(
 	t *testing.T,
 ) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yml")
 	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}

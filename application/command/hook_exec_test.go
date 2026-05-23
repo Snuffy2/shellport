@@ -40,7 +40,7 @@ func TestFilterExecHookEnviron(t *testing.T) {
 // subprocesses do not inherit sensitive ShellPort environment variables.
 func TestFilterExecHookEnvironDoesNotForwardShellPortSecrets(t *testing.T) {
 	envs := []string{
-		"SHELLPORT_CONFIG=/config/shellport.conf.json",
+		"SHELLPORT_CONFIG=/config/shellport.conf.yml",
 		"SHELLPORT_PRESET_SECRET_KEY=secret",
 		"PATH=/usr/bin",
 	}
@@ -51,7 +51,7 @@ func TestFilterExecHookEnvironDoesNotForwardShellPortSecrets(t *testing.T) {
 		t.Fatalf("expected PATH to remain in filtered hook environment")
 	}
 
-	if slices.Contains(filtered, "SHELLPORT_CONFIG=/config/shellport.conf.json") {
+	if slices.Contains(filtered, "SHELLPORT_CONFIG=/config/shellport.conf.yml") {
 		t.Fatalf("expected SHELLPORT_CONFIG to be filtered from hook environment")
 	}
 

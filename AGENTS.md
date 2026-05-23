@@ -56,7 +56,7 @@ Important behavior:
 - `npm run build` runs generation and then builds the `shellport` binary.
 - `npm run testonly` runs Vitest frontend tests and `go test ./... -race`.
 - `npm test` runs generation first, then `testonly`.
-- `npm run dev` starts the Go backend with `shellport.conf.example.json` and
+- `npm run dev` starts the Go backend with `scripts/shellport.dev.conf.yml` and
   runs a Vite dev server with HMR and backend proxying.
 
 For Go-only checks, use:

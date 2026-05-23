@@ -1,12 +1,13 @@
 # ShellPort Configuration
 
-ShellPort reads its runtime settings from a `.json` file. In the Docker image, the default path is `/config/shellport.conf.json`.
+ShellPort reads its runtime settings from a `.yml` file. In the Docker image, the default path is `/config/shellport.conf.yml`.
 
 If that file does not exist, ShellPort creates a minimal writable config and then loads it. The generated file listens on `0.0.0.0:8182`, starts with no presets, and leaves `UserPassword` and `AdminPassword` blank so you can reach the UI on first boot and add presets before tightening access.
 
-You can point ShellPort at a different file with `SHELLPORT_CONFIG`.
+You can point ShellPort at a different file with `SHELLPORT_CONFIG`, including
+an explicitly named `.yaml` file.
 
-The checked-in `shellport.conf.example.json` is an annotated reference file and is loadable by ShellPort.
+The checked-in `shellport.conf.example.yml` is an annotated reference file and is loadable by ShellPort.
 
 Most top-level config changes are read at startup. Restart ShellPort after
 changing passwords, listeners, TLS, SOCKS5, hooks, or preset-only restrictions.
@@ -15,7 +16,7 @@ full restart.
 
 ## Config File Location
 
-The default file path is convenient for Docker volume mounts, but it is not required. Any writable `.json` config file can be used as long as ShellPort can read it at startup.
+The default file path is convenient for Docker volume mounts, but it is not required. Any writable `.yml` or `.yaml` config file can be used as long as ShellPort can read it at startup.
 
 The runtime environment variables are:
 
@@ -24,7 +25,7 @@ The runtime environment variables are:
 - `SHELLPORT_DEBUG`, which enables debug logging when it is set to any non-empty value.
 - `SHELLPORT_PRESET_SECRET_KEY`, which enables preset-password encryption and decryption.
 
-`SHELLPORT_PRESET_SECRET_KEY` must be provided as a base64-encoded 32-byte key. Set it in the environment, not in the JSON file. When present, ShellPort migrates plaintext preset passwords to encrypted form on startup and keeps the plaintext value out of the config file.
+`SHELLPORT_PRESET_SECRET_KEY` must be provided as a base64-encoded 32-byte key. Set it in the environment, not in the YAML file. When present, ShellPort migrates plaintext preset passwords to encrypted form on startup and keeps the plaintext value out of the config file.
 
 ## Preset Management
 
@@ -159,7 +160,7 @@ ET does not support password authentication or SOCKS5 proxying.
 
 ## Preset UI Workflow
 
-The preset editor in the UI follows the same configuration model as the JSON file.
+The preset editor in the UI follows the same configuration model as the YAML file.
 
 For a new preset, fill in the preset name, type, host, and any type-specific fields. Choose the authentication mode, then decide whether to save a password or a private key. If you use the existing server key option, ShellPort can point the preset at a key file managed on disk instead of embedding key text in the main config.
 

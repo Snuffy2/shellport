@@ -12,10 +12,10 @@ import (
 	"strings"
 
 	"github.com/natefinch/atomic"
-	"github.com/tailscale/hujson"
+	"gopkg.in/yaml.v3"
 )
 
-// PersistPresetIDs writes generated preset IDs back to a JSON configuration file.
+// PersistPresetIDs writes generated preset IDs back to a YAML configuration file.
 //
 // It preserves the existing preset order and only updates ID fields. The caller
 // must pass the same number of presets that were loaded from filePath.
@@ -45,12 +45,12 @@ func PersistPresetIDs(filePath string, presets []Preset) error {
 	return writeCommonInputFileDocument(resolvedPath, doc)
 }
 
-// ReplaceFilePresets atomically updates the Presets list in a JSON config file.
+// ReplaceFilePresets atomically updates the Presets list in a YAML config file.
 func ReplaceFilePresets(filePath string, presets []Preset) error {
 	return replaceFilePresets(filePath, presets, nil, nil, nil)
 }
 
-// ReplaceFilePresetsWithRuntime atomically updates a JSON config file using
+// ReplaceFilePresetsWithRuntime atomically updates a YAML config file using
 // runtimePresets to distinguish deleted presets from raw entries the runtime
 // did not understand.
 func ReplaceFilePresetsWithRuntime(
@@ -381,9 +381,9 @@ func presetMapByID(presets []Preset) map[string]Preset {
 
 type commonInputFileDocument struct {
 	input      commonInput
-	raw        map[string]json.RawMessage
-	rawPresets []map[string]json.RawMessage
-	syntax     hujson.Value
+	raw        map[string]any
+	rawPresets []map[string]any
+	syntax     *yaml.Node
 	mode       os.FileMode
 }
 
@@ -397,25 +397,22 @@ func readCommonInputFileDocument(filePath string) (commonInputFileDocument, erro
 	if readErr != nil {
 		return commonInputFileDocument{}, readErr
 	}
-	syntax, parseErr := hujson.Parse(data)
-	if parseErr != nil {
-		return commonInputFileDocument{}, parseErr
-	}
-	standardSyntax := syntax.Clone()
-	standardSyntax.Standardize()
-	standardJSON := standardSyntax.Pack()
-
-	cfg := commonInput{}
-	if decodeErr := json.Unmarshal(standardJSON, &cfg); decodeErr != nil {
+	raw, decodeErr := decodeYAMLMap(data)
+	if decodeErr != nil {
 		return commonInputFileDocument{}, decodeErr
 	}
-	raw := map[string]json.RawMessage{}
-	if decodeErr := json.Unmarshal(standardJSON, &raw); decodeErr != nil {
+	syntax := yaml.Node{}
+	if decodeErr := yaml.Unmarshal(data, &syntax); decodeErr != nil {
 		return commonInputFileDocument{}, decodeErr
 	}
-	var rawPresets []map[string]json.RawMessage
+	cfg, inputErr := commonInputFromYAMLMap(raw)
+	if inputErr != nil {
+		return commonInputFileDocument{}, inputErr
+	}
+	var rawPresets []map[string]any
 	if presets, ok := raw["Presets"]; ok {
-		if decodeErr := json.Unmarshal(presets, &rawPresets); decodeErr != nil {
+		rawPresets, decodeErr = rawPresetMaps(presets)
+		if decodeErr != nil {
 			return commonInputFileDocument{}, decodeErr
 		}
 	}
@@ -423,7 +420,7 @@ func readCommonInputFileDocument(filePath string) (commonInputFileDocument, erro
 		input:      cfg,
 		raw:        raw,
 		rawPresets: rawPresets,
-		syntax:     syntax,
+		syntax:     &syntax,
 		mode:       info.Mode(),
 	}, nil
 }
@@ -443,14 +440,10 @@ func writeCommonInputFileDocument(
 ) error {
 	raw := doc.raw
 	if raw == nil {
-		raw = map[string]json.RawMessage{}
+		raw = map[string]any{}
 	}
 	if _, ok := raw["AdminPassword"]; ok || doc.input.AdminPassword != "" {
-		adminPassword, marshalAdminPasswordErr := json.Marshal(doc.input.AdminPassword)
-		if marshalAdminPasswordErr != nil {
-			return marshalAdminPasswordErr
-		}
-		raw["AdminPassword"] = adminPassword
+		raw["AdminPassword"] = doc.input.AdminPassword
 	}
 	presets, marshalErr := marshalPresetInputsPreservingRaw(
 		doc.input.Presets,
@@ -460,8 +453,8 @@ func writeCommonInputFileDocument(
 		return marshalErr
 	}
 	raw["Presets"] = presets
-	if doc.syntax.Value != nil {
-		updates := map[string]json.RawMessage{
+	if doc.syntax != nil {
+		updates := map[string]any{
 			"Presets": presets,
 		}
 		if adminPassword, ok := raw["AdminPassword"]; ok {
@@ -474,59 +467,75 @@ func writeCommonInputFileDocument(
 
 func writeCommonInputFileSyntax(
 	filePath string,
-	syntax hujson.Value,
-	updates map[string]json.RawMessage,
+	syntax *yaml.Node,
+	updates map[string]any,
 	mode os.FileMode,
 ) error {
-	root, ok := syntax.Value.(*hujson.Object)
-	if !ok {
+	root := yamlMappingRoot(syntax)
+	if root == nil {
 		return writeCommonInputFile(filePath, updates, mode)
 	}
 	for key, value := range updates {
-		if err := setObjectMemberValue(root, key, value); err != nil {
+		node, err := yamlNodeFromValue(value)
+		if err != nil {
 			return err
 		}
+		setYAMLMappingValue(root, key, node)
 	}
-	syntax.Format()
-	return writeCommonInputFileBytes(filePath, syntax.Pack(), mode)
+	return writeCommonInputFileNode(filePath, syntax, mode)
 }
 
-func setObjectMemberValue(
-	object *hujson.Object,
-	key string,
-	data json.RawMessage,
-) error {
-	next, err := hujson.Parse(data)
-	if err != nil {
-		return err
-	}
-	for i := range object.Members {
-		if object.Members[i].Name.Value.(hujson.Literal).String() != key {
-			continue
-		}
-		next.BeforeExtra = object.Members[i].Value.BeforeExtra
-		next.AfterExtra = object.Members[i].Value.AfterExtra
-		object.Members[i].Value = next
+func yamlMappingRoot(node *yaml.Node) *yaml.Node {
+	if node == nil {
 		return nil
 	}
-	object.Members = append(object.Members, hujson.ObjectMember{
-		Name: hujson.Value{
-			BeforeExtra: hujson.Extra("\n  "),
-			Value:       hujson.String(key),
-		},
-		Value: hujson.Value{
-			BeforeExtra: hujson.Extra(" "),
-			Value:       next.Value,
-		},
-	})
-	return nil
+	if node.Kind == yaml.DocumentNode && len(node.Content) == 1 {
+		node = node.Content[0]
+	}
+	if node.Kind != yaml.MappingNode {
+		return nil
+	}
+	return node
+}
+
+func yamlNodeFromValue(value any) (*yaml.Node, error) {
+	data, err := yaml.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	node := yaml.Node{}
+	if err := yaml.Unmarshal(data, &node); err != nil {
+		return nil, err
+	}
+	if len(node.Content) == 1 {
+		return node.Content[0], nil
+	}
+	return &node, nil
+}
+
+func setYAMLMappingValue(root *yaml.Node, key string, value *yaml.Node) {
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value != key {
+			continue
+		}
+		value.HeadComment = root.Content[i+1].HeadComment
+		value.LineComment = root.Content[i+1].LineComment
+		value.FootComment = root.Content[i+1].FootComment
+		root.Content[i+1] = value
+		return
+	}
+	root.Content = append(root.Content, &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Tag:   "!!str",
+		Value: key,
+	}, value)
 }
 
 func marshalPresetInputsPreservingRaw(
 	inputs presetInputs,
-	rawPresets []map[string]json.RawMessage,
-) (json.RawMessage, error) {
-	rawByID := make(map[string]map[string]json.RawMessage, len(rawPresets))
+	rawPresets []map[string]any,
+) ([]map[string]any, error) {
+	rawByID := make(map[string]map[string]any, len(rawPresets))
 	for _, rawPreset := range rawPresets {
 		id := rawPresetString(rawPreset, "ID")
 		if id != "" {
@@ -534,7 +543,7 @@ func marshalPresetInputsPreservingRaw(
 		}
 	}
 
-	presets := make([]map[string]json.RawMessage, len(inputs))
+	presets := make([]map[string]any, len(inputs))
 	for i, input := range inputs {
 		id := strings.TrimSpace(input.ID)
 		rawPreset := rawByID[id]
@@ -550,76 +559,73 @@ func marshalPresetInputsPreservingRaw(
 		}
 		presets[i] = preset
 	}
-	return json.Marshal(presets)
+	return presets, nil
 }
 
 func rawPresetString(
-	rawPreset map[string]json.RawMessage,
+	rawPreset map[string]any,
 	key string,
 ) string {
 	if rawPreset == nil {
 		return ""
 	}
-	var value string
-	if err := json.Unmarshal(rawPreset[key], &value); err != nil {
-		return ""
+	if value, ok := rawPreset[key].(string); ok {
+		return strings.TrimSpace(value)
 	}
-	return strings.TrimSpace(value)
+	return ""
 }
 
 func mergePresetInputRaw(
 	input presetInput,
-	rawPreset map[string]json.RawMessage,
-) (map[string]json.RawMessage, error) {
-	merged := make(map[string]json.RawMessage, len(rawPreset)+6)
+	rawPreset map[string]any,
+) (map[string]any, error) {
+	merged := make(map[string]any, len(rawPreset)+6)
 	for key, value := range rawPreset {
 		merged[key] = value
 	}
-	if err := setPresetRawField(merged, "ID", input.ID); err != nil {
-		return nil, err
-	}
-	if err := setPresetRawField(merged, "Title", input.Title); err != nil {
-		return nil, err
-	}
-	if err := setPresetRawField(merged, "Type", input.Type); err != nil {
-		return nil, err
-	}
-	if err := setPresetRawField(merged, "Host", input.Host); err != nil {
-		return nil, err
-	}
-	if err := setPresetRawField(merged, "TabColor", input.TabColor); err != nil {
-		return nil, err
-	}
-	if err := setPresetRawField(merged, "Meta", input.Meta); err != nil {
-		return nil, err
-	}
+	merged["ID"] = input.ID
+	merged["Title"] = input.Title
+	merged["Type"] = input.Type
+	merged["Host"] = input.Host
+	merged["TabColor"] = input.TabColor
+	merged["Meta"] = input.Meta
 	return merged, nil
 }
 
-func setPresetRawField(
-	rawPreset map[string]json.RawMessage,
-	key string,
-	value any,
-) error {
+func rawPresetMaps(value any) ([]map[string]any, error) {
 	data, err := json.Marshal(value)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rawPreset[key] = data
-	return nil
+	var rawPresets []map[string]any
+	if err := json.Unmarshal(data, &rawPresets); err != nil {
+		return nil, err
+	}
+	return rawPresets, nil
 }
 
-// writeCommonInputFile atomically rewrites filePath with cfg encoded as JSON.
+// writeCommonInputFile atomically rewrites filePath with cfg encoded as YAML.
 func writeCommonInputFile(
 	filePath string,
-	cfg map[string]json.RawMessage,
+	cfg map[string]any,
 	mode os.FileMode,
 ) error {
-	data, marshalErr := json.MarshalIndent(cfg, "", "  ")
+	data, marshalErr := yaml.Marshal(cfg)
 	if marshalErr != nil {
 		return marshalErr
 	}
-	data = append(data, '\n')
+	return writeCommonInputFileBytes(filePath, data, mode)
+}
+
+func writeCommonInputFileNode(
+	filePath string,
+	node *yaml.Node,
+	mode os.FileMode,
+) error {
+	data, marshalErr := yaml.Marshal(node)
+	if marshalErr != nil {
+		return marshalErr
+	}
 	return writeCommonInputFileBytes(filePath, data, mode)
 }
 

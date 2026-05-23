@@ -12,50 +12,44 @@ import (
 	"strings"
 
 	"github.com/Snuffy2/shellport/application/log"
-	"github.com/tailscale/hujson"
+	"gopkg.in/yaml.v3"
 )
 
 // fileTypeName is the loader name reported when configuration is loaded from a
-// JSON file.
+// YAML file.
 const (
 	// DefaultConfigFilePath is the default Docker config file path.
-	DefaultConfigFilePath = "/config/shellport.conf.json"
+	DefaultConfigFilePath = "/config/shellport.conf.yml"
 	fileTypeName          = "File"
-	defaultConfigContent  = `{
-  "HostName": "",
-  "UserPassword": "",
-  "AdminPassword": "",
-  "DialTimeout": 5,
-  "Socks5": "",
-  "Socks5User": "",
-  "Socks5Password": "",
-  "Hooks": {
-    "before_connecting": []
-  },
-  "HookTimeout": 30,
-  "Servers": [
-    {
-      "ListenInterface": "0.0.0.0",
-      "ListenPort": 8182,
-      "InitialTimeout": 10,
-      "ReadTimeout": 120,
-      "WriteTimeout": 120,
-      "HeartbeatTimeout": 15,
-      "ReadDelay": 10,
-      "WriteDelay": 10,
-      "TLSCertificateFile": "",
-      "TLSCertificateKeyFile": "",
-      "ServerTitle": "",
-      "ServerMessage": ""
-    }
-  ],
-  "Presets": [],
-  "OnlyAllowPresetRemotes": false
-}
+	defaultConfigContent  = `HostName: ""
+UserPassword: ""
+AdminPassword: ""
+DialTimeout: 5
+Socks5: ""
+Socks5User: ""
+Socks5Password: ""
+Hooks:
+  before_connecting: []
+HookTimeout: 30
+Servers:
+  - ListenInterface: 0.0.0.0
+    ListenPort: 8182
+    InitialTimeout: 10
+    ReadTimeout: 120
+    WriteTimeout: 120
+    HeartbeatTimeout: 15
+    ReadDelay: 10
+    WriteDelay: 10
+    TLSCertificateFile: ""
+    TLSCertificateKeyFile: ""
+    ServerTitle: ""
+    ServerMessage: ""
+Presets: []
+OnlyAllowPresetRemotes: false
 `
 )
 
-// loadFile opens filePath, JSON-decodes it into a commonInput, and returns the
+// loadFile opens filePath, YAML-decodes it into a commonInput, and returns the
 // resulting Configuration. It returns the fileTypeName string along with the
 // configuration or the first error encountered.
 func loadFile(filePath string) (string, Configuration, error) {
@@ -63,23 +57,15 @@ func loadFile(filePath string) (string, Configuration, error) {
 	if readErr != nil {
 		return fileTypeName, Configuration{}, readErr
 	}
-	standardJSON, err := standardizeJSONC(data)
+	raw, err := decodeYAMLMap(data)
 	if err != nil {
 		return fileTypeName, Configuration{}, err
-	}
-	cfg := commonInput{}
-	raw := map[string]json.RawMessage{}
-	if jDecodeErr := json.Unmarshal(standardJSON, &raw); jDecodeErr != nil {
-		return fileTypeName, Configuration{}, jDecodeErr
 	}
 	if err := rejectFilePresetSecretKey(raw); err != nil {
 		return fileTypeName, Configuration{}, err
 	}
-	data, marshalErr := json.Marshal(raw)
-	if marshalErr != nil {
-		return fileTypeName, Configuration{}, marshalErr
-	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	cfg, err := commonInputFromYAMLMap(raw)
+	if err != nil {
 		return fileTypeName, Configuration{}, err
 	}
 	finalCfg, err := cfg.concretize()
@@ -87,21 +73,55 @@ func loadFile(filePath string) (string, Configuration, error) {
 	return fileTypeName, finalCfg, err
 }
 
-func standardizeJSONC(data []byte) ([]byte, error) {
-	value, err := hujson.Parse(data)
-	if err != nil {
+func decodeYAMLMap(data []byte) (map[string]any, error) {
+	raw := map[string]any{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
-	value.Standardize()
-	return value.Pack(), nil
+	return normalizeYAMLMap(raw), nil
 }
 
-func rejectFilePresetSecretKey(raw map[string]json.RawMessage) error {
+func commonInputFromYAMLMap(raw map[string]any) (commonInput, error) {
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return commonInput{}, err
+	}
+	cfg := commonInput{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return commonInput{}, err
+	}
+	return cfg, nil
+}
+
+func normalizeYAMLMap(raw map[string]any) map[string]any {
+	normalized := make(map[string]any, len(raw))
+	for key, value := range raw {
+		normalized[key] = normalizeYAMLValue(value)
+	}
+	return normalized
+}
+
+func normalizeYAMLValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return normalizeYAMLMap(typed)
+	case []any:
+		normalized := make([]any, len(typed))
+		for i, item := range typed {
+			normalized[i] = normalizeYAMLValue(item)
+		}
+		return normalized
+	default:
+		return value
+	}
+}
+
+func rejectFilePresetSecretKey(raw map[string]any) error {
 	if _, ok := raw["PresetSecretKey"]; ok {
-		return fmt.Errorf("%s must be set as an environment variable, not in JSON config", PresetSecretKeyEnv)
+		return fmt.Errorf("%s must be set as an environment variable, not in YAML config", PresetSecretKeyEnv)
 	}
 	if _, ok := raw[PresetSecretKeyEnv]; ok {
-		return fmt.Errorf("%s must be set as an environment variable, not in JSON config", PresetSecretKeyEnv)
+		return fmt.Errorf("%s must be set as an environment variable, not in YAML config", PresetSecretKeyEnv)
 	}
 	return nil
 }

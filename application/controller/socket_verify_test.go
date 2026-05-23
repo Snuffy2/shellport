@@ -27,7 +27,7 @@ func decodeAccessConfigForTest(t *testing.T, cfg socketAccessConfiguration) map[
 }
 
 func TestSocketAccessConfigurationIncludesPresetManagementPolicy(t *testing.T) {
-	writableSourceFile := filepath.Join(t.TempDir(), "shellport.conf.json")
+	writableSourceFile := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	if err := os.WriteFile(writableSourceFile, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestSocketAccessConfigurationIncludesPresetManagementPolicy(t *testing.T) {
 }
 
 func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile config returned error: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 }
 
 func TestSocketAccessConfigurationHidesPrivateKeyFileUntilManageAllowed(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile config returned error: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestSocketAccessConfigurationListsPrivateKeyFilesOnlyWhenManageable(
 	t *testing.T,
 ) {
 	configDir := t.TempDir()
-	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configPath := filepath.Join(configDir, "shellport.conf.yaml")
 	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile config returned error: %v", err)
 	}

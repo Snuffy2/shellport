@@ -47,7 +47,7 @@ func requireRawPresetCount(t *testing.T, presets presetInputs, want int) {
 }
 
 func TestLoadFileRecordsSourceFile(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{
 		{"ID": "preset-existing", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 	})
@@ -63,7 +63,7 @@ func TestLoadFileRecordsSourceFile(t *testing.T) {
 
 func TestLoadFileDoesNotReadAdminPasswordFromEnvironment(t *testing.T) {
 	t.Setenv("ADMIN_PASSWORD", "env-admin-password")
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{
 		{"ID": "preset-existing", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 	})
@@ -78,7 +78,7 @@ func TestLoadFileDoesNotReadAdminPasswordFromEnvironment(t *testing.T) {
 }
 
 func TestPersistPresetIDsAddsMissingIDsToConfigFile(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{
 		{"Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 	})
@@ -109,7 +109,7 @@ func TestPersistPresetIDsAddsMissingIDsToConfigFile(t *testing.T) {
 }
 
 func TestPersistPresetIDsPreservesUnknownTopLevelFields(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	content := []byte(`{
   "Servers": [
     {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
@@ -135,13 +135,13 @@ func TestPersistPresetIDsPreservesUnknownTopLevelFields(t *testing.T) {
 		t.Fatalf("PersistPresetIDs returned error: %v", err)
 	}
 
-	var raw map[string]json.RawMessage
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("os.ReadFile returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("json.Unmarshal returned error: %v", err)
+	raw, err := decodeYAMLMap(data)
+	if err != nil {
+		t.Fatalf("decodeYAMLMap returned error: %v", err)
 	}
 	if _, ok := raw["FutureTopLevel"]; !ok {
 		t.Fatal("unknown top-level field was not preserved")
@@ -149,7 +149,7 @@ func TestPersistPresetIDsPreservesUnknownTopLevelFields(t *testing.T) {
 }
 
 func TestReplaceFilePresetsPreservesRawMetaValues(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
 	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile key returned error: %v", err)
@@ -196,7 +196,7 @@ func TestReplaceFilePresetsPreservesRawMetaValues(t *testing.T) {
 }
 
 func TestReplaceFilePresetsPreservesUnsupportedRawPresets(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home:22"},
 		{"ID": "preset-future", "Title": "Future", "Type": "Future", "Host": "future.home"},
@@ -227,7 +227,7 @@ func TestReplaceFilePresetsPreservesUnsupportedRawPresets(t *testing.T) {
 }
 
 func TestReplaceFilePresetsPreservesUnknownPresetFields(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	content := []byte(`{
   "Servers": [
     {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
@@ -260,26 +260,28 @@ func TestReplaceFilePresetsPreservesUnknownPresetFields(t *testing.T) {
 		t.Fatalf("ReplaceFilePresets returned error: %v", err)
 	}
 
-	var raw struct {
-		Presets []map[string]json.RawMessage
-	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("os.ReadFile returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("json.Unmarshal returned error: %v", err)
+	raw, err := decodeYAMLMap(data)
+	if err != nil {
+		t.Fatalf("decodeYAMLMap returned error: %v", err)
 	}
-	if len(raw.Presets) != 1 {
-		t.Fatalf("raw preset count = %d, want 1", len(raw.Presets))
+	rawPresets, err := rawPresetMaps(raw["Presets"])
+	if err != nil {
+		t.Fatalf("rawPresetMaps returned error: %v", err)
 	}
-	if _, ok := raw.Presets[0]["FuturePresetField"]; !ok {
+	if len(rawPresets) != 1 {
+		t.Fatalf("raw preset count = %d, want 1", len(rawPresets))
+	}
+	if _, ok := rawPresets[0]["FuturePresetField"]; !ok {
 		t.Fatal("unknown preset field was not preserved")
 	}
 }
 
 func TestReplaceFilePresetsPreservesUnknownTopLevelFields(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	content := []byte(`{
   "Servers": [
     {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
@@ -307,13 +309,13 @@ func TestReplaceFilePresetsPreservesUnknownTopLevelFields(t *testing.T) {
 		t.Fatalf("ReplaceFilePresets returned error: %v", err)
 	}
 
-	var raw map[string]json.RawMessage
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("os.ReadFile returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("json.Unmarshal returned error: %v", err)
+	raw, err := decodeYAMLMap(data)
+	if err != nil {
+		t.Fatalf("decodeYAMLMap returned error: %v", err)
 	}
 	if _, ok := raw["FutureTopLevel"]; !ok {
 		t.Fatal("unknown top-level field was not preserved")
@@ -321,18 +323,20 @@ func TestReplaceFilePresetsPreservesUnknownTopLevelFields(t *testing.T) {
 }
 
 func TestReplaceFilePresetsPreservesUnchangedConfigComments(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  // listener settings should keep this operator note
-  "Servers": [
-    {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
-  ],
-  "Presets": [
-    {"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home:22"}
-  ],
-  // future setting should keep this operator note
-  "FutureTopLevel": {"enabled": true}
-}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`# listener settings should keep this operator note
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets:
+  - ID: preset-atlantis
+    Title: Atlantis
+    Type: SSH
+    Host: atlantis.home:22
+# future setting should keep this operator note
+FutureTopLevel:
+  enabled: true
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -357,20 +361,20 @@ func TestReplaceFilePresetsPreservesUnchangedConfigComments(t *testing.T) {
 	}
 	if !strings.Contains(
 		string(data),
-		"// listener settings should keep this operator note",
+		"# listener settings should keep this operator note",
 	) {
 		t.Fatalf("listener comment was not preserved:\n%s", data)
 	}
 	if !strings.Contains(
 		string(data),
-		"// future setting should keep this operator note",
+		"# future setting should keep this operator note",
 	) {
 		t.Fatal("future setting comment was not preserved")
 	}
 }
 
 func TestReplaceFilePresetsWithRuntimeDoesNotResolveRawMeta(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
 	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile key returned error: %v", err)
@@ -432,7 +436,7 @@ func TestReplaceFilePresetsWithRuntimeDoesNotResolveRawMeta(t *testing.T) {
 }
 
 func TestReplaceFilePresetsWithRuntimePreservesRotatedRawMetaReference(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
 	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile key returned error: %v", err)
@@ -497,7 +501,7 @@ func TestReplaceFilePresetsWithRuntimePreservesRotatedRawMetaReference(t *testin
 }
 
 func TestReplaceFilePresetsWithRuntimeAllowsInlinePrivateKeyReplacement(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	keyPath := filepath.Join(t.TempDir(), "id_ed25519")
 	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile key returned error: %v", err)
@@ -559,7 +563,7 @@ func TestReplaceFilePresetsWithRuntimeAllowsInlinePrivateKeyReplacement(t *testi
 }
 
 func TestReplaceFilePresetsWithRuntimePreservesOmittedRawOnlyMeta(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -614,7 +618,7 @@ func TestReplaceFilePresetsWithRuntimePreservesOmittedRawOnlyMeta(t *testing.T) 
 }
 
 func TestReplaceFilePresetsWithRuntimeDropsKnownMetaForWrongType(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -679,7 +683,7 @@ func TestReplaceFilePresetsWithRuntimeDropsKnownMetaForWrongType(t *testing.T) {
 
 func TestReplaceFilePresetsUpdatesSymlinkTarget(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "shellport.conf.json")
+	configPath := filepath.Join(tempDir, "shellport.conf.yaml")
 	linkPath := filepath.Join(tempDir, "linked.conf.json")
 	writePresetConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home:22"},
@@ -717,7 +721,7 @@ func TestReplaceFilePresetsUpdatesSymlinkTarget(t *testing.T) {
 }
 
 func TestReplaceFilePresetsPreservesOmittedRawMetaKeys(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
