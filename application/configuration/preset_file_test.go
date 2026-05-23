@@ -355,6 +355,50 @@ Presets:
 	}
 }
 
+func TestReplaceFilePresetsSkipsYAMLPresetMergeKeys(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+PresetDefaults: &presetDefaults
+  FuturePresetFlag: true
+Presets:
+  - <<: *presetDefaults
+    ID: preset-atlantis
+    Title: Atlantis
+    Type: SSH
+    Host: atlantis.home:22
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	if err := ReplaceFilePresets(configPath, []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "atlantis.home:22",
+			Meta: map[string]string{
+				"Fingerprint": "SHA256:abc",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("ReplaceFilePresets returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile returned error: %v", err)
+	}
+	if strings.Contains(string(data), "<<:") {
+		t.Fatalf("merge key was preserved as a preset field:\n%s", data)
+	}
+	if !strings.Contains(string(data), "FuturePresetFlag: true") {
+		t.Fatalf("merged future preset field was not materialized:\n%s", data)
+	}
+}
+
 func TestReplaceFilePresetsPreservesUnknownTopLevelFields(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	content := []byte(`{

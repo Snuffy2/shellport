@@ -179,6 +179,37 @@ Presets:
 	}
 }
 
+func TestLoadFileSkipsYAMLMetaMergeKeys(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+MetaDefaults: &metaDefaults
+  User: pi
+Presets:
+  - Title: Atlantis
+    Type: SSH
+    Host: atlantis.home
+    Meta:
+      <<: *metaDefaults
+      Password: secret
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.Presets[0].Meta["User"] != "pi" {
+		t.Fatalf("User = %q, want pi", cfg.Presets[0].Meta["User"])
+	}
+	if _, ok := cfg.Presets[0].Meta["<<"]; ok {
+		t.Fatal("merge key was preserved as preset metadata")
+	}
+}
+
 func TestDefaultFileSearchListUsesConfigDirectoryOnly(t *testing.T) {
 	searchList := defaultFileSearchList()
 

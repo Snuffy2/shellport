@@ -185,6 +185,9 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 		}
 		for i := 0; i+1 < len(node.Content); i += 2 {
 			key := node.Content[i].Value
+			if key == "<<" {
+				continue
+			}
 			valueNode := node.Content[i+1]
 			if valueNode.Kind == yaml.ScalarNode {
 				typed[key] = yamlMetaScalarValue(valueNode, typed[key])
