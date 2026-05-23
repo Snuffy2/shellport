@@ -22,6 +22,38 @@ export const ECHO_FAILED = streams.ECHO_FAILED;
 const maxSenderDelay = 200;
 /** @type {number} Minimum adaptive sender delay in milliseconds. */
 const minSenderDelay = 30;
+/** @type {number} Maximum keep-alive OPTIONS timeout in milliseconds. */
+const maxKeepAliveTimeout = 10000;
+/** @type {number} Minimum keep-alive OPTIONS timeout in milliseconds. */
+const minKeepAliveTimeout = 1000;
+
+async function cleanupDialConnection(conn, reason) {
+  if (!conn) {
+    return;
+  }
+
+  if (conn.ws) {
+    conn.ws.close();
+  }
+
+  if (conn.sender) {
+    try {
+      await conn.sender.close();
+    } catch (e) {
+      process.env.NODE_ENV === "development" && console.trace(e);
+    }
+  }
+
+  if (conn.reader) {
+    try {
+      conn.reader.closeWithReason
+        ? conn.reader.closeWithReason(reason)
+        : conn.reader.close();
+    } catch (e) {
+      process.env.NODE_ENV === "development" && console.trace(e);
+    }
+  }
+}
 
 /**
  * Manages WebSocket connection setup and the AES-GCM encrypted framing layer.
@@ -46,7 +78,6 @@ class Dial {
     this.address = address;
     this.timeout = timeout;
     this.privateKey = privateKey;
-    this.keepAliveTicker = null;
   }
 
   /**
@@ -90,14 +121,19 @@ class Dial {
           return reject(e);
         };
 
-      if (!self.keepAliveTicker) {
-        self.keepAliveTicker = setInterval(
-          () => {
-            xhr.options(address.keepAlive, {});
-          },
-          Math.max(self.timeout / 2, 1000),
-        );
-      }
+      const keepAliveTimeout = Math.max(
+        Math.min(self.timeout / 2, maxKeepAliveTimeout),
+        minKeepAliveTimeout,
+      );
+
+      const keepAliveTicker = setInterval(
+        () => {
+          xhr.options(address.keepAlive, {}, keepAliveTimeout).catch((e) => {
+            process.env.NODE_ENV === "development" && console.trace(e);
+          });
+        },
+        Math.max(self.timeout / 2, 1000),
+      );
 
       ws.addEventListener("open", (_event) => {
         myRes(ws);
@@ -109,14 +145,12 @@ class Dial {
         };
 
         myRej(event);
-        clearInterval(self.keepAliveTicker);
-        self.keepAliveTicker = null;
+        clearInterval(keepAliveTicker);
       });
 
       ws.addEventListener("error", (_event) => {
         ws.close();
-        clearInterval(self.keepAliveTicker);
-        self.keepAliveTicker = null;
+        clearInterval(keepAliveTicker);
       });
     });
   }
@@ -158,9 +192,11 @@ class Dial {
    */
   async dial(callbacks) {
     let ws = await this.connect(this.address, this.timeout);
+    let rd = null,
+      sd = null;
 
     try {
-      let rd = new reader.Reader(new reader.Multiple(() => {}), (data) => {
+      rd = new reader.Reader(new reader.Multiple(() => {}), (data) => {
         return new Promise((resolve) => {
           let bufferReader = new FileReader();
 
@@ -201,32 +237,32 @@ class Dial {
         },
         getSdDataConvert = () => {
           return sdDataConvert;
-        },
-        sd = new sender.Sender(
-          async (rawData) => {
-            try {
-              let data = await getSdDataConvert()(rawData);
+        };
+      sd = new sender.Sender(
+        async (rawData) => {
+          try {
+            let data = await getSdDataConvert()(rawData);
 
-              ws.send(data.buffer);
-              callbacks.outbound(data);
-            } catch (e) {
-              ws.close();
-              rd.closeWithReason(e);
+            ws.send(data.buffer);
+            callbacks.outbound(data);
+          } catch (e) {
+            ws.close();
+            rd.closeWithReason(e);
 
-              if (process.env.NODE_ENV === "development") {
-                console.error(e);
-              }
-
-              throw e;
+            if (process.env.NODE_ENV === "development") {
+              console.error(e);
             }
-          },
-          4096 - 64, // Server has a 4096 bytes receive buffer, can be no greater,
-          minSenderDelay, // 30ms input delay
-          10, // max 10 buffered requests
-        );
+
+            throw e;
+          }
+        },
+        4096 - 64, // Server has a 4096 bytes receive buffer, can be no greater,
+        minSenderDelay, // 30ms input delay
+        10, // max 10 buffered requests
+      );
 
       let senderNonce = crypt.generateNonce();
-      sd.send(senderNonce);
+      await sd.send(senderNonce);
 
       let receiverNonce = await reader.readN(rd, crypt.GCMNonceSize);
 
@@ -280,6 +316,16 @@ class Dial {
       };
     } catch (e) {
       ws.close();
+      if (sd !== null) {
+        try {
+          await sd.close();
+        } catch (closeErr) {
+          process.env.NODE_ENV === "development" && console.trace(closeErr);
+        }
+      }
+      if (rd !== null) {
+        rd.closeWithReason(e);
+      }
       throw e;
     }
   }
@@ -306,6 +352,7 @@ export class Socket {
     this.echoInterval = echoInterval;
     this.streamHandler = null;
     this.streamHandlerPromise = null;
+    this.openSerial = 0;
   }
 
   /**
@@ -323,7 +370,7 @@ export class Socket {
    * @throws {Error} Re-throws any dial failure after calling `callbacks.failed`.
    */
   async get(callbacks) {
-    if (this.streamHandler) {
+    if (this.streamHandler && !this.streamHandler.stop) {
       return this.streamHandler;
     }
 
@@ -331,13 +378,32 @@ export class Socket {
       return this.streamHandlerPromise;
     }
 
-    this.streamHandlerPromise = this.open(callbacks);
+    const streamHandlerPromise = this.open(callbacks, ++this.openSerial);
+    this.streamHandlerPromise = streamHandlerPromise;
 
     try {
-      return await this.streamHandlerPromise;
+      return await streamHandlerPromise;
     } finally {
-      this.streamHandlerPromise = null;
+      if (this.streamHandlerPromise === streamHandlerPromise) {
+        this.streamHandlerPromise = null;
+      }
     }
+  }
+
+  /**
+   * Closes the active stream handler, if one is connected.
+   *
+   * @returns {Promise<void>} Resolves once the active stream clear completes.
+   */
+  close() {
+    this.openSerial++;
+    this.streamHandlerPromise = null;
+
+    if (this.streamHandler === null) {
+      return Promise.resolve();
+    }
+
+    return this.streamHandler.clear(null);
   }
 
   /**
@@ -348,10 +414,11 @@ export class Socket {
    *   failed: function(Error): void, close: function(Error|null): void,
    *   traffic: function(number, number): void,
    *   echo: function(number): void }} callbacks - Lifecycle and traffic callbacks.
+   * @param {number} openSerial Serial number for this open attempt.
    * @returns {Promise<streams.Streams>} The active stream manager.
    * @throws {Error} Re-throws any dial failure after calling `callbacks.failed`.
    */
-  async open(callbacks) {
+  async open(callbacks, openSerial) {
     let self = this;
 
     callbacks.connecting();
@@ -369,9 +436,21 @@ export class Socket {
         currentReceived > currentUnpacked * receiveToPauseFactor
       );
     };
+    const sendFlowControl = (streamHandler, send) => {
+      send().catch((e) => {
+        if (self.streamHandler === streamHandler) {
+          streamHandler.clear(e).catch((clearErr) => {
+            process.env.NODE_ENV === "development" && console.trace(clearErr);
+          });
+        }
+      });
+    };
+
+    let conn = null;
+    let streamHandler = null;
 
     try {
-      let conn = await this.dial.dial({
+      conn = await this.dial.dial({
         inbound(data) {
           currentReceived += data.size;
 
@@ -386,14 +465,16 @@ export class Socket {
           }
 
           if (self.streamHandler !== null) {
+            const streamHandler = self.streamHandler;
+
             if (streamPaused && !shouldPause()) {
               streamPaused = false;
-              self.streamHandler.resume();
+              sendFlowControl(streamHandler, () => streamHandler.resume());
 
               return;
             } else if (!streamPaused && shouldPause()) {
               streamPaused = true;
-              self.streamHandler.pause();
+              sendFlowControl(streamHandler, () => streamHandler.pause());
 
               return;
             }
@@ -404,7 +485,13 @@ export class Socket {
         },
       });
 
-      let streamHandler = new streams.Streams(conn.reader, conn.sender, {
+      if (openSerial !== this.openSerial) {
+        await cleanupDialConnection(conn, "Socket open cancelled");
+
+        throw new Error("Socket open cancelled");
+      }
+
+      streamHandler = new streams.Streams(conn.reader, conn.sender, {
         echoInterval: self.echoInterval,
         echoUpdater(delay) {
           const sendDelay = delay / 2;
@@ -420,20 +507,33 @@ export class Socket {
           return callbacks.echo(delay);
         },
         cleared(e) {
-          if (self.streamHandler === null) {
-            return;
-          }
+          const activeStream = self.streamHandler === streamHandler;
 
-          self.streamHandler = null;
+          if (activeStream) {
+            self.streamHandler = null;
+          }
 
           // Close connection first otherwise we may
           // risk sending things out
           conn.ws.close();
-          callbacks.close(e);
+
+          if (activeStream) {
+            callbacks.close(e);
+          }
         },
       });
 
+      this.streamHandler = streamHandler;
       callbacks.connected();
+
+      if (
+        openSerial !== this.openSerial ||
+        this.streamHandler !== streamHandler
+      ) {
+        await cleanupDialConnection(conn, "Socket open cancelled");
+
+        throw new Error("Socket open cancelled");
+      }
 
       streamHandler.serve().catch((e) => {
         if (process.env.NODE_ENV !== "development") {
@@ -442,10 +542,15 @@ export class Socket {
 
         console.trace(e);
       });
-
-      this.streamHandler = streamHandler;
     } catch (e) {
-      callbacks.failed(e);
+      if (openSerial === this.openSerial) {
+        if (this.streamHandler === streamHandler) {
+          this.streamHandler = null;
+          await cleanupDialConnection(conn, "Socket open failed");
+        }
+
+        callbacks.failed(e);
+      }
 
       throw e;
     }

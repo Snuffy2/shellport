@@ -21,6 +21,8 @@ import (
 // length exceeds the read buffer.
 // ErrHandlerInvalidControlMessage is returned when a control frame carries zero
 // bytes of payload.
+// ErrHandlerUnknownControlSignal is returned when a control frame carries an
+// unsupported control signal byte.
 var (
 	ErrHandlerUnknownHeaderType = errors.New(
 		"unknown command header type")
@@ -30,6 +32,9 @@ var (
 
 	ErrHandlerInvalidControlMessage = errors.New(
 		"invalid control message")
+
+	ErrHandlerUnknownControlSignal = errors.New(
+		"unknown control signal")
 )
 
 // HandlerCancelSignal is a channel that, when closed or written to, signals
@@ -247,6 +252,9 @@ func (e *Handler) handleControl(d byte, l log.Logger) error {
 		} else {
 			l.Debug("Repeated Resume Stream command, ignore")
 		}
+
+	default:
+		return ErrHandlerUnknownControlSignal
 	}
 
 	return nil

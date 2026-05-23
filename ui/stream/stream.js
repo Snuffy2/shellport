@@ -358,7 +358,7 @@ export class Stream {
     }
 
     this.isShuttingDown = true;
-    this.command.close();
+    return this.command.close();
   }
 
   /**

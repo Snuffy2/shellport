@@ -801,6 +801,7 @@ func (d *sshClient) local(
 			if wErr != nil {
 				remote.closer()
 				d.l.Debug("Failed to write data to remote: %s", wErr)
+				return wErr
 			}
 		}
 
@@ -910,12 +911,13 @@ func (d *sshClient) Close() error {
 		d.fingerprintVerifyResultReceiveClosed = true
 	}
 
+	d.baseCtxCancel()
+
 	remote, remoteErr := d.getRemote()
 	if remoteErr == nil {
 		remote.closer()
 	}
 
-	d.baseCtxCancel()
 	d.remoteCloseWait.Wait()
 
 	return nil

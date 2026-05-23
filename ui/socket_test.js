@@ -1,0 +1,348 @@
+// Copyright (C) 2026 Snuffy2
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import assert from "assert";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const streamMocks = vi.hoisted(() => {
+  const state = {
+    instances: [],
+  };
+
+  class FakeStreams {
+    constructor(reader, sender, config) {
+      this.reader = reader;
+      this.sender = sender;
+      this.config = config;
+      this.served = false;
+      this.stop = false;
+      this.clearedWith = undefined;
+      state.instances.push(this);
+    }
+
+    serve() {
+      this.served = true;
+
+      return new Promise(() => {});
+    }
+
+    pause() {
+      return this.sender.send(new Uint8Array([1]));
+    }
+
+    resume() {
+      return this.sender.send(new Uint8Array([2]));
+    }
+
+    clear(e) {
+      this.stop = true;
+      this.clearedWith = e;
+      this.config.cleared(e);
+
+      return Promise.resolve();
+    }
+  }
+
+  return { FakeStreams, state };
+});
+
+const xhrMocks = vi.hoisted(() => ({
+  options: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("./stream/streams.js", () => ({
+  ECHO_FAILED: -1,
+  Streams: streamMocks.FakeStreams,
+}));
+
+vi.mock("./xhr.js", () => ({
+  options: xhrMocks.options,
+}));
+
+const { Socket } = await import("./socket.js");
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
+function buildConnection() {
+  return {
+    reader: {
+      close: vi.fn(),
+      closeWithReason: vi.fn(),
+    },
+    sender: {
+      close: vi.fn(() => Promise.resolve()),
+      setDelay: vi.fn(),
+    },
+    ws: {
+      close: vi.fn(),
+    },
+  };
+}
+
+function buildCallbacks() {
+  return {
+    connecting: vi.fn(),
+    connected: vi.fn(),
+    failed: vi.fn(),
+    close: vi.fn(),
+    traffic: vi.fn(),
+    echo: vi.fn(),
+  };
+}
+
+describe("Socket", () => {
+  beforeEach(() => {
+    streamMocks.state.instances = [];
+    xhrMocks.options.mockClear();
+  });
+
+  it("ignores and closes an in-flight dial after close", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const dial = deferred();
+    const conn = buildConnection();
+    const callbacks = buildCallbacks();
+
+    socket.dial.dial = vi.fn(() => dial.promise);
+
+    const pending = socket.get(callbacks).catch((e) => e);
+    await Promise.resolve();
+
+    await socket.close();
+    dial.resolve(conn);
+
+    const result = await pending;
+
+    assert(result instanceof Error);
+    assert.strictEqual(socket.streamHandler, null);
+    assert.strictEqual(streamMocks.state.instances.length, 0);
+    expect(callbacks.connected).not.toHaveBeenCalled();
+    expect(callbacks.failed).not.toHaveBeenCalled();
+    expect(conn.ws.close).toHaveBeenCalledTimes(1);
+    expect(conn.sender.close).toHaveBeenCalledTimes(1);
+    expect(conn.reader.close).not.toHaveBeenCalled();
+    expect(conn.reader.closeWithReason).toHaveBeenCalledWith(
+      "Socket open cancelled",
+    );
+  });
+
+  it("does not let stale flow-control failures clear a newer stream", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const callbacks = buildCallbacks();
+    const firstConn = buildConnection();
+    const secondConn = buildConnection();
+    const pauseFailure = deferred();
+    let firstDialCallbacks;
+
+    socket.dial.dial = vi
+      .fn()
+      .mockImplementationOnce((dialCallbacks) => {
+        firstDialCallbacks = dialCallbacks;
+
+        return Promise.resolve(firstConn);
+      })
+      .mockResolvedValueOnce(secondConn);
+
+    const first = await socket.get(callbacks);
+
+    first.sender.send = vi.fn(() => pauseFailure.promise);
+    firstDialCallbacks.inbound({ size: 1024 * 32 });
+    firstDialCallbacks.inboundUnpacked(new Uint8Array(1));
+
+    await first.clear(new Error("old connection dropped"));
+    const second = await socket.get(callbacks);
+
+    pauseFailure.reject(new Error("old pause failed"));
+    await Promise.resolve();
+
+    assert.strictEqual(socket.streamHandler, second);
+    assert.notStrictEqual(first, second);
+    assert.strictEqual(second.clearedWith, undefined);
+  });
+
+  it("handles active flow-control clear failures", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const callbacks = buildCallbacks();
+    const conn = buildConnection();
+    const pauseFailure = deferred();
+    let dialCallbacks;
+
+    socket.dial.dial = vi.fn().mockImplementationOnce((callbacks) => {
+      dialCallbacks = callbacks;
+
+      return Promise.resolve(conn);
+    });
+
+    const streamHandler = await socket.get(callbacks);
+    streamHandler.sender.send = vi.fn(() => pauseFailure.promise);
+    streamHandler.clear = vi.fn(() =>
+      Promise.reject(new Error("clear failed")),
+    );
+
+    dialCallbacks.inbound({ size: 1024 * 32 });
+    dialCallbacks.inboundUnpacked(new Uint8Array(1));
+
+    pauseFailure.reject(new Error("pause failed"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(streamHandler.clear).toHaveBeenCalled();
+  });
+
+  it("does not let a stale clear callback tear down a newer stream", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const callbacks = buildCallbacks();
+    const firstConn = buildConnection();
+    const secondConn = buildConnection();
+
+    socket.dial.dial = vi
+      .fn()
+      .mockResolvedValueOnce(firstConn)
+      .mockResolvedValueOnce(secondConn);
+
+    const first = await socket.get(callbacks);
+    socket.streamHandler = null;
+    const second = await socket.get(callbacks);
+
+    await first.clear(new Error("late old clear"));
+
+    assert.strictEqual(socket.streamHandler, second);
+    expect(firstConn.ws.close).toHaveBeenCalledTimes(1);
+    expect(secondConn.ws.close).not.toHaveBeenCalled();
+  });
+
+  it("does not assign a stream handler if close is invoked from connected", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const conn = buildConnection();
+    const callbacks = buildCallbacks();
+
+    socket.dial.dial = vi.fn(() => Promise.resolve(conn));
+    callbacks.connected.mockImplementation(() => socket.close());
+
+    const result = await socket.get(callbacks).catch((e) => e);
+
+    assert(result instanceof Error);
+    assert.strictEqual(socket.streamHandler, null);
+    assert.strictEqual(streamMocks.state.instances[0].served, false);
+    expect(conn.ws.close).toHaveBeenCalled();
+    expect(conn.sender.close).toHaveBeenCalled();
+    expect(conn.reader.close).not.toHaveBeenCalled();
+    expect(conn.reader.closeWithReason).toHaveBeenCalledWith(
+      "Socket open cancelled",
+    );
+  });
+
+  it("clears a stream handler when connected callback throws", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const firstConn = buildConnection();
+    const secondConn = buildConnection();
+    const callbacks = buildCallbacks();
+    const expectedError = new Error("connected failed");
+
+    socket.dial.dial = vi
+      .fn()
+      .mockResolvedValueOnce(firstConn)
+      .mockResolvedValueOnce(secondConn);
+    callbacks.connected
+      .mockImplementationOnce(() => {
+        throw expectedError;
+      })
+      .mockImplementationOnce(() => {});
+
+    const result = await socket.get(callbacks).catch((e) => e);
+
+    assert.strictEqual(result, expectedError);
+    assert.strictEqual(socket.streamHandler, null);
+    assert.strictEqual(streamMocks.state.instances[0].served, false);
+    expect(callbacks.failed).toHaveBeenCalledWith(expectedError);
+    expect(firstConn.ws.close).toHaveBeenCalledTimes(1);
+    expect(firstConn.sender.close).toHaveBeenCalledTimes(1);
+    expect(firstConn.reader.closeWithReason).toHaveBeenCalledWith(
+      "Socket open failed",
+    );
+
+    const second = await socket.get(callbacks);
+
+    assert.strictEqual(socket.streamHandler, second);
+    assert.strictEqual(second, streamMocks.state.instances[1]);
+    assert.strictEqual(second.served, true);
+  });
+
+  it("does not reuse a stream handler that is already clearing", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const callbacks = buildCallbacks();
+    const firstConn = buildConnection();
+    const secondConn = buildConnection();
+
+    socket.dial.dial = vi
+      .fn()
+      .mockResolvedValueOnce(firstConn)
+      .mockResolvedValueOnce(secondConn);
+
+    const first = await socket.get(callbacks);
+    first.stop = true;
+    const second = await socket.get(callbacks);
+
+    assert.notStrictEqual(first, second);
+    assert.strictEqual(socket.streamHandler, second);
+  });
+
+  it("keeps overlapping dial keep-alive timers isolated", async () => {
+    vi.useFakeTimers();
+    const realWebSocket = globalThis.WebSocket;
+    const sockets = [];
+
+    class FakeWebSocket {
+      constructor() {
+        this.listeners = {};
+        sockets.push(this);
+      }
+
+      addEventListener(eventName, handler) {
+        this.listeners[eventName] = handler;
+      }
+
+      close() {
+        this.listeners.close({ code: 1000 });
+      }
+    }
+
+    globalThis.WebSocket = FakeWebSocket;
+
+    try {
+      const socket = new Socket({}, {}, 2000, 1000);
+      const firstConnect = socket.dial.connect(
+        { webSocket: "ws://first", keepAlive: "/keep" },
+        2000,
+      );
+      sockets[0].listeners.open({});
+      await firstConnect;
+
+      const secondConnect = socket.dial.connect(
+        { webSocket: "ws://second", keepAlive: "/keep" },
+        2000,
+      );
+      sockets[1].listeners.open({});
+      await secondConnect;
+
+      vi.advanceTimersByTime(1000);
+      assert.strictEqual(xhrMocks.options.mock.calls.length, 2);
+
+      sockets[0].close();
+      vi.advanceTimersByTime(1000);
+
+      assert.strictEqual(xhrMocks.options.mock.calls.length, 3);
+    } finally {
+      globalThis.WebSocket = realWebSocket;
+      vi.useRealTimers();
+    }
+  });
+});

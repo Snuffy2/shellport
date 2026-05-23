@@ -46,6 +46,214 @@ describe("Streams", () => {
     assert.deepStrictEqual(sent, [[1, 2]]);
   });
 
+  it("waits for command close before completing streams during clear", async () => {
+    const events = [];
+    const closeGate = new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {},
+      },
+    );
+    const streamID = 6;
+
+    st.streams[streamID].run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        async close() {
+          await closeGate;
+          events.push("close");
+        },
+        completed() {
+          events.push("completed");
+        },
+      }),
+      st.sender,
+    );
+
+    await st.clear(null);
+
+    assert.deepStrictEqual(events, ["close", "completed"]);
+  });
+
+  it("reports command close failures and completes streams during clear", async () => {
+    const events = [];
+    const expectedError = new Error("close failed");
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+    const streamID = 7;
+
+    st.streams[streamID].run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        close() {
+          events.push("close");
+          return Promise.reject(expectedError);
+        },
+        completed() {
+          events.push("completed");
+        },
+      }),
+      st.sender,
+    );
+
+    await st.clear(null);
+
+    assert.deepStrictEqual(events, ["close", "completed"]);
+    assert.strictEqual(clearedError, expectedError);
+  });
+
+  it("completes already-closing streams during clear", async () => {
+    const events = [];
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+    const streamID = 8;
+
+    st.streams[streamID].run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        close() {
+          events.push("close");
+          return Promise.resolve();
+        },
+        completed() {
+          events.push("completed");
+        },
+      }),
+      st.sender,
+    );
+    await st.streams[streamID].close();
+
+    await st.clear(null);
+
+    assert.deepStrictEqual(events, ["close", "completed"]);
+    assert.strictEqual(clearedError, null);
+  });
+
+  it("reports sender close failures during clean clear", async () => {
+    const expectedError = new Error("sender close failed");
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.reject(expectedError);
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+
+    await st.clear(null);
+
+    assert.strictEqual(clearedError, expectedError);
+  });
+
+  it("reports reader close failures during clean clear", async () => {
+    const expectedError = new Error("reader close failed");
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {
+          throw expectedError;
+        },
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+
+    await st.clear(null);
+
+    assert.strictEqual(clearedError, expectedError);
+  });
+
   it("acknowledges a late remote close after local close starts", async () => {
     const sent = [];
     const st = new streams.Streams(
@@ -131,6 +339,49 @@ describe("Streams", () => {
     await assert.rejects(() => st.handleClose(closeHeader), /ack send failed/);
   });
 
+  it("does not acknowledge remote close when command close fails", async () => {
+    const sent = [];
+    const expectedError = new Error("command close failed");
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send(data) {
+          sent.push(Array.from(data));
+
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {},
+      },
+    );
+    const streamID = 5;
+    const closeHeader = new header.Header(header.CLOSE);
+
+    closeHeader.set(streamID);
+    st.streams[streamID].run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        close() {
+          return Promise.reject(expectedError);
+        },
+        completed() {},
+      }),
+      st.sender,
+    );
+
+    await assert.rejects(() => st.handleClose(closeHeader), expectedError);
+    assert.deepStrictEqual(sent, []);
+  });
+
   it("drains late stream data after local close starts", async () => {
     const st = new streams.Streams(
       {
@@ -186,5 +437,184 @@ describe("Streams", () => {
 
     assert.strictEqual(ticked, 0);
     assert.strictEqual(rd.remains(), 0);
+  });
+
+  it("clears the stream when a heartbeat send fails", async () => {
+    const expectedError = new Error("heartbeat send failed");
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.reject(expectedError);
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    assert.strictEqual(clearedError, expectedError);
+  });
+
+  it("handles clear callback failures after heartbeat send failures", async () => {
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.reject(new Error("heartbeat send failed"));
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {
+          throw new Error("clear callback failed");
+        },
+      },
+    );
+
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    assert.strictEqual(st.stop, true);
+  });
+
+  it("clears the stream after repeated missed heartbeats", async () => {
+    let clearedError = null;
+    const echoUpdates = [];
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater(delay) {
+          echoUpdates.push(delay);
+        },
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    assert.deepStrictEqual(echoUpdates, []);
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    assert.match(clearedError.message, /missed heartbeat responses/);
+    assert.deepStrictEqual(echoUpdates, [streams.ECHO_FAILED]);
+  });
+
+  it("handles clear callback failures after missed heartbeats", async () => {
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared() {
+          throw new Error("clear callback failed");
+        },
+      },
+    );
+
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    st.sendEcho();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    assert.strictEqual(st.stop, true);
+  });
+
+  it("ignores stale echo responses without clearing the active heartbeat", async () => {
+    const echoUpdates = [];
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater(delay) {
+          echoUpdates.push(delay);
+        },
+        cleared() {},
+      },
+    );
+    st.lastEchoTime = new Date();
+    st.lastEchoData = Uint8Array.from([1, 2, 3]);
+    const staleEchoReader = new reader.Buffer(
+      Uint8Array.from([header.CONTROL_ECHO, 9, 9, 9]),
+      () => {},
+    );
+
+    await st.handleControl(staleEchoReader);
+
+    assert.deepStrictEqual(Array.from(st.lastEchoData), [1, 2, 3]);
+    assert.deepStrictEqual(echoUpdates, []);
   });
 });

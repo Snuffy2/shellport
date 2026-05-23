@@ -167,4 +167,83 @@ describe("Telnet Command", () => {
     assert.strictEqual(initialSends.length, 1);
     assert.deepStrictEqual(initialSends[0], expected);
   });
+
+  it("publishes a cancellation error when the backend completes before connect", () => {
+    let commandHandler = null;
+    const resolved = [];
+    const streams = {
+      request(_commandId, builder) {
+        const streamSender = {
+          send() {
+            return Promise.resolve();
+          },
+        };
+
+        commandHandler = builder(streamSender);
+
+        commandHandler.run({
+          send() {
+            return Promise.resolve();
+          },
+        });
+
+        return {
+          result: Promise.resolve(),
+          stream: {
+            close() {},
+          },
+        };
+      },
+    };
+    const controls = {
+      get(type) {
+        assert.strictEqual(type, "Telnet");
+
+        return {
+          build() {
+            return {
+              charset: "",
+              tabColor: "",
+              send() {},
+              close() {},
+              events: {},
+            };
+          },
+          ui() {
+            return "Telnet";
+          },
+        };
+      },
+    };
+    const wizard = new telnet.Command().wizard(
+      new command.Info(new telnet.Command()),
+      null,
+      null,
+      [],
+      streams,
+      {
+        resolve(step) {
+          resolved.push(step);
+        },
+      },
+      controls,
+      { save() {} },
+    );
+
+    wizard.stepInitialPrompt().data().respond({
+      host: "example.com:23",
+      encoding: "utf-8",
+    });
+    commandHandler.completed();
+
+    const finalStep = resolved.at(-1);
+
+    assert.strictEqual(finalStep.type(), command.NEXT_DONE);
+    assert.strictEqual(finalStep.data().success, false);
+    assert.strictEqual(finalStep.data().errorTitle, "Operation has failed");
+    assert.strictEqual(
+      finalStep.data().errorMessage,
+      "Connection has been cancelled",
+    );
+  });
 });
