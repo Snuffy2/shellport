@@ -78,7 +78,13 @@ func decodeYAMLMap(data []byte) (map[string]any, error) {
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
-	return normalizeYAMLMap(raw), nil
+	normalized := normalizeYAMLMap(raw)
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	preserveYAMLMetaScalarText(normalized, &doc)
+	return normalized, nil
 }
 
 func commonInputFromYAMLMap(raw map[string]any) (commonInput, error) {
@@ -127,6 +133,86 @@ func normalizeYAMLMetaValue(value any) any {
 		return normalizeYAMLValue(typed)
 	default:
 		return fmt.Sprint(typed)
+	}
+}
+
+func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
+	if node == nil {
+		return
+	}
+	switch node.Kind {
+	case yaml.DocumentNode:
+		if len(node.Content) > 0 {
+			preserveYAMLMetaScalarText(value, node.Content[0])
+		}
+	case yaml.MappingNode:
+		typed, ok := value.(map[string]any)
+		if !ok {
+			return
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			child := node.Content[i+1]
+			if key == "Meta" {
+				typed[key] = yamlMetaScalarText(child, typed[key])
+				continue
+			}
+			preserveYAMLMetaScalarText(typed[key], child)
+		}
+	case yaml.SequenceNode:
+		typed, ok := value.([]any)
+		if !ok {
+			return
+		}
+		for i, child := range node.Content {
+			if i >= len(typed) {
+				return
+			}
+			preserveYAMLMetaScalarText(typed[i], child)
+		}
+	}
+}
+
+func yamlMetaScalarText(node *yaml.Node, fallback any) any {
+	if node == nil {
+		return fallback
+	}
+	switch node.Kind {
+	case yaml.MappingNode:
+		typed, ok := fallback.(map[string]any)
+		if !ok {
+			return fallback
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			valueNode := node.Content[i+1]
+			if valueNode.Kind == yaml.ScalarNode {
+				typed[key] = valueNode.Value
+				continue
+			}
+			typed[key] = yamlMetaScalarText(valueNode, typed[key])
+		}
+		return typed
+	case yaml.SequenceNode:
+		typed, ok := fallback.([]any)
+		if !ok {
+			return fallback
+		}
+		for i, child := range node.Content {
+			if i >= len(typed) {
+				return typed
+			}
+			if child.Kind == yaml.ScalarNode {
+				typed[i] = child.Value
+				continue
+			}
+			typed[i] = yamlMetaScalarText(child, typed[i])
+		}
+		return typed
+	case yaml.ScalarNode:
+		return node.Value
+	default:
+		return fallback
 	}
 }
 

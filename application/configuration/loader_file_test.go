@@ -149,7 +149,8 @@ Presets:
     Meta:
       User: pi
       ET Server Port: 2022
-      Password: 1234
+      Password: 0123
+      Enabled: true
 `)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
@@ -162,8 +163,11 @@ Presets:
 	if cfg.Presets[0].Meta["ET Server Port"] != "2022" {
 		t.Fatalf("ET Server Port = %q, want 2022", cfg.Presets[0].Meta["ET Server Port"])
 	}
-	if cfg.Presets[0].Meta["Password"] != "1234" {
-		t.Fatalf("Password = %q, want 1234", cfg.Presets[0].Meta["Password"])
+	if cfg.Presets[0].Meta["Password"] != "0123" {
+		t.Fatalf("Password = %q, want 0123", cfg.Presets[0].Meta["Password"])
+	}
+	if cfg.Presets[0].Meta["Enabled"] != "true" {
+		t.Fatalf("Enabled = %q, want true", cfg.Presets[0].Meta["Enabled"])
 	}
 }
 
