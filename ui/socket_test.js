@@ -240,6 +240,42 @@ describe("Socket", () => {
     );
   });
 
+  it("clears a stream handler when connected callback throws", async () => {
+    const socket = new Socket({}, {}, 1000, 1000);
+    const firstConn = buildConnection();
+    const secondConn = buildConnection();
+    const callbacks = buildCallbacks();
+    const expectedError = new Error("connected failed");
+
+    socket.dial.dial = vi
+      .fn()
+      .mockResolvedValueOnce(firstConn)
+      .mockResolvedValueOnce(secondConn);
+    callbacks.connected
+      .mockImplementationOnce(() => {
+        throw expectedError;
+      })
+      .mockImplementationOnce(() => {});
+
+    const result = await socket.get(callbacks).catch((e) => e);
+
+    assert.strictEqual(result, expectedError);
+    assert.strictEqual(socket.streamHandler, null);
+    assert.strictEqual(streamMocks.state.instances[0].served, false);
+    expect(callbacks.failed).toHaveBeenCalledWith(expectedError);
+    expect(firstConn.ws.close).toHaveBeenCalledTimes(1);
+    expect(firstConn.sender.close).toHaveBeenCalledTimes(1);
+    expect(firstConn.reader.closeWithReason).toHaveBeenCalledWith(
+      "Socket open failed",
+    );
+
+    const second = await socket.get(callbacks);
+
+    assert.strictEqual(socket.streamHandler, second);
+    assert.strictEqual(second, streamMocks.state.instances[1]);
+    assert.strictEqual(second.served, true);
+  });
+
   it("does not reuse a stream handler that is already clearing", async () => {
     const socket = new Socket({}, {}, 1000, 1000);
     const callbacks = buildCallbacks();

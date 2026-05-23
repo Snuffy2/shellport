@@ -446,8 +446,11 @@ export class Socket {
       });
     };
 
+    let conn = null;
+    let streamHandler = null;
+
     try {
-      let conn = await this.dial.dial({
+      conn = await this.dial.dial({
         inbound(data) {
           currentReceived += data.size;
 
@@ -488,7 +491,7 @@ export class Socket {
         throw new Error("Socket open cancelled");
       }
 
-      let streamHandler = new streams.Streams(conn.reader, conn.sender, {
+      streamHandler = new streams.Streams(conn.reader, conn.sender, {
         echoInterval: self.echoInterval,
         echoUpdater(delay) {
           const sendDelay = delay / 2;
@@ -541,6 +544,11 @@ export class Socket {
       });
     } catch (e) {
       if (openSerial === this.openSerial) {
+        if (this.streamHandler === streamHandler) {
+          this.streamHandler = null;
+          await cleanupDialConnection(conn, "Socket open failed");
+        }
+
         callbacks.failed(e);
       }
 
