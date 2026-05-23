@@ -6,7 +6,6 @@ package application
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,6 +15,18 @@ import (
 	"github.com/Snuffy2/shellport/application/log"
 	"gopkg.in/yaml.v3"
 )
+
+func writeStartupConfig(t *testing.T, path string, data map[string]any, mode os.FileMode) {
+	t.Helper()
+
+	content, err := yaml.Marshal(data)
+	if err != nil {
+		t.Fatalf("yaml.Marshal returned error: %v", err)
+	}
+	if err := os.WriteFile(path, content, mode); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+}
 
 func TestNormalizeStartupPresetIDsPersistsFileBackedIDs(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
@@ -27,13 +38,7 @@ func TestNormalizeStartupPresetIDsPersistsFileBackedIDs(t *testing.T) {
 			{"Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -109,13 +114,7 @@ func TestNormalizeStartupPresetsPersistsMetaCleanupAndDefaults(t *testing.T) {
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -169,13 +168,7 @@ func TestNormalizeStartupPresetsKeepsBlankAdminPasswordWhenUserPasswordIsSet(t *
 			{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -210,13 +203,7 @@ func TestNormalizeStartupPresetsKeepsExplicitAdminPassword(t *testing.T) {
 			{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -245,13 +232,7 @@ func TestNormalizeStartupPresetsKeepsEnvAdminPasswordOutOfFile(t *testing.T) {
 			{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -302,13 +283,7 @@ func TestNormalizeStartupPresetIDsMigratesPlaintextPresetPassword(t *testing.T) 
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -391,13 +366,7 @@ func TestNormalizeStartupPresetsIgnoresUnsupportedEncryptedPassword(t *testing.T
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -429,13 +398,7 @@ func TestNormalizeStartupPresetIDsAllowsReadOnlyFileBackedIDs(t *testing.T) {
 			{"Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 	if err := os.Chmod(configDir, 0o500); err != nil {
 		t.Fatalf("os.Chmod returned error: %v", err)
 	}
@@ -485,13 +448,7 @@ func TestNormalizeStartupPresetsAllowsReadOnlyInlinePrivateKey(t *testing.T) {
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o400); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o400)
 	if err := os.Chmod(configDir, 0o500); err != nil {
 		t.Fatalf("os.Chmod returned error: %v", err)
 	}
@@ -544,13 +501,7 @@ func TestNormalizeStartupPresetsMigratesPlaintextPrivateKeysToFiles(t *testing.T
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -638,13 +589,7 @@ func TestNormalizeStartupPresetsPreservesEnvironmentPrivateKeys(t *testing.T) {
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {

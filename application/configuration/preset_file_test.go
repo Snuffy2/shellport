@@ -5,11 +5,12 @@
 package configuration
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func writePresetConfig(t *testing.T, path string, presets []map[string]any) {
@@ -21,9 +22,9 @@ func writePresetConfig(t *testing.T, path string, presets []map[string]any) {
 		},
 		"Presets": presets,
 	}
-	content, err := json.MarshalIndent(data, "", "  ")
+	content, err := yaml.Marshal(data)
 	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
+		t.Fatalf("yaml.Marshal returned error: %v", err)
 	}
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
