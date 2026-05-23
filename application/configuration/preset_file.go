@@ -395,13 +395,17 @@ func readCommonInputFileDocument(filePath string) (commonInputFileDocument, erro
 	if readErr != nil {
 		return commonInputFileDocument{}, readErr
 	}
+	standardJSON, jsoncErr := standardizeJSONC(data)
+	if jsoncErr != nil {
+		return commonInputFileDocument{}, jsoncErr
+	}
 
 	cfg := commonInput{}
-	if decodeErr := json.Unmarshal(data, &cfg); decodeErr != nil {
+	if decodeErr := json.Unmarshal(standardJSON, &cfg); decodeErr != nil {
 		return commonInputFileDocument{}, decodeErr
 	}
 	raw := map[string]json.RawMessage{}
-	if decodeErr := json.Unmarshal(data, &raw); decodeErr != nil {
+	if decodeErr := json.Unmarshal(standardJSON, &raw); decodeErr != nil {
 		return commonInputFileDocument{}, decodeErr
 	}
 	var rawPresets []map[string]json.RawMessage
