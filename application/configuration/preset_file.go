@@ -634,6 +634,9 @@ func rawPresetMapsFromSyntax(
 		return nil, err
 	}
 	presetsNode := yamlMappingValueNode(yamlMappingRoot(syntax), key)
+	if presetsNode != nil && presetsNode.Kind == yaml.AliasNode {
+		presetsNode = cloneYAMLNodeMaterializingAliases(presetsNode)
+	}
 	if presetsNode == nil || presetsNode.Kind != yaml.SequenceNode {
 		return decodedRawPresets, nil
 	}

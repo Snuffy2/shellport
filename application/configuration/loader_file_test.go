@@ -317,6 +317,92 @@ Presets:
 	}
 }
 
+func TestLoadFileAcceptsUnquotedYAMLHookCommandArgsAsStrings(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Hooks:
+  before_connecting:
+    - ["/bin/echo", 123, true, null]
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	command := cfg.Hooks[HOOK_BEFORE_CONNECTING][0]
+	want := HookCommand{"/bin/echo", "123", "true", ""}
+	if len(command) != len(want) {
+		t.Fatalf("hook command length = %d, want %d: %#v", len(command), len(want), command)
+	}
+	for i := range want {
+		if command[i] != want[i] {
+			t.Fatalf("hook command[%d] = %q, want %q", i, command[i], want[i])
+		}
+	}
+}
+
+func TestDecodeYAMLMapDoesNotCoerceUnknownStringNamedFields(t *testing.T) {
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+FutureBlock:
+  Host: 7
+  Meta:
+    Retries: 3
+Presets:
+  - ID: preset-atlantis
+    Title: Atlantis
+    Type: SSH
+    Host: atlantis.home
+    FutureBlock:
+      Host: 8
+      Meta:
+        Retries: 4
+`)
+
+	raw, err := decodeYAMLMap(content)
+	if err != nil {
+		t.Fatalf("decodeYAMLMap returned error: %v", err)
+	}
+	futureBlock, ok := raw["FutureBlock"].(map[string]any)
+	if !ok {
+		t.Fatalf("FutureBlock = %#v, want map", raw["FutureBlock"])
+	}
+	if _, ok := futureBlock["Host"].(string); ok {
+		t.Fatalf("unknown top-level Host was coerced to string: %#v", futureBlock["Host"])
+	}
+	futureMeta, ok := futureBlock["Meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("FutureBlock.Meta = %#v, want map", futureBlock["Meta"])
+	}
+	if _, ok := futureMeta["Retries"].(string); ok {
+		t.Fatalf("unknown top-level Meta.Retries was coerced to string: %#v", futureMeta["Retries"])
+	}
+	presets, err := rawPresetMaps(raw["Presets"])
+	if err != nil {
+		t.Fatalf("rawPresetMaps returned error: %v", err)
+	}
+	presetFutureBlock, ok := presets[0]["FutureBlock"].(map[string]any)
+	if !ok {
+		t.Fatalf("preset FutureBlock = %#v, want map", presets[0]["FutureBlock"])
+	}
+	if _, ok := presetFutureBlock["Host"].(string); ok {
+		t.Fatalf("unknown preset Host was coerced to string: %#v", presetFutureBlock["Host"])
+	}
+	presetFutureMeta, ok := presetFutureBlock["Meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("preset FutureBlock.Meta = %#v, want map", presetFutureBlock["Meta"])
+	}
+	if _, ok := presetFutureMeta["Retries"].(string); ok {
+		t.Fatalf("unknown preset Meta.Retries was coerced to string: %#v", presetFutureMeta["Retries"])
+	}
+}
+
 func TestLoadFileSkipsYAMLMetaMergeKeys(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	content := []byte(`Servers:

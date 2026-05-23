@@ -83,31 +83,37 @@ func decodeYAMLMap(data []byte) (map[string]any, error) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, err
 	}
-	preserveYAMLMetaScalarText(normalized, &doc)
+	preserveYAMLConfigScalarText(normalized, &doc)
 	return normalized, nil
 }
 
-var yamlStringFieldNames = map[string]struct{}{
-	"adminpassword":         {},
-	"host":                  {},
-	"hostname":              {},
-	"id":                    {},
+var yamlCommonStringFieldNames = map[string]struct{}{
+	"adminpassword":  {},
+	"hostname":       {},
+	"socks5":         {},
+	"socks5password": {},
+	"socks5user":     {},
+	"userpassword":   {},
+}
+
+var yamlServerStringFieldNames = map[string]struct{}{
 	"listeninterface":       {},
 	"servermessage":         {},
 	"servertitle":           {},
-	"socks5":                {},
-	"socks5password":        {},
-	"socks5user":            {},
 	"tlscertificatefile":    {},
 	"tlscertificatekeyfile": {},
-	"tabcolor":              {},
-	"title":                 {},
-	"type":                  {},
-	"userpassword":          {},
 }
 
-func isYAMLStringFieldName(key string) bool {
-	_, ok := yamlStringFieldNames[strings.ToLower(key)]
+var yamlPresetStringFieldNames = map[string]struct{}{
+	"host":     {},
+	"id":       {},
+	"tabcolor": {},
+	"title":    {},
+	"type":     {},
+}
+
+func isYAMLStringFieldName(key string, fields map[string]struct{}) bool {
+	_, ok := fields[strings.ToLower(key)]
 	return ok
 }
 
@@ -130,10 +136,6 @@ func commonInputFromYAMLMap(raw map[string]any) (commonInput, error) {
 func normalizeYAMLMap(raw map[string]any) map[string]any {
 	normalized := make(map[string]any, len(raw))
 	for key, value := range raw {
-		if isYAMLMetaFieldName(key) {
-			normalized[key] = normalizeYAMLMeta(value)
-			continue
-		}
 		normalized[key] = normalizeYAMLValue(value)
 	}
 	return normalized
@@ -164,14 +166,14 @@ func normalizeYAMLMetaValue(value any) any {
 	}
 }
 
-func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
+func preserveYAMLConfigScalarText(value any, node *yaml.Node) {
 	if node == nil {
 		return
 	}
 	switch node.Kind {
 	case yaml.DocumentNode:
 		if len(node.Content) > 0 {
-			preserveYAMLMetaScalarText(value, node.Content[0])
+			preserveYAMLConfigScalarText(value, node.Content[0])
 		}
 	case yaml.MappingNode:
 		typed, ok := value.(map[string]any)
@@ -182,7 +184,85 @@ func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
 			if node.Content[i].Value != "<<" {
 				continue
 			}
-			typed = yamlMergedMappingScalarText(node.Content[i+1], typed)
+			typed = yamlMergedMappingScalarText(
+				node.Content[i+1],
+				typed,
+				yamlCommonStringFieldNames,
+			)
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			if key == "<<" {
+				continue
+			}
+			child := node.Content[i+1]
+			if strings.EqualFold(key, "Servers") {
+				preserveYAMLServerScalarText(typed[key], child)
+				continue
+			}
+			if strings.EqualFold(key, "Presets") {
+				preserveYAMLPresetScalarText(typed[key], child)
+				continue
+			}
+			if strings.EqualFold(key, "Hooks") {
+				preserveYAMLHookScalarText(typed[key], child)
+				continue
+			}
+			if isYAMLStringFieldName(key, yamlCommonStringFieldNames) {
+				typed[key] = yamlStringFieldValue(child, typed[key])
+			}
+		}
+	}
+}
+
+func preserveYAMLServerScalarText(value any, node *yaml.Node) {
+	if node == nil {
+		return
+	}
+	if node.Kind == yaml.AliasNode {
+		preserveYAMLServerScalarText(value, node.Alias)
+		return
+	}
+	switch node.Kind {
+	case yaml.MappingNode:
+		preserveYAMLMappingScalarText(value, node, yamlServerStringFieldNames)
+	case yaml.SequenceNode:
+		typed, ok := value.([]any)
+		if !ok {
+			return
+		}
+		for i, child := range node.Content {
+			if i >= len(typed) {
+				return
+			}
+			preserveYAMLServerScalarText(typed[i], child)
+		}
+	}
+}
+
+func preserveYAMLPresetScalarText(value any, node *yaml.Node) {
+	if node == nil {
+		return
+	}
+	if node.Kind == yaml.AliasNode {
+		preserveYAMLPresetScalarText(value, node.Alias)
+		return
+	}
+	switch node.Kind {
+	case yaml.MappingNode:
+		typed, ok := value.(map[string]any)
+		if !ok {
+			return
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value != "<<" {
+				continue
+			}
+			typed = yamlMergedMappingScalarText(
+				node.Content[i+1],
+				typed,
+				yamlPresetStringFieldNames,
+			)
 		}
 		for i := 0; i+1 < len(node.Content); i += 2 {
 			key := node.Content[i].Value
@@ -194,11 +274,9 @@ func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
 				typed[key] = yamlMetaScalarText(child, typed[key])
 				continue
 			}
-			if isYAMLStringFieldName(key) {
+			if isYAMLStringFieldName(key, yamlPresetStringFieldNames) {
 				typed[key] = yamlStringFieldValue(child, typed[key])
-				continue
 			}
-			preserveYAMLMetaScalarText(typed[key], child)
 		}
 	case yaml.SequenceNode:
 		typed, ok := value.([]any)
@@ -209,23 +287,88 @@ func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
 			if i >= len(typed) {
 				return
 			}
-			preserveYAMLMetaScalarText(typed[i], child)
+			preserveYAMLPresetScalarText(typed[i], child)
 		}
 	}
 }
 
-func yamlMergedMappingScalarText(node *yaml.Node, base map[string]any) map[string]any {
+func preserveYAMLHookScalarText(value any, node *yaml.Node) {
+	if node == nil {
+		return
+	}
+	if node.Kind == yaml.AliasNode {
+		preserveYAMLHookScalarText(value, node.Alias)
+		return
+	}
+	typed, ok := value.(map[string]any)
+	if !ok || node.Kind != yaml.MappingNode {
+		return
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == "<<" {
+			continue
+		}
+		key := node.Content[i].Value
+		typed[key] = yamlHookCommandScalarText(node.Content[i+1], typed[key])
+	}
+}
+
+func yamlHookCommandScalarText(node *yaml.Node, base any) any {
+	if node == nil {
+		return base
+	}
+	if node.Kind == yaml.AliasNode {
+		return yamlHookCommandScalarText(node.Alias, base)
+	}
+	commands, ok := base.([]any)
+	if !ok || node.Kind != yaml.SequenceNode {
+		return base
+	}
+	for i, commandNode := range node.Content {
+		if i >= len(commands) {
+			return commands
+		}
+		command, ok := commands[i].([]any)
+		if !ok {
+			continue
+		}
+		if commandNode.Kind == yaml.AliasNode {
+			commandNode = commandNode.Alias
+		}
+		if commandNode.Kind != yaml.SequenceNode {
+			continue
+		}
+		for j, argNode := range commandNode.Content {
+			if j >= len(command) {
+				break
+			}
+			if argNode.Kind == yaml.AliasNode {
+				argNode = argNode.Alias
+			}
+			if argNode.Kind == yaml.ScalarNode {
+				command[j] = yamlScalarValue(argNode, command[j])
+			}
+		}
+	}
+	return commands
+}
+
+func yamlMergedMappingScalarText(
+	node *yaml.Node,
+	base map[string]any,
+	fields map[string]struct{},
+) map[string]any {
 	if node == nil {
 		return base
 	}
 	switch node.Kind {
 	case yaml.AliasNode:
-		return yamlMappingScalarText(node.Alias, base)
+		return yamlMappingScalarText(node.Alias, base, fields)
 	case yaml.MappingNode:
-		return yamlMappingScalarText(node, base)
+		return yamlMappingScalarText(node, base, fields)
 	case yaml.SequenceNode:
 		for i := len(node.Content) - 1; i >= 0; i-- {
-			base = yamlMergedMappingScalarText(node.Content[i], base)
+			base = yamlMergedMappingScalarText(node.Content[i], base, fields)
 		}
 		return base
 	default:
@@ -233,7 +376,37 @@ func yamlMergedMappingScalarText(node *yaml.Node, base map[string]any) map[strin
 	}
 }
 
-func yamlMappingScalarText(node *yaml.Node, base map[string]any) map[string]any {
+func preserveYAMLMappingScalarText(
+	value any,
+	node *yaml.Node,
+	fields map[string]struct{},
+) {
+	typed, ok := value.(map[string]any)
+	if !ok {
+		return
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value != "<<" {
+			continue
+		}
+		typed = yamlMergedMappingScalarText(node.Content[i+1], typed, fields)
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key := node.Content[i].Value
+		if key == "<<" {
+			continue
+		}
+		if isYAMLStringFieldName(key, fields) {
+			typed[key] = yamlStringFieldValue(node.Content[i+1], typed[key])
+		}
+	}
+}
+
+func yamlMappingScalarText(
+	node *yaml.Node,
+	base map[string]any,
+	fields map[string]struct{},
+) map[string]any {
 	if node == nil || node.Kind != yaml.MappingNode {
 		return base
 	}
@@ -243,11 +416,7 @@ func yamlMappingScalarText(node *yaml.Node, base map[string]any) map[string]any 
 			continue
 		}
 		child := node.Content[i+1]
-		if isYAMLMetaFieldName(key) {
-			base[key] = yamlMetaScalarText(child, base[key])
-			continue
-		}
-		if isYAMLStringFieldName(key) {
+		if isYAMLStringFieldName(key, fields) {
 			base[key] = yamlStringFieldValue(child, base[key])
 		}
 	}
