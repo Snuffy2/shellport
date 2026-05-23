@@ -166,8 +166,8 @@
         // Mosh currently only accepts utf-8.
         "Encoding": "utf-8",
 
-        // Override the local Mosh server command when needed. Leave empty to
-        // use the default "mosh-server".
+        // Override the remote mosh-server command when needed. Leave empty
+        // to use the default "mosh-server".
         "Mosh Server": "mosh-server"
       }
     },

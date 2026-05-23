@@ -27,7 +27,6 @@ directory.
 mkdir shellport
 cd shellport
 mkdir -p config
-printf 'SHELLPORT_PRESET_SECRET_KEY=%s\n' "$(openssl rand -base64 32)" > .env
 ```
 
 2. Create `docker-compose.yaml`:
@@ -44,12 +43,12 @@ services:
       - ./config:/config
     environment:
       TZ: America/New_York
-      SHELLPORT_PRESET_SECRET_KEY: "${SHELLPORT_PRESET_SECRET_KEY:?generate .env first}"
+      SHELLPORT_PRESET_SECRET_KEY: "replace-with-generated-key"
 ```
 
-The `.env` file stores the preset secret key used for saved preset passwords.
-Keep the same value for every restart so ShellPort can read encrypted saved
-preset passwords later.
+Before first start, replace `replace-with-generated-key` with the output of
+`openssl rand -base64 32`. Keep the same value for every restart so ShellPort
+can read encrypted saved preset passwords later.
 
 3. Start ShellPort:
 
