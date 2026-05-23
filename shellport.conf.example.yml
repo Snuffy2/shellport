@@ -33,8 +33,10 @@ Hooks:
   # Commands run before ShellPort starts a remote connection. Any non-zero
   # exit status aborts the connection attempt.
   before_connecting:
-    # Hook commands use YAML array form. Each array item is one argv entry.
-    - ["/bin/sh", "-c", "echo connecting to $SHELLPORT_HOOK_REMOTE_TYPE $SHELLPORT_HOOK_REMOTE_ADDRESS"]
+    # Hook commands use YAML array form. Each array item is one argv entry. Put
+    # any parsing of SHELLPORT_HOOK_REMOTE_TYPE and
+    # SHELLPORT_HOOK_REMOTE_ADDRESS inside the executable/script.
+    - ["/usr/local/bin/shellport-before-connecting-hook"]
 
 # Maximum time each hook may run before ShellPort terminates it, in
 # seconds.

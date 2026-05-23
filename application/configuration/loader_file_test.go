@@ -181,28 +181,6 @@ func TestDefaultFileSearchListUsesConfigDirectoryOnly(t *testing.T) {
 	}
 }
 
-func TestAutoCreateDefaultFileRefusesLegacyJSONConfigSibling(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "config", "shellport.conf.yml")
-	legacyPath := filepath.Join(filepath.Dir(configPath), "shellport.conf.json")
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
-		t.Fatalf("os.MkdirAll returned error: %v", err)
-	}
-	if err := os.WriteFile(legacyPath, []byte(`{"Servers":[{"ListenInterface":"127.0.0.1","ListenPort":8182}]}`), 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
-
-	_, _, err := AutoCreateDefaultFile(configPath)(log.NewDitch())
-	if err == nil {
-		t.Fatal("AutoCreateDefaultFile returned nil error, want legacy JSON conflict")
-	}
-	if !strings.Contains(err.Error(), legacyPath) {
-		t.Fatalf("AutoCreateDefaultFile error = %q, want legacy path %q", err, legacyPath)
-	}
-	if _, statErr := os.Stat(configPath); !os.IsNotExist(statErr) {
-		t.Fatalf("new YAML config stat error = %v, want not exist", statErr)
-	}
-}
-
 func TestCreateDefaultConfigFileWritesLoadableConfig(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config", "shellport.conf.yml")
 

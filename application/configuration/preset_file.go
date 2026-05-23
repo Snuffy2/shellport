@@ -579,7 +579,12 @@ func mergePresetInputRaw(
 	input presetInput,
 	rawPreset map[string]any,
 ) (map[string]any, error) {
-	merged := make(map[string]any, len(rawPreset)+6)
+	const presetInputFieldCount = 6
+	capacity := len(rawPreset)
+	if capacity <= int(^uint(0)>>1)-presetInputFieldCount {
+		capacity += presetInputFieldCount
+	}
+	merged := make(map[string]any, capacity)
 	for key, value := range rawPreset {
 		merged[key] = value
 	}

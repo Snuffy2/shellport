@@ -18,11 +18,6 @@ full restart.
 
 The default file path is convenient for Docker volume mounts, but it is not required. Any writable `.yml` or `.yaml` config file can be used as long as ShellPort can read it at startup.
 
-If ShellPort is about to create `/config/shellport.conf.yml` and a legacy
-`/config/shellport.conf.json` file is already present in the same directory, it
-refuses to create a new blank config. Rename or migrate the existing file, or
-set `SHELLPORT_CONFIG` to the exact file you want ShellPort to load.
-
 The runtime environment variables are:
 
 - `TZ`, which sets the timezone used for timestamps in logs.
@@ -55,8 +50,10 @@ When `OnlyAllowPresetRemotes` is enabled, ShellPort only allows connections to h
 `Hooks` lets you run server-side commands during connection lifecycle events. The `before_connecting` hook runs before ShellPort dials the remote host. A non-zero exit status aborts the connection. Hook inputs are not sanitized by ShellPort, so only use trusted commands and validate the values inside your hook scripts.
 
 Each hook command is an array of arguments. ShellPort does not run the command
-through a shell unless you explicitly use a shell as the command, such as
-`/bin/sh` with `-c`. Multiple hooks run in order.
+through a shell. Prefer a direct executable or script entry point, and read
+`SHELLPORT_HOOK_REMOTE_TYPE` and `SHELLPORT_HOOK_REMOTE_ADDRESS` from the
+environment inside that program. Avoid `sh -c` interpolation for hook inputs.
+Multiple hooks run in order.
 
 `before_connecting` receives `SHELLPORT_HOOK_REMOTE_TYPE` and
 `SHELLPORT_HOOK_REMOTE_ADDRESS` in the hook environment. Text written to stdout
