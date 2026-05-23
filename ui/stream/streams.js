@@ -130,7 +130,8 @@ export class Streams {
    * Running streams are closed, the sender is awaited so buffered outbound data
    * can flush, the reader is closed, and the configured clear callback is
    * invoked with the original error when one triggered shutdown, or the first
-   * cleanup error when shutdown started cleanly.
+   * cleanup error when shutdown started cleanly. Stream completion callbacks
+   * still run so command subscribers are released during final teardown.
    *
    * @param {?Exception} e Error that caused the clear, or null for normal
    *   shutdown.
@@ -167,12 +168,10 @@ export class Streams {
         }
       }
 
-      if (closeErr === null) {
-        try {
-          this.streams[i].completed();
-        } catch (e) {
-          //Do nothing
-        }
+      try {
+        this.streams[i].completed();
+      } catch (e) {
+        //Do nothing
       }
     }
 

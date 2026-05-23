@@ -94,7 +94,7 @@ describe("Streams", () => {
     assert.deepStrictEqual(events, ["close", "completed"]);
   });
 
-  it("does not complete streams whose command close fails during clear", async () => {
+  it("reports command close failures and completes streams during clear", async () => {
     const events = [];
     const expectedError = new Error("close failed");
     let clearedError = null;
@@ -140,7 +140,7 @@ describe("Streams", () => {
 
     await st.clear(null);
 
-    assert.deepStrictEqual(events, ["close"]);
+    assert.deepStrictEqual(events, ["close", "completed"]);
     assert.strictEqual(clearedError, expectedError);
   });
 
