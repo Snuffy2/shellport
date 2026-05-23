@@ -395,6 +395,48 @@ Presets:
 	}
 }
 
+func TestReplaceFilePresetsPreservesLowercasePresetsRawFields(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+presets:
+  - ID: preset-atlantis
+    Title: Atlantis
+    Type: SSH
+    Host: atlantis.home:22
+    FuturePresetCode: 0123
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	if err := ReplaceFilePresets(configPath, []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "columbia.home:22",
+		},
+	}); err != nil {
+		t.Fatalf("ReplaceFilePresets returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile returned error: %v", err)
+	}
+	if strings.Contains(string(data), "Presets:") {
+		t.Fatalf("lowercase presets key was rewritten:\n%s", data)
+	}
+	if !strings.Contains(string(data), "presets:") {
+		t.Fatalf("lowercase presets key was not preserved:\n%s", data)
+	}
+	if !strings.Contains(string(data), "FuturePresetCode: 0123") {
+		t.Fatalf("future preset code scalar was not preserved:\n%s", data)
+	}
+}
+
 func TestReplaceFilePresetsSkipsYAMLPresetMergeKeys(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	content := []byte(`Servers:
@@ -481,6 +523,51 @@ Presets:
 	if !strings.Contains(string(data), "FuturePresetField:") ||
 		!strings.Contains(string(data), "enabled: true") {
 		t.Fatalf("materialized unknown preset field was not preserved:\n%s", data)
+	}
+}
+
+func TestReplaceFilePresetsPreservesAliasPresetScalarLexemes(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+PresetTemplate: &presetTemplate
+  ID: preset-atlantis
+  Title: Atlantis
+  Type: SSH
+  Host: atlantis.home:22
+  FuturePresetCode: 0123
+  FuturePresetFlag: yes
+Presets:
+  - *presetTemplate
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	if err := ReplaceFilePresets(configPath, []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "columbia.home:22",
+		},
+	}); err != nil {
+		t.Fatalf("ReplaceFilePresets returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile returned error: %v", err)
+	}
+	if strings.Contains(string(data), "- *presetTemplate") {
+		t.Fatalf("alias preset entry was not materialized:\n%s", data)
+	}
+	if !strings.Contains(string(data), "FuturePresetCode: 0123") {
+		t.Fatalf("future preset code scalar was not preserved:\n%s", data)
+	}
+	if !strings.Contains(string(data), "FuturePresetFlag: yes") {
+		t.Fatalf("future preset flag scalar was not preserved:\n%s", data)
 	}
 }
 

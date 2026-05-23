@@ -391,6 +391,7 @@ type commonInputFileDocument struct {
 	input      commonInput
 	raw        map[string]any
 	rawPresets []map[string]any
+	presetsKey string
 	syntax     *yaml.Node
 	mode       os.FileMode
 }
@@ -418,8 +419,9 @@ func readCommonInputFileDocument(filePath string) (commonInputFileDocument, erro
 		return commonInputFileDocument{}, inputErr
 	}
 	var rawPresets []map[string]any
-	if presets, ok := raw["Presets"]; ok {
-		rawPresets, decodeErr = rawPresetMapsFromSyntax(&syntax, presets)
+	presetsKey, presets, ok := rawMappingValueCaseInsensitive(raw, "Presets")
+	if ok {
+		rawPresets, decodeErr = rawPresetMapsFromSyntax(&syntax, presetsKey, presets)
 		if decodeErr != nil {
 			return commonInputFileDocument{}, decodeErr
 		}
@@ -428,6 +430,7 @@ func readCommonInputFileDocument(filePath string) (commonInputFileDocument, erro
 		input:      cfg,
 		raw:        raw,
 		rawPresets: rawPresets,
+		presetsKey: presetsKey,
 		syntax:     &syntax,
 		mode:       info.Mode(),
 	}, nil
@@ -460,10 +463,14 @@ func writeCommonInputFileDocument(
 	if marshalErr != nil {
 		return marshalErr
 	}
-	raw["Presets"] = presets
+	presetsKey := doc.presetsKey
+	if presetsKey == "" {
+		presetsKey = "Presets"
+	}
+	raw[presetsKey] = presets
 	if doc.syntax != nil {
 		updates := map[string]any{
-			"Presets": presets,
+			presetsKey: presets,
 		}
 		if adminPassword, ok := raw["AdminPassword"]; ok {
 			updates["AdminPassword"] = adminPassword
@@ -523,7 +530,7 @@ func yamlNodeFromValue(value any) (*yaml.Node, error) {
 
 func setYAMLMappingValue(root *yaml.Node, key string, value *yaml.Node) {
 	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value != key {
+		if !strings.EqualFold(root.Content[i].Value, key) {
 			continue
 		}
 		value.Anchor = root.Content[i+1].Anchor
@@ -619,18 +626,22 @@ func rawPresetMaps(value any) ([]map[string]any, error) {
 
 func rawPresetMapsFromSyntax(
 	syntax *yaml.Node,
+	key string,
 	decoded any,
 ) ([]map[string]any, error) {
 	decodedRawPresets, err := rawPresetMaps(decoded)
 	if err != nil {
 		return nil, err
 	}
-	presetsNode := yamlMappingValueNode(yamlMappingRoot(syntax), "Presets")
+	presetsNode := yamlMappingValueNode(yamlMappingRoot(syntax), key)
 	if presetsNode == nil || presetsNode.Kind != yaml.SequenceNode {
 		return decodedRawPresets, nil
 	}
 	rawPresets := make([]map[string]any, 0, len(presetsNode.Content))
 	for i, presetNode := range presetsNode.Content {
+		if presetNode.Kind == yaml.AliasNode {
+			presetNode = cloneYAMLNodeMaterializingAliases(presetNode)
+		}
 		if presetNode.Kind != yaml.MappingNode {
 			return decodedRawPresets, nil
 		}
@@ -648,11 +659,20 @@ func yamlMappingValueNode(root *yaml.Node, key string) *yaml.Node {
 		return nil
 	}
 	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == key {
+		if strings.EqualFold(root.Content[i].Value, key) {
 			return root.Content[i+1]
 		}
 	}
 	return nil
+}
+
+func rawMappingValueCaseInsensitive(raw map[string]any, want string) (string, any, bool) {
+	for key, value := range raw {
+		if strings.EqualFold(key, want) {
+			return key, value, true
+		}
+	}
+	return "", nil, false
 }
 
 func rawPresetMapFromYAMLNode(node *yaml.Node, decoded map[string]any) map[string]any {
