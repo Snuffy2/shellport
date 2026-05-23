@@ -28,7 +28,7 @@ func decodeAccessConfigForTest(t *testing.T, cfg socketAccessConfiguration) map[
 
 func TestSocketAccessConfigurationIncludesPresetManagementPolicy(t *testing.T) {
 	writableSourceFile := filepath.Join(t.TempDir(), "shellport.conf.yaml")
-	if err := os.WriteFile(writableSourceFile, []byte("{}"), 0o600); err != nil {
+	if err := os.WriteFile(writableSourceFile, []byte("Servers: []\nPresets: []\n"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
 
@@ -120,7 +120,7 @@ func TestSocketAccessConfigurationIncludesPresetManagementPolicy(t *testing.T) {
 
 func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
-	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("Servers: []\nPresets: []\n"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile config returned error: %v", err)
 	}
 	cfg := newSocketAccessConfiguration(
@@ -182,7 +182,7 @@ func TestSocketAccessConfigurationMarksHiddenSavedPassword(t *testing.T) {
 
 func TestSocketAccessConfigurationHidesPrivateKeyFileUntilManageAllowed(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
-	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("Servers: []\nPresets: []\n"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile config returned error: %v", err)
 	}
 	preset := configuration.Preset{
@@ -282,7 +282,7 @@ func TestSocketAccessConfigurationListsPrivateKeyFilesOnlyWhenManageable(
 ) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "shellport.conf.yaml")
-	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("Servers: []\nPresets: []\n"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile config returned error: %v", err)
 	}
 	keyDir := filepath.Join(configDir, "private_keys")

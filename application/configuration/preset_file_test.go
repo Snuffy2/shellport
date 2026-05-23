@@ -142,15 +142,16 @@ func TestPersistPresetIDsAddsMissingIDsToConfigFile(t *testing.T) {
 
 func TestPersistPresetIDsPreservesUnknownTopLevelFields(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
-	content := []byte(`{
-  "Servers": [
-    {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
-  ],
-  "Presets": [
-    {"Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"}
-  ],
-  "FutureTopLevel": {"enabled": true}
-}`)
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets:
+  - Title: Atlantis
+    Type: SSH
+    Host: atlantis.home
+FutureTopLevel:
+  enabled: true
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -260,20 +261,17 @@ func TestReplaceFilePresetsPreservesUnsupportedRawPresets(t *testing.T) {
 
 func TestReplaceFilePresetsPreservesUnknownPresetFields(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
-	content := []byte(`{
-  "Servers": [
-    {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
-  ],
-  "Presets": [
-    {
-      "ID": "preset-atlantis",
-      "Title": "Atlantis",
-      "Type": "SSH",
-      "Host": "atlantis.home:22",
-      "FuturePresetField": {"enabled": true}
-    }
-  ]
-}`)
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets:
+  - ID: preset-atlantis
+    Title: Atlantis
+    Type: SSH
+    Host: atlantis.home:22
+    FuturePresetField:
+      enabled: true
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -446,15 +444,17 @@ Presets:
 
 func TestReplaceFilePresetsPreservesUnknownTopLevelFields(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
-	content := []byte(`{
-  "Servers": [
-    {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
-  ],
-  "Presets": [
-    {"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home:22"}
-  ],
-  "FutureTopLevel": {"enabled": true}
-}`)
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets:
+  - ID: preset-atlantis
+    Title: Atlantis
+    Type: SSH
+    Host: atlantis.home:22
+FutureTopLevel:
+  enabled: true
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}

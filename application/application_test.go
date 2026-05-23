@@ -41,7 +41,7 @@ func TestWarnIfPresetConfigNotWritableSkipsWritableFileBackedConfig(
 	t *testing.T,
 ) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yml")
-	if err := os.WriteFile(configPath, []byte("{}"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("Servers: []\nPresets: []\n"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
 	var output bytes.Buffer
