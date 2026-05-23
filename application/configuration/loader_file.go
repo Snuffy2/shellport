@@ -184,6 +184,12 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 			return fallback
 		}
 		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value != "<<" {
+				continue
+			}
+			typed = yamlMetaMergedScalarText(node.Content[i+1], typed)
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
 			key := node.Content[i].Value
 			if key == "<<" {
 				continue
@@ -214,6 +220,33 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 		return typed
 	case yaml.ScalarNode:
 		return yamlMetaScalarValue(node, fallback)
+	default:
+		return fallback
+	}
+}
+
+func yamlMetaMergedScalarText(node *yaml.Node, fallback map[string]any) map[string]any {
+	if node == nil {
+		return fallback
+	}
+	switch node.Kind {
+	case yaml.AliasNode:
+		merged, ok := yamlMetaScalarText(node.Alias, fallback).(map[string]any)
+		if !ok {
+			return fallback
+		}
+		return merged
+	case yaml.MappingNode:
+		merged, ok := yamlMetaScalarText(node, fallback).(map[string]any)
+		if !ok {
+			return fallback
+		}
+		return merged
+	case yaml.SequenceNode:
+		for _, child := range node.Content {
+			fallback = yamlMetaMergedScalarText(child, fallback)
+		}
+		return fallback
 	default:
 		return fallback
 	}

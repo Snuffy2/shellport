@@ -185,7 +185,7 @@ func TestLoadFileSkipsYAMLMetaMergeKeys(t *testing.T) {
   - ListenInterface: 127.0.0.1
     ListenPort: 8182
 MetaDefaults: &metaDefaults
-  User: pi
+  User: 010
 Presets:
   - Title: Atlantis
     Type: SSH
@@ -202,8 +202,8 @@ Presets:
 	if err != nil {
 		t.Fatalf("loadFile returned error: %v", err)
 	}
-	if cfg.Presets[0].Meta["User"] != "pi" {
-		t.Fatalf("User = %q, want pi", cfg.Presets[0].Meta["User"])
+	if cfg.Presets[0].Meta["User"] != "010" {
+		t.Fatalf("User = %q, want 010", cfg.Presets[0].Meta["User"])
 	}
 	if _, ok := cfg.Presets[0].Meta["<<"]; ok {
 		t.Fatal("merge key was preserved as preset metadata")
