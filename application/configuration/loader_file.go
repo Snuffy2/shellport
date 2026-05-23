@@ -176,8 +176,8 @@ func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
 				typed[key] = yamlMetaScalarText(child, typed[key])
 				continue
 			}
-			if _, ok := yamlStringFieldNames[key]; ok && child.Kind == yaml.ScalarNode {
-				typed[key] = yamlScalarValue(child, typed[key])
+			if _, ok := yamlStringFieldNames[key]; ok {
+				typed[key] = yamlStringFieldValue(child, typed[key])
 				continue
 			}
 			preserveYAMLMetaScalarText(typed[key], child)
@@ -225,6 +225,8 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 			typed[key] = yamlMetaScalarText(valueNode, typed[key])
 		}
 		return typed
+	case yaml.AliasNode:
+		return yamlMetaScalarText(node.Alias, fallback)
 	case yaml.SequenceNode:
 		typed, ok := fallback.([]any)
 		if !ok {
@@ -246,6 +248,19 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 	default:
 		return fallback
 	}
+}
+
+func yamlStringFieldValue(node *yaml.Node, fallback any) any {
+	if node == nil {
+		return fallback
+	}
+	if node.Kind == yaml.AliasNode {
+		return yamlStringFieldValue(node.Alias, fallback)
+	}
+	if node.Kind == yaml.ScalarNode {
+		return yamlScalarValue(node, fallback)
+	}
+	return fallback
 }
 
 func yamlMetaMergedScalarText(node *yaml.Node, fallback map[string]any) map[string]any {

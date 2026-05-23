@@ -192,6 +192,41 @@ Presets:
 	}
 }
 
+func TestLoadFilePreservesAliasedYAMLStringScalars(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`PresetID: &presetID 0001
+PresetTitle: &presetTitle 0010
+PresetMeta: &presetMeta
+  Password: 0123
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets:
+  - ID: *presetID
+    Title: *presetTitle
+    Type: SSH
+    Host: atlantis.home
+    Meta: *presetMeta
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.Presets[0].ID != "0001" {
+		t.Fatalf("ID = %q, want 0001", cfg.Presets[0].ID)
+	}
+	if cfg.Presets[0].Title != "0010" {
+		t.Fatalf("Title = %q, want 0010", cfg.Presets[0].Title)
+	}
+	if cfg.Presets[0].Meta["Password"] != "0123" {
+		t.Fatalf("Password = %q, want 0123", cfg.Presets[0].Meta["Password"])
+	}
+}
+
 func TestLoadFileAcceptsUnquotedYAMLMetaScalarsAsStrings(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	content := []byte(`Servers:
