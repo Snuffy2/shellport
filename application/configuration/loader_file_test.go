@@ -151,6 +151,8 @@ Presets:
       ET Server Port: 2022
       Password: 0123
       Enabled: true
+      Empty: null
+      Tilde: ~
 `)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
@@ -168,6 +170,12 @@ Presets:
 	}
 	if cfg.Presets[0].Meta["Enabled"] != "true" {
 		t.Fatalf("Enabled = %q, want true", cfg.Presets[0].Meta["Enabled"])
+	}
+	if cfg.Presets[0].Meta["Empty"] != "" {
+		t.Fatalf("Empty = %q, want empty", cfg.Presets[0].Meta["Empty"])
+	}
+	if cfg.Presets[0].Meta["Tilde"] != "" {
+		t.Fatalf("Tilde = %q, want empty", cfg.Presets[0].Meta["Tilde"])
 	}
 }
 

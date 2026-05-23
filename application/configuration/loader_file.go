@@ -187,7 +187,7 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 			key := node.Content[i].Value
 			valueNode := node.Content[i+1]
 			if valueNode.Kind == yaml.ScalarNode {
-				typed[key] = valueNode.Value
+				typed[key] = yamlMetaScalarValue(valueNode, typed[key])
 				continue
 			}
 			typed[key] = yamlMetaScalarText(valueNode, typed[key])
@@ -203,17 +203,27 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 				return typed
 			}
 			if child.Kind == yaml.ScalarNode {
-				typed[i] = child.Value
+				typed[i] = yamlMetaScalarValue(child, typed[i])
 				continue
 			}
 			typed[i] = yamlMetaScalarText(child, typed[i])
 		}
 		return typed
 	case yaml.ScalarNode:
-		return node.Value
+		return yamlMetaScalarValue(node, fallback)
 	default:
 		return fallback
 	}
+}
+
+func yamlMetaScalarValue(node *yaml.Node, fallback any) any {
+	if node.Tag == "!!null" {
+		if fallback == nil {
+			return ""
+		}
+		return fallback
+	}
+	return node.Value
 }
 
 func normalizeYAMLValue(value any) any {

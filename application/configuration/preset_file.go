@@ -419,7 +419,7 @@ func readCommonInputFileDocument(filePath string) (commonInputFileDocument, erro
 	}
 	var rawPresets []map[string]any
 	if presets, ok := raw["Presets"]; ok {
-		rawPresets, decodeErr = rawPresetMaps(presets)
+		rawPresets, decodeErr = rawPresetMapsFromSyntax(&syntax, presets)
 		if decodeErr != nil {
 			return commonInputFileDocument{}, decodeErr
 		}
@@ -580,6 +580,9 @@ func rawPresetString(
 	if value, ok := rawPreset[key].(string); ok {
 		return strings.TrimSpace(value)
 	}
+	if value, ok := rawPreset[key].(*yaml.Node); ok && value.Kind == yaml.ScalarNode {
+		return strings.TrimSpace(value.Value)
+	}
 	return ""
 }
 
@@ -615,6 +618,58 @@ func rawPresetMaps(value any) ([]map[string]any, error) {
 		return nil, err
 	}
 	return rawPresets, nil
+}
+
+func rawPresetMapsFromSyntax(
+	syntax *yaml.Node,
+	fallback any,
+) ([]map[string]any, error) {
+	presetsNode := yamlMappingValueNode(yamlMappingRoot(syntax), "Presets")
+	if presetsNode == nil || presetsNode.Kind != yaml.SequenceNode {
+		return rawPresetMaps(fallback)
+	}
+	rawPresets := make([]map[string]any, 0, len(presetsNode.Content))
+	for _, presetNode := range presetsNode.Content {
+		if presetNode.Kind != yaml.MappingNode {
+			return rawPresetMaps(fallback)
+		}
+		rawPresets = append(rawPresets, rawPresetMapFromYAMLNode(presetNode))
+	}
+	return rawPresets, nil
+}
+
+func yamlMappingValueNode(root *yaml.Node, key string) *yaml.Node {
+	if root == nil {
+		return nil
+	}
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == key {
+			return root.Content[i+1]
+		}
+	}
+	return nil
+}
+
+func rawPresetMapFromYAMLNode(node *yaml.Node) map[string]any {
+	rawPreset := make(map[string]any, len(node.Content)/2)
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		rawPreset[node.Content[i].Value] = cloneYAMLNode(node.Content[i+1])
+	}
+	return rawPreset
+}
+
+func cloneYAMLNode(node *yaml.Node) *yaml.Node {
+	if node == nil {
+		return nil
+	}
+	cloned := *node
+	if len(node.Content) > 0 {
+		cloned.Content = make([]*yaml.Node, len(node.Content))
+		for i, child := range node.Content {
+			cloned.Content[i] = cloneYAMLNode(child)
+		}
+	}
+	return &cloned
 }
 
 // writeCommonInputFile atomically rewrites filePath with cfg encoded as YAML.
