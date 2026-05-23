@@ -181,6 +181,48 @@ FutureTopLevel:
 	}
 }
 
+func TestReplaceFilePresetsPreservesUpdatedMappingAnchors(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets: &presetList
+  - ID: preset-atlantis
+    Title: Atlantis
+    Type: SSH
+    Host: atlantis.home:22
+PresetMirror: *presetList
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	if err := ReplaceFilePresets(configPath, []Preset{
+		{
+			ID:    "preset-atlantis",
+			Title: "Atlantis",
+			Type:  "SSH",
+			Host:  "columbia.home:22",
+		},
+	}); err != nil {
+		t.Fatalf("ReplaceFilePresets returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile returned error: %v", err)
+	}
+	if !strings.Contains(string(data), "Presets: &presetList") {
+		t.Fatalf("preset anchor was not preserved:\n%s", data)
+	}
+	if !strings.Contains(string(data), "PresetMirror: *presetList") {
+		t.Fatalf("preset alias was not preserved:\n%s", data)
+	}
+	if _, _, err := readCommonInputFile(configPath); err != nil {
+		t.Fatalf("readCommonInputFile returned error: %v\n%s", err, data)
+	}
+}
+
 func TestReplaceFilePresetsPreservesRawMetaValues(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	keyPath := filepath.Join(t.TempDir(), "id_ed25519")

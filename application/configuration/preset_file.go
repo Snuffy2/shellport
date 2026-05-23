@@ -526,6 +526,7 @@ func setYAMLMappingValue(root *yaml.Node, key string, value *yaml.Node) {
 		if root.Content[i].Value != key {
 			continue
 		}
+		value.Anchor = root.Content[i+1].Anchor
 		value.HeadComment = root.Content[i+1].HeadComment
 		value.LineComment = root.Content[i+1].LineComment
 		value.FootComment = root.Content[i+1].FootComment
@@ -591,11 +592,7 @@ func mergePresetInputRaw(
 	rawPreset map[string]any,
 ) (map[string]any, error) {
 	const presetInputFieldCount = 6
-	capacity := len(rawPreset)
-	if capacity <= int(^uint(0)>>1)-presetInputFieldCount {
-		capacity += presetInputFieldCount
-	}
-	merged := make(map[string]any, capacity)
+	merged := make(map[string]any, safePresetInputCapacity(len(rawPreset), presetInputFieldCount))
 	for key, value := range rawPreset {
 		merged[key] = value
 	}
@@ -659,7 +656,7 @@ func yamlMappingValueNode(root *yaml.Node, key string) *yaml.Node {
 }
 
 func rawPresetMapFromYAMLNode(node *yaml.Node, fallback map[string]any) map[string]any {
-	rawPreset := make(map[string]any, len(fallback)+len(node.Content)/2)
+	rawPreset := make(map[string]any, safePresetInputCapacity(len(fallback), len(node.Content)/2))
 	for key, value := range fallback {
 		rawPreset[key] = value
 	}

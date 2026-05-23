@@ -88,22 +88,31 @@ func decodeYAMLMap(data []byte) (map[string]any, error) {
 }
 
 var yamlStringFieldNames = map[string]struct{}{
-	"AdminPassword":         {},
-	"Host":                  {},
-	"HostName":              {},
-	"ID":                    {},
-	"ListenInterface":       {},
-	"ServerMessage":         {},
-	"ServerTitle":           {},
-	"Socks5":                {},
-	"Socks5Password":        {},
-	"Socks5User":            {},
-	"TLSCertificateFile":    {},
-	"TLSCertificateKeyFile": {},
-	"TabColor":              {},
-	"Title":                 {},
-	"Type":                  {},
-	"UserPassword":          {},
+	"adminpassword":         {},
+	"host":                  {},
+	"hostname":              {},
+	"id":                    {},
+	"listeninterface":       {},
+	"servermessage":         {},
+	"servertitle":           {},
+	"socks5":                {},
+	"socks5password":        {},
+	"socks5user":            {},
+	"tlscertificatefile":    {},
+	"tlscertificatekeyfile": {},
+	"tabcolor":              {},
+	"title":                 {},
+	"type":                  {},
+	"userpassword":          {},
+}
+
+func isYAMLStringFieldName(key string) bool {
+	_, ok := yamlStringFieldNames[strings.ToLower(key)]
+	return ok
+}
+
+func isYAMLMetaFieldName(key string) bool {
+	return strings.EqualFold(key, "Meta")
 }
 
 func commonInputFromYAMLMap(raw map[string]any) (commonInput, error) {
@@ -121,7 +130,7 @@ func commonInputFromYAMLMap(raw map[string]any) (commonInput, error) {
 func normalizeYAMLMap(raw map[string]any) map[string]any {
 	normalized := make(map[string]any, len(raw))
 	for key, value := range raw {
-		if key == "Meta" {
+		if isYAMLMetaFieldName(key) {
 			normalized[key] = normalizeYAMLMeta(value)
 			continue
 		}
@@ -181,11 +190,11 @@ func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
 				continue
 			}
 			child := node.Content[i+1]
-			if key == "Meta" {
+			if isYAMLMetaFieldName(key) {
 				typed[key] = yamlMetaScalarText(child, typed[key])
 				continue
 			}
-			if _, ok := yamlStringFieldNames[key]; ok {
+			if isYAMLStringFieldName(key) {
 				typed[key] = yamlStringFieldValue(child, typed[key])
 				continue
 			}
@@ -234,11 +243,11 @@ func yamlMappingScalarText(node *yaml.Node, fallback map[string]any) map[string]
 			continue
 		}
 		child := node.Content[i+1]
-		if key == "Meta" {
+		if isYAMLMetaFieldName(key) {
 			fallback[key] = yamlMetaScalarText(child, fallback[key])
 			continue
 		}
-		if _, ok := yamlStringFieldNames[key]; ok {
+		if isYAMLStringFieldName(key) {
 			fallback[key] = yamlStringFieldValue(child, fallback[key])
 		}
 	}

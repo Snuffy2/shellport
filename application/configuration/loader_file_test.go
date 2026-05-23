@@ -192,6 +192,54 @@ Presets:
 	}
 }
 
+func TestLoadFilePreservesLowercaseYAMLStringScalars(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`hostname: 010
+adminpassword: true
+servers:
+  - listeninterface: 127.0.0.1
+    listenport: 8182
+    servertitle: 2026
+presets:
+  - id: 0001
+    title: 0010
+    type: SSH
+    host: atlantis.home
+    tabcolor: 0099
+    meta:
+      Password: 0123
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.HostName != "010" {
+		t.Fatalf("HostName = %q, want 010", cfg.HostName)
+	}
+	if cfg.AdminPassword != "true" {
+		t.Fatalf("AdminPassword = %q, want true", cfg.AdminPassword)
+	}
+	if cfg.Servers[0].ServerTitle != "2026" {
+		t.Fatalf("ServerTitle = %q, want 2026", cfg.Servers[0].ServerTitle)
+	}
+	if cfg.Presets[0].ID != "0001" {
+		t.Fatalf("ID = %q, want 0001", cfg.Presets[0].ID)
+	}
+	if cfg.Presets[0].Title != "0010" {
+		t.Fatalf("Title = %q, want 0010", cfg.Presets[0].Title)
+	}
+	if cfg.Presets[0].TabColor != "0099" {
+		t.Fatalf("TabColor = %q, want 0099", cfg.Presets[0].TabColor)
+	}
+	if cfg.Presets[0].Meta["Password"] != "0123" {
+		t.Fatalf("Password = %q, want 0123", cfg.Presets[0].Meta["Password"])
+	}
+}
+
 func TestLoadFilePreservesAliasedYAMLStringScalars(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	content := []byte(`PresetID: &presetID 0001
