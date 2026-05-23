@@ -132,7 +132,7 @@ The important setup choices are:
 - `SHELLPORT_PRESET_SECRET_KEY` lets ShellPort encrypt saved preset passwords before writing them back to disk.
 - `TLSCertificateFile` and `TLSCertificateKeyFile` enable HTTPS for a server listener.
 - `Socks5` routes outbound connections through a SOCKS5 proxy.
-- `OnlyAllowPresetRemotes` limits outbound connections to hosts that are already defined as presets.
+- `OnlyAllowPresetRemotes` limits outbound connections to hosts that are already defined as presets and disables preset management.
 
 Mosh uses SSH only to start the remote session; the Mosh data path uses UDP
 between the ShellPort container and the remote host. ET uses the local `et`
