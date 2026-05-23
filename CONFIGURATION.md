@@ -151,7 +151,7 @@ SSH presets use the same preset form as the other connection types, but they are
 
 Mosh presets still use SSH for bootstrap, but the browser session is proxied through ShellPort while the remote Mosh traffic uses UDP between the backend and the host. The remote host must have `mosh-server` installed. ShellPort does not support SOCKS5 for Mosh.
 
-The `Mosh Server` field lets you override the local command used to launch the server-side Mosh helper. Leave it empty to use `mosh-server`.
+The `Mosh Server` field lets you override the remote `mosh-server` executable path used during SSH bootstrap. Leave it empty to use `mosh-server`; provide an executable path without extra arguments.
 
 ET presets require private-key authentication. The `ET Server Port` field controls the remote `etserver` TCP port and defaults to `2022`. The `ET Command` field names the local ET client command and currently only accepts the built-in `et` value.
 
