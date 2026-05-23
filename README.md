@@ -1,83 +1,87 @@
 # ShellPort
 
-Browser-based remote shell access over SSH, Telnet, Mosh, and Eternal Terminal (ET)
+ShellPort is a browser-based remote shell for SSH, Telnet, Mosh, and Eternal Terminal (ET).
+
+## Quick Start
+
+The easiest way to run ShellPort is with Docker and a writable config directory.
 
 ![Screenshot](screenshot.png)
 
-## Supported browsers
+1. Create a config directory:
 
-Most browsers over the past few years, including Chrome 80+, Edge 80+, Firefox 78+, and Safari 14+.
-
-## Docker
-
-Run ShellPort with Docker Compose:
-
-```yaml
-services:
-  shellport:
-    image: ghcr.io/snuffy2/shellport:latest
-    container_name: shellport
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8182:8182"
-    volumes:
-      - ./config:/config
-    environment:
-      # Optional: override the config file path. By default, this compose file
-      # uses /config/shellport.conf.json from the mounted ./config dir.
-      # SHELLPORT_CONFIG: /config/shellport.conf.json
-      # Optional: IANA timezone used for local timestamps in logs.
-      TZ: America/New_York
-      # Recommended: base64-encoded 32-byte key for encrypted preset passwords.
-      # Generate with: openssl rand -base64 32
-      SHELLPORT_PRESET_SECRET_KEY: "replace-with-generated-key"
-      # Optional: set to "1" to enable debug-level logs on Docker stdout.
-      # SHELLPORT_DEBUG: "1"
+```sh
+mkdir -p config
 ```
 
-Then open `http://localhost:8182`.
+2. Start the container:
 
-The example publishes ShellPort only on localhost so a first-run instance is not
-exposed on the network before you add authentication to the generated config
-file. For direct LAN access, change the port mapping after setting
-`UserPassword` and, optionally, `AdminPassword` for preset-management protection.
+```sh
+docker run -d \
+  --name shellport \
+  --restart unless-stopped \
+  -p 127.0.0.1:8182:8182 \
+  -v "$PWD/config:/config" \
+  -e TZ=America/New_York \
+  -e SHELLPORT_PRESET_SECRET_KEY="<base64-encoded-32-byte-key>" \
+  ghcr.io/snuffy2/shellport:latest
+```
+
+3. Open `http://localhost:8182`.
+
+If `config/shellport.conf.json` does not exist, ShellPort creates it on first boot. The file keeps the `.json` extension, but ShellPort accepts JSONC-style comments and trailing commas. Use `shellport.conf.example.json` as a loadable annotated reference while you edit the live file.
+
+Keep the service on `127.0.0.1` until you have added the passwords or access controls you want.
+
+Generate `SHELLPORT_PRESET_SECRET_KEY` once with `openssl rand -base64 32` and reuse the same value for every restart if you want encrypted preset passwords to remain readable.
+
+If you prefer Docker Compose, the repository also includes `docker-compose.example.yaml` with the same layout.
+
+## Create Presets In The UI
+
+Presets are the normal way to connect to hosts. Open the Connector view and use the preset editor to create a new preset or edit an existing one.
+
+The main fields match the UI:
+
+- `Preset name`
+- `Type`
+- `Host`
+- `Tab color`
+- `User`
+- `Authentication`
+- `Password`
+- `Private key source`
+- `Encoding`
+- `Mosh Server`
+- `ET Server Port`
+- `ET Command`
+
+For SSH and Mosh presets, you can choose password or private key authentication. ET presets currently use private key authentication only.
+
+If the preset already has a saved password or private key, the editor lets you keep it, replace it, or clear it. Fingerprints can be saved from the connection-time fingerprint prompt.
+
+Preset create, edit, and delete actions require a writable file-backed configuration. If `AdminPassword` is set, the UI will prompt for it before protected preset changes. If `AdminPassword` is blank and `UserPassword` is set, any authenticated user can manage presets. If both passwords are blank, preset management is open to anyone who can reach the UI.
 
 ## Configuration
 
-ShellPort is configured with a JSON configuration file. See [CONFIGURATION.md](CONFIGURATION.md) for the full configuration reference.
+See [CONFIGURATION.md](CONFIGURATION.md) for the full configuration reference.
 
-The Docker Compose example above mounts `./config` as the writable `/config` directory. By default, ShellPort loads `/config/shellport.conf.json`, creating it with a minimal `0.0.0.0:8182` configuration if the file does not exist. That generated file leaves `UserPassword` and `AdminPassword` empty so you can add presets from the UI first, then edit the config file later for authentication, admin protection, or other advanced settings. `SHELLPORT_CONFIG` is only needed when you want to override the config file path.
+The important setup choices are:
 
-Writable file-backed configuration enables preset updates from the UI, such as saving SSH/Mosh fingerprints. If `SHELLPORT_PRESET_SECRET_KEY` is set, plaintext preset `Password` values are migrated on startup to `Encrypted Password` and the plaintext value is removed from the JSON file. That key must be set through the environment, not in JSON. Without that key, plaintext password presets continue
-to work as before. Full preset add/edit/remove API writes require admin access. The UI prompts for `AdminPassword` before the first protected preset create, edit, or delete action and remembers a successful AdminPassword only for the current browser page session. If `AdminPassword` is blank, anyone with UI access can manage presets. If both `UserPassword` and `AdminPassword` are blank, everyone gets admin access without authentication. Fingerprint saves remain available only from the connection-time fingerprint prompt.
+- `UserPassword` controls access to the web UI.
+- `AdminPassword` protects preset writes when you want separate admin access.
+- `SHELLPORT_PRESET_SECRET_KEY` lets ShellPort encrypt saved preset passwords before writing them back to disk.
+- `TLSCertificateFile` and `TLSCertificateKeyFile` enable HTTPS for a server listener.
+- `Socks5` routes outbound connections through a SOCKS5 proxy.
+- `OnlyAllowPresetRemotes` limits outbound connections to hosts that are already defined as presets.
 
-Generate a preset secret key with one of these commands:
+## Browser Support
 
-#### macOS/Linux
+ShellPort works with recent versions of Chrome, Edge, Firefox, and Safari.
 
-```sh
-openssl rand -base64 32
-```
+## Running From Source
 
-#### Windows PowerShell
-
-```powershell
-$rng = [Security.Cryptography.RandomNumberGenerator]::Create()
-$bytes = New-Object byte[] 32
-$rng.GetBytes($bytes)
-[Convert]::ToBase64String($bytes)
-```
-
-## Mosh and Eternal Terminal (ET)
-
-Mosh support is available with SSH used for bootstrap only. The browser connection to ShellPort still uses WebSocket, while Mosh data flows over UDP between the backend container and the remote host. Remote hosts need `mosh-server` installed, SOCKS5 is not supported for Mosh, the backend-to-host Mosh leg is IPv4-only, and terminal encoding is fixed to UTF-8.
-
-ET support is available for private-key authentication. ShellPort verifies the SSH host fingerprint and private key before launching the local `et` client, then proxies the ET client PTY over the existing browser WebSocket. ET uses the remote `etserver` TCP port, defaulting to `2022`. SOCKS5 proxying and password authentication are not supported for ET v1. Closing the ShellPort browser session terminates the backend `et` client process, matching the current Mosh-style session lifetime.
-
-<details>
-<summary><h2>Running From Source</h2></summary>
-
-Use this path for development.
+Use this path if you want to develop ShellPort locally.
 
 Prerequisites:
 
@@ -86,7 +90,7 @@ Prerequisites:
 - `node` 24 or newer
 - `npm`
 
-Build the frontend assets and backend binary:
+Clone the repo and build the app:
 
 ```sh
 git clone https://github.com/Snuffy2/shellport.git
@@ -101,11 +105,9 @@ Run the development server:
 npm run dev
 ```
 
-The development command starts the Go backend with `shellport.conf.example.json` and serves the frontend through Vite with HMR. Vite proxies backend routes such as `/shellport/socket` to the Go process.
+`npm run dev` starts the Go backend with `shellport.conf.example.json` and serves the frontend through Vite with HMR and backend proxying.
 
-The generated production binary is written to `./shellport` by `npm run build`.
-
-Useful development checks:
+Useful checks while developing:
 
 ```sh
 npm run generate
@@ -114,16 +116,14 @@ npm run lint
 go test ./...
 ```
 
-`npm run generate` produces the Vite assets and then refreshes the embedded Go static assets.
-
-</details>
+`npm run generate` rebuilds the frontend assets and refreshes the embedded static assets used by the Go backend.
 
 ## Fork
 
-This repository is a fork of [nirui/sshwifty](https://github.com/nirui/sshwifty). The original project and its design are the work of [@nirui](https://github.com/nirui), whose excellent work made this possible.
+This repository is a fork of [nirui/sshwifty](https://github.com/nirui/sshwifty). The original project and design are the work of [@nirui](https://github.com/nirui).
 
 ## License
 
-Code in this project is licensed under AGPL-3.0-only. See [LICENSE.md](LICENSE.md) for details.
+Code in this project is licensed under AGPL-3.0-only. See [LICENSE](LICENSE.md) for details.
 
-Third-party components are licensed under their respective licenses. See [DEPENDENCIES.md](DEPENDENCIES.md) for dependency copyright and license details.
+Third-party components are licensed under their respective licenses. See [DEPENDENCIES](DEPENDENCIES.md) for dependency copyright and license details.

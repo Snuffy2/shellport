@@ -19,7 +19,7 @@ import (
 type Common struct {
 	// SourceFile is the JSON configuration file path when loaded from disk.
 	SourceFile string
-	// HostName is the public hostname used in generated links and TLS validation.
+	// HostName restricts accepted HTTP Host headers when set.
 	HostName string
 	// UserPassword is the password required for client authentication;
 	// an empty value disables authentication.
