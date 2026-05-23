@@ -848,7 +848,7 @@ func TestReplaceFilePresetsWithRuntimeDropsKnownMetaForWrongType(t *testing.T) {
 func TestReplaceFilePresetsUpdatesSymlinkTarget(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "shellport.conf.yaml")
-	linkPath := filepath.Join(tempDir, "linked.conf.json")
+	linkPath := filepath.Join(tempDir, "linked.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home:22"},
 	})
