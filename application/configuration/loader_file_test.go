@@ -14,14 +14,13 @@ import (
 )
 
 func TestLoadFileRejectsPresetSecretKey(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  "HostName": "localhost",
-  "PresetSecretKey": "not-allowed",
-  "Servers": [
-    {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
-  ]
-}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`HostName: localhost
+PresetSecretKey: not-allowed
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -36,14 +35,13 @@ func TestLoadFileRejectsPresetSecretKey(t *testing.T) {
 }
 
 func TestLoadFileRejectsPresetSecretKeyEnvName(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  "HostName": "localhost",
-  "SHELLPORT_PRESET_SECRET_KEY": "not-allowed",
-  "Servers": [
-    {"ListenInterface": "127.0.0.1", "ListenPort": 8182}
-  ]
-}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`HostName: localhost
+SHELLPORT_PRESET_SECRET_KEY: not-allowed
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -57,18 +55,14 @@ func TestLoadFileRejectsPresetSecretKeyEnvName(t *testing.T) {
 	}
 }
 
-func TestLoadFileAcceptsJSONCInJSONFile(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  // ShellPort accepts comments in .json config files.
-  "HostName": "localhost",
-  "Servers": [
-    {
-      "ListenInterface": "127.0.0.1",
-      "ListenPort": 8182,
-    },
-  ],
-}`)
+func TestLoadFileAcceptsYAMLConfigFile(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`# ShellPort accepts comments in YAML config files.
+HostName: localhost
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -86,7 +80,7 @@ func TestLoadFileAcceptsJSONCInJSONFile(t *testing.T) {
 }
 
 func TestExampleConfigFileIsLoadable(t *testing.T) {
-	configPath := filepath.Join("..", "..", "shellport.conf.example.json")
+	configPath := filepath.Join("..", "..", "shellport.conf.example.yml")
 
 	_, cfg, err := loadFile(configPath)
 	if err != nil {
@@ -101,7 +95,7 @@ func TestExampleConfigFileIsLoadable(t *testing.T) {
 }
 
 func TestDevConfigTemplateIsLoadable(t *testing.T) {
-	configPath := filepath.Join("..", "..", "scripts", "shellport.dev.conf.json")
+	configPath := filepath.Join("..", "..", "scripts", "shellport.dev.conf.yml")
 
 	_, cfg, err := loadFile(configPath)
 	if err != nil {
@@ -119,18 +113,14 @@ func TestDevConfigTemplateIsLoadable(t *testing.T) {
 }
 
 func TestLoadFileReadsServerTitle(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  "HostName": "localhost",
-  "Servers": [
-    {
-      "ListenInterface": "127.0.0.1",
-      "ListenPort": 8182,
-      "ServerTitle": "Homelab Shells",
-      "ServerMessage": "Pick a host"
-    }
-  ]
-}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`HostName: localhost
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+    ServerTitle: Homelab Shells
+    ServerMessage: Pick a host
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -147,10 +137,346 @@ func TestLoadFileReadsServerTitle(t *testing.T) {
 	}
 }
 
+func TestLoadFilePreservesUnquotedYAMLStringScalars(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`HostName: 010
+UserPassword: 0123
+AdminPassword: true
+Socks5User: 0007
+Socks5Password: false
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+    ServerTitle: 2026
+Presets:
+  - ID: 0001
+    Title: 0010
+    Type: SSH
+    Host: atlantis.home
+    TabColor: 0099
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.HostName != "010" {
+		t.Fatalf("HostName = %q, want 010", cfg.HostName)
+	}
+	if cfg.UserPassword != "0123" {
+		t.Fatalf("UserPassword = %q, want 0123", cfg.UserPassword)
+	}
+	if cfg.AdminPassword != "true" {
+		t.Fatalf("AdminPassword = %q, want true", cfg.AdminPassword)
+	}
+	if cfg.Socks5User != "0007" {
+		t.Fatalf("Socks5User = %q, want 0007", cfg.Socks5User)
+	}
+	if cfg.Socks5Password != "false" {
+		t.Fatalf("Socks5Password = %q, want false", cfg.Socks5Password)
+	}
+	if cfg.Servers[0].ServerTitle != "2026" {
+		t.Fatalf("ServerTitle = %q, want 2026", cfg.Servers[0].ServerTitle)
+	}
+	if cfg.Presets[0].ID != "0001" {
+		t.Fatalf("ID = %q, want 0001", cfg.Presets[0].ID)
+	}
+	if cfg.Presets[0].Title != "0010" {
+		t.Fatalf("Title = %q, want 0010", cfg.Presets[0].Title)
+	}
+	if cfg.Presets[0].TabColor != "0099" {
+		t.Fatalf("TabColor = %q, want 0099", cfg.Presets[0].TabColor)
+	}
+}
+
+func TestLoadFilePreservesLowercaseYAMLStringScalars(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`hostname: 010
+adminpassword: true
+servers:
+  - listeninterface: 127.0.0.1
+    listenport: 8182
+    servertitle: 2026
+presets:
+  - id: 0001
+    title: 0010
+    type: SSH
+    host: atlantis.home
+    tabcolor: 0099
+    meta:
+      Password: 0123
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.HostName != "010" {
+		t.Fatalf("HostName = %q, want 010", cfg.HostName)
+	}
+	if cfg.AdminPassword != "true" {
+		t.Fatalf("AdminPassword = %q, want true", cfg.AdminPassword)
+	}
+	if cfg.Servers[0].ServerTitle != "2026" {
+		t.Fatalf("ServerTitle = %q, want 2026", cfg.Servers[0].ServerTitle)
+	}
+	if cfg.Presets[0].ID != "0001" {
+		t.Fatalf("ID = %q, want 0001", cfg.Presets[0].ID)
+	}
+	if cfg.Presets[0].Title != "0010" {
+		t.Fatalf("Title = %q, want 0010", cfg.Presets[0].Title)
+	}
+	if cfg.Presets[0].TabColor != "0099" {
+		t.Fatalf("TabColor = %q, want 0099", cfg.Presets[0].TabColor)
+	}
+	if cfg.Presets[0].Meta["Password"] != "0123" {
+		t.Fatalf("Password = %q, want 0123", cfg.Presets[0].Meta["Password"])
+	}
+}
+
+func TestLoadFilePreservesAliasedYAMLStringScalars(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`PresetID: &presetID 0001
+PresetTitle: &presetTitle 0010
+PresetMeta: &presetMeta
+  Password: 0123
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets:
+  - ID: *presetID
+    Title: *presetTitle
+    Type: SSH
+    Host: atlantis.home
+    Meta: *presetMeta
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.Presets[0].ID != "0001" {
+		t.Fatalf("ID = %q, want 0001", cfg.Presets[0].ID)
+	}
+	if cfg.Presets[0].Title != "0010" {
+		t.Fatalf("Title = %q, want 0010", cfg.Presets[0].Title)
+	}
+	if cfg.Presets[0].Meta["Password"] != "0123" {
+		t.Fatalf("Password = %q, want 0123", cfg.Presets[0].Meta["Password"])
+	}
+}
+
+func TestLoadFileAcceptsUnquotedYAMLMetaScalarsAsStrings(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets:
+  - Title: Atlantis
+    Type: ET
+    Host: atlantis.home
+    Meta:
+      User: pi
+      ET Server Port: 2022
+      Password: 0123
+      Enabled: true
+      Empty: null
+      Tilde: ~
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.Presets[0].Meta["ET Server Port"] != "2022" {
+		t.Fatalf("ET Server Port = %q, want 2022", cfg.Presets[0].Meta["ET Server Port"])
+	}
+	if cfg.Presets[0].Meta["Password"] != "0123" {
+		t.Fatalf("Password = %q, want 0123", cfg.Presets[0].Meta["Password"])
+	}
+	if cfg.Presets[0].Meta["Enabled"] != "true" {
+		t.Fatalf("Enabled = %q, want true", cfg.Presets[0].Meta["Enabled"])
+	}
+	if cfg.Presets[0].Meta["Empty"] != "" {
+		t.Fatalf("Empty = %q, want empty", cfg.Presets[0].Meta["Empty"])
+	}
+	if cfg.Presets[0].Meta["Tilde"] != "" {
+		t.Fatalf("Tilde = %q, want empty", cfg.Presets[0].Meta["Tilde"])
+	}
+}
+
+func TestLoadFileAcceptsUnquotedYAMLHookCommandArgsAsStrings(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Hooks:
+  before_connecting:
+    - ["/bin/echo", 123, true, null]
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	command := cfg.Hooks[HOOK_BEFORE_CONNECTING][0]
+	want := HookCommand{"/bin/echo", "123", "true", ""}
+	if len(command) != len(want) {
+		t.Fatalf("hook command length = %d, want %d: %#v", len(command), len(want), command)
+	}
+	for i := range want {
+		if command[i] != want[i] {
+			t.Fatalf("hook command[%d] = %q, want %q", i, command[i], want[i])
+		}
+	}
+}
+
+func TestDecodeYAMLMapDoesNotCoerceUnknownStringNamedFields(t *testing.T) {
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+FutureBlock:
+  Host: 7
+  Meta:
+    Retries: 3
+Presets:
+  - ID: preset-atlantis
+    Title: Atlantis
+    Type: SSH
+    Host: atlantis.home
+    FutureBlock:
+      Host: 8
+      Meta:
+        Retries: 4
+`)
+
+	raw, err := decodeYAMLMap(content)
+	if err != nil {
+		t.Fatalf("decodeYAMLMap returned error: %v", err)
+	}
+	futureBlock, ok := raw["FutureBlock"].(map[string]any)
+	if !ok {
+		t.Fatalf("FutureBlock = %#v, want map", raw["FutureBlock"])
+	}
+	if _, ok := futureBlock["Host"].(string); ok {
+		t.Fatalf("unknown top-level Host was coerced to string: %#v", futureBlock["Host"])
+	}
+	futureMeta, ok := futureBlock["Meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("FutureBlock.Meta = %#v, want map", futureBlock["Meta"])
+	}
+	if _, ok := futureMeta["Retries"].(string); ok {
+		t.Fatalf("unknown top-level Meta.Retries was coerced to string: %#v", futureMeta["Retries"])
+	}
+	presets, err := rawPresetMaps(raw["Presets"])
+	if err != nil {
+		t.Fatalf("rawPresetMaps returned error: %v", err)
+	}
+	presetFutureBlock, ok := presets[0]["FutureBlock"].(map[string]any)
+	if !ok {
+		t.Fatalf("preset FutureBlock = %#v, want map", presets[0]["FutureBlock"])
+	}
+	if _, ok := presetFutureBlock["Host"].(string); ok {
+		t.Fatalf("unknown preset Host was coerced to string: %#v", presetFutureBlock["Host"])
+	}
+	presetFutureMeta, ok := presetFutureBlock["Meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("preset FutureBlock.Meta = %#v, want map", presetFutureBlock["Meta"])
+	}
+	if _, ok := presetFutureMeta["Retries"].(string); ok {
+		t.Fatalf("unknown preset Meta.Retries was coerced to string: %#v", presetFutureMeta["Retries"])
+	}
+}
+
+func TestLoadFileSkipsYAMLMetaMergeKeys(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+MetaDefaults: &metaDefaults
+  User: 010
+FallbackMetaDefaults: &fallbackMetaDefaults
+  User: 020
+  Password: inherited
+Presets:
+  - Title: Atlantis
+    Type: SSH
+    Host: atlantis.home
+    Meta:
+      <<: [*metaDefaults, *fallbackMetaDefaults]
+      Password: null
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.Presets[0].Meta["User"] != "010" {
+		t.Fatalf("User = %q, want 010", cfg.Presets[0].Meta["User"])
+	}
+	if cfg.Presets[0].Meta["Password"] != "" {
+		t.Fatalf("Password = %q, want empty", cfg.Presets[0].Meta["Password"])
+	}
+	if _, ok := cfg.Presets[0].Meta["<<"]; ok {
+		t.Fatal("merge key was preserved as preset metadata")
+	}
+}
+
+func TestLoadFilePreservesMergedYAMLStringScalars(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+PresetDefaults: &presetDefaults
+  ID: 0001
+  Title: 0010
+  Type: SSH
+  Host: atlantis.home
+  TabColor: 0099
+Presets:
+  - <<: *presetDefaults
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.Presets[0].ID != "0001" {
+		t.Fatalf("ID = %q, want 0001", cfg.Presets[0].ID)
+	}
+	if cfg.Presets[0].Title != "0010" {
+		t.Fatalf("Title = %q, want 0010", cfg.Presets[0].Title)
+	}
+	if cfg.Presets[0].TabColor != "0099" {
+		t.Fatalf("TabColor = %q, want 0099", cfg.Presets[0].TabColor)
+	}
+}
+
 func TestDefaultFileSearchListUsesConfigDirectoryOnly(t *testing.T) {
 	searchList := defaultFileSearchList()
 
-	expected := []string{filepath.Join("/", "config", "shellport.conf.json")}
+	expected := []string{filepath.Join("/", "config", "shellport.conf.yml")}
 	if len(searchList) != len(expected) {
 		t.Fatalf("defaultFileSearchList() length = %d, want %d: %v", len(searchList), len(expected), searchList)
 	}
@@ -162,7 +488,7 @@ func TestDefaultFileSearchListUsesConfigDirectoryOnly(t *testing.T) {
 }
 
 func TestCreateDefaultConfigFileWritesLoadableConfig(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "config", "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "config", "shellport.conf.yml")
 
 	if err := createDefaultConfigFile(configPath); err != nil {
 		t.Fatalf("createDefaultConfigFile returned error: %v", err)
@@ -204,8 +530,8 @@ func TestCreateDefaultConfigFileWritesLoadableConfig(t *testing.T) {
 }
 
 func TestCreateDefaultConfigFileDoesNotOverwriteExistingConfig(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	original := []byte(`{"Servers":[{"ListenInterface":"127.0.0.1","ListenPort":8182}]}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	original := []byte("Servers:\n  - ListenInterface: 127.0.0.1\n    ListenPort: 8182\n")
 	if err := os.WriteFile(configPath, original, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -224,8 +550,8 @@ func TestCreateDefaultConfigFileDoesNotOverwriteExistingConfig(t *testing.T) {
 }
 
 func TestAutoCreateDefaultFileLoadsExistingConfigAfterCreateRace(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	original := []byte(`{"Servers":[{"ListenInterface":"127.0.0.1","ListenPort":8182}]}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	original := []byte("Servers:\n  - ListenInterface: 127.0.0.1\n    ListenPort: 8182\n")
 	if err := os.WriteFile(configPath, original, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}

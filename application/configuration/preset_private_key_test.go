@@ -10,7 +10,7 @@ import (
 )
 
 func TestPreservePresetPrivateKeyReferencesNormalizesFingerprintHosts(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -51,7 +51,7 @@ func TestMigratePresetPrivateKeysToFilesReplacesExistingFileReferenceWithPastedK
 	t *testing.T,
 ) {
 	configDir := t.TempDir()
-	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configPath := filepath.Join(configDir, "shellport.conf.yaml")
 	oldKeyPath := filepath.Join(configDir, "old.key")
 	if err := os.WriteFile(oldKeyPath, []byte("OLD PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile old key returned error: %v", err)

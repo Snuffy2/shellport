@@ -10,10 +10,10 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/gorilla/websocket v1.5.3
 	github.com/natefinch/atomic v1.0.1
-	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
 	github.com/unixshells/mosh-go v0.5.2
 	golang.org/x/crypto v0.52.0
 	golang.org/x/net v0.55.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

@@ -58,8 +58,8 @@ docker compose up -d
 
 4. Open `http://localhost:8182`.
 
-If `config/shellport.conf.json` does not exist, ShellPort creates it on first
-boot. Use the repository's `shellport.conf.example.json` as an annotated
+If `config/shellport.conf.yml` does not exist, ShellPort creates it on first
+boot. Use the repository's `shellport.conf.example.yml` as an annotated
 reference while you edit the live file.
 
 The example only publishes ShellPort on `127.0.0.1`. Keep it there until you
@@ -85,7 +85,7 @@ docker run -d \
 
 1. Open the UI while it is still bound to `127.0.0.1`.
 2. Create one or more presets from the Connector view.
-3. Edit `config/shellport.conf.json` and set `UserPassword` before exposing the
+3. Edit `config/shellport.conf.yml` and set `UserPassword` before exposing the
    service to other machines.
 4. Set `AdminPassword` if preset create, edit, and delete actions should require
    a separate admin password.
@@ -168,7 +168,7 @@ Run the development server:
 npm run dev
 ```
 
-`npm run dev` starts the Go backend with a writable local config copied from `scripts/shellport.dev.conf.json` into `.tmp/dev/shellport.conf.json`, then serves the frontend through Vite with HMR and backend proxying.
+`npm run dev` starts the Go backend with a writable local config copied from `scripts/shellport.dev.conf.yml` into `.tmp/dev/shellport.conf.yml`, then serves the frontend through Vite with HMR and backend proxying.
 
 Useful checks while developing:
 

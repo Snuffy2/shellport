@@ -532,7 +532,8 @@ func exerciseETSSHAuth(t *testing.T, auth []ssh.AuthMethod) error {
 				_ = ch.Reject(ssh.Prohibited, "test does not open channels")
 			}
 		}()
-		serverDone <- conn.Close()
+		_ = conn.Close()
+		serverDone <- nil
 	}()
 
 	clientConn, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)

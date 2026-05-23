@@ -21,6 +21,7 @@ import (
 	"github.com/Snuffy2/shellport/application/commands"
 	"github.com/Snuffy2/shellport/application/configuration"
 	"github.com/Snuffy2/shellport/application/log"
+	"gopkg.in/yaml.v3"
 )
 
 func writePresetAPIConfig(t *testing.T, path string, presets []map[string]any) {
@@ -32,9 +33,9 @@ func writePresetAPIConfig(t *testing.T, path string, presets []map[string]any) {
 		},
 		"Presets": presets,
 	}
-	content, err := json.MarshalIndent(data, "", "  ")
+	content, err := yaml.Marshal(data)
 	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
+		t.Fatalf("yaml.Marshal returned error: %v", err)
 	}
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
@@ -138,7 +139,7 @@ func normalizeStartupPresetIDsForTest(
 }
 
 func TestPresetConfigGetReturnsPresetIDs(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 	})
@@ -161,7 +162,7 @@ func TestPresetConfigGetReturnsPresetIDs(t *testing.T) {
 }
 
 func TestPresetConfigGetMarksHiddenSavedPassword(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -203,7 +204,7 @@ func TestPresetConfigGetMarksHiddenSavedPassword(t *testing.T) {
 
 func TestPresetConfigGetDoesNotMigratePrivateKeysForUserRole(t *testing.T) {
 	configDir := t.TempDir()
-	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configPath := filepath.Join(configDir, "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -249,7 +250,7 @@ func TestPresetConfigGetDoesNotMigratePrivateKeysForUserRole(t *testing.T) {
 
 func TestPresetConfigGetListsPrivateKeyFilesOnlyAfterAdminPassword(t *testing.T) {
 	configDir := t.TempDir()
-	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configPath := filepath.Join(configDir, "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	keyDir := filepath.Join(configDir, "private_keys")
 	if err := os.Mkdir(keyDir, 0o700); err != nil {
@@ -304,7 +305,7 @@ func TestPresetConfigGetListsPrivateKeyFilesOnlyAfterAdminPassword(t *testing.T)
 }
 
 func TestPresetConfigPutAddsMissingIDsAndPersists(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 	})
@@ -341,7 +342,7 @@ func TestPresetConfigPutAddsMissingIDsAndPersists(t *testing.T) {
 }
 
 func TestPresetConfigPutRemovesSupportedPresetsAndPreservesRawUnsupported(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		{"ID": "preset-future", "Title": "Future", "Type": "Future", "Host": "future.home"},
@@ -360,16 +361,15 @@ func TestPresetConfigPutRemovesSupportedPresetsAndPreservesRawUnsupported(t *tes
 
 	var raw struct {
 		Presets []struct {
-			ID string
-		}
+			ID string `yaml:"ID"`
+		} `yaml:"Presets"`
 	}
-	f, err := os.Open(configPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
-		t.Fatalf("os.Open returned error: %v", err)
+		t.Fatalf("os.ReadFile returned error: %v", err)
 	}
-	defer f.Close()
-	if err := json.NewDecoder(f).Decode(&raw); err != nil {
-		t.Fatalf("json Decode returned error: %v", err)
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("yaml.Unmarshal returned error: %v", err)
 	}
 	if len(raw.Presets) != 2 {
 		t.Fatalf("raw preset count = %d, want 2", len(raw.Presets))
@@ -383,7 +383,7 @@ func TestPresetConfigPutRemovesSupportedPresetsAndPreservesRawUnsupported(t *tes
 }
 
 func TestPresetConfigPutRejectsDuplicateIDs(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newAdminTestPresetConfig(t, configPath)
 	body := []byte(`{"presets":[{"id":"dup","title":"A","type":"SSH","host":"a.home"},{"id":"dup","title":"B","type":"SSH","host":"b.home"}]}`)
@@ -401,7 +401,7 @@ func TestPresetConfigPutRejectsDuplicateIDs(t *testing.T) {
 
 func TestPresetConfigPutDoesNotMigratePrivateKeyBeforeValidation(t *testing.T) {
 	configDir := t.TempDir()
-	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configPath := filepath.Join(configDir, "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{})
 	controller := newAdminTestPresetConfig(t, configPath)
 	body := []byte(fmt.Sprintf(
@@ -423,7 +423,7 @@ func TestPresetConfigPutDoesNotMigratePrivateKeyBeforeValidation(t *testing.T) {
 }
 
 func TestPresetConfigPutAllowsAdminWhenBothKeysAreBlank(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newTestPresetConfig(t, configPath)
 	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home"}]}`)
@@ -438,7 +438,7 @@ func TestPresetConfigPutAllowsAdminWhenBothKeysAreBlank(t *testing.T) {
 }
 
 func TestPresetConfigPutRequiresAdminPasswordForFullReplacement(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 	})
@@ -456,7 +456,7 @@ func TestPresetConfigPutRequiresAdminPasswordForFullReplacement(t *testing.T) {
 }
 
 func TestPresetConfigPutRejectsFullReplacementWhenRestrictedToPresets(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 	})
@@ -498,7 +498,7 @@ func TestPresetConfigPutRejectsFullReplacementWhenRestrictedToPresets(t *testing
 }
 
 func TestPresetConfigPutPreserveHeaderRequiresAdminPasswordWithoutPresetID(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 	})
@@ -521,7 +521,7 @@ func TestPresetConfigPutPreserveHeaderRequiresAdminPasswordWithoutPresetID(t *te
 }
 
 func TestPresetConfigPutRejectsClearHiddenPasswordIDsOnFingerprintSave(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -568,7 +568,7 @@ func TestPresetConfigPutRejectsClearHiddenPasswordIDsOnFingerprintSave(t *testin
 }
 
 func TestPresetConfigPutAllowsUserPasswordAdminWhenAdminPasswordIsBlank(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newAuthenticatedTestPresetConfig(t, configPath)
 	body := []byte(`{"presets":[{"id":"preset-columbia","title":"Columbia","type":"SSH","host":"columbia.home"}]}`)
@@ -583,7 +583,7 @@ func TestPresetConfigPutAllowsUserPasswordAdminWhenAdminPasswordIsBlank(t *testi
 }
 
 func TestPresetConfigPutAllowsAnonymousUserButNotAdminWhenUserPasswordBlank(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newTestPresetConfig(t, configPath)
 	controller.commonCfg.AdminPassword = "test-admin-password"
@@ -608,7 +608,7 @@ func TestPresetConfigPutAllowsAnonymousUserButNotAdminWhenUserPasswordBlank(t *t
 }
 
 func TestPresetConfigPutRejectsIDsDuplicatedAfterTrimming(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newAdminTestPresetConfig(t, configPath)
 	body := []byte(`{"presets":[{"id":" dup ","title":"A","type":"SSH","host":"a.home"},{"id":"dup","title":"B","type":"SSH","host":"b.home"}]}`)
@@ -635,7 +635,7 @@ func TestPresetConfigPutEncryptsPlaintextPasswordsWhenKeyIsSet(t *testing.T) {
 			[]byte("0123456789abcdef0123456789abcdef"),
 		),
 	)
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newAdminTestPresetConfig(t, configPath)
 	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home","meta":{"User":"pi","Authentication":"Password","Password":"mypassword"}}]}`)
@@ -683,7 +683,7 @@ func TestPresetConfigPutPreservesHiddenPasswordOnFingerprintSave(t *testing.T) {
 			[]byte("0123456789abcdef0123456789abcdef"),
 		),
 	)
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -738,7 +738,7 @@ func TestPresetConfigPutPreservesHiddenPasswordOnFingerprintSave(t *testing.T) {
 }
 
 func TestPresetConfigPutAllowsFingerprintSaveWhenRestrictedToPresets(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -791,7 +791,7 @@ func TestPresetConfigPutAllowsFingerprintSaveWhenRestrictedToPresets(t *testing.
 }
 
 func TestPresetConfigPutPreservesHiddenPrivateKeyOnFullFingerprintSave(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	keyPath := filepath.Join(t.TempDir(), "atlantis.key")
 	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile key returned error: %v", err)
@@ -859,7 +859,7 @@ func TestPresetConfigPutPreservesHiddenPasswordOnFullAdminReplacement(t *testing
 			[]byte("0123456789abcdef0123456789abcdef"),
 		),
 	)
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -906,7 +906,7 @@ func TestPresetConfigPutPreservesHiddenPasswordOnFullAdminReplacement(t *testing
 }
 
 func TestPresetConfigPutCanClearOneHiddenPasswordWhilePreservingOthers(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -987,7 +987,7 @@ func TestPresetConfigPutCanClearOneHiddenPasswordWhilePreservingOthers(t *testin
 }
 
 func TestPresetConfigPutAcceptsCompactFingerprintSaveWithLargeMeta(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	largePrivateKey := strings.Repeat("k", maxPresetConfigStringBytes+1)
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
@@ -1033,7 +1033,7 @@ func TestPresetConfigPutAcceptsCompactFingerprintSaveWithLargeMeta(t *testing.T)
 
 func TestPresetConfigPutCompactFingerprintSavePreservesPrivateKeyFileReference(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "shellport.conf.json")
+	configPath := filepath.Join(tempDir, "shellport.conf.yaml")
 	keyPath := filepath.Join(tempDir, "id_ed25519")
 	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile key returned error: %v", err)
@@ -1070,15 +1070,15 @@ func TestPresetConfigPutCompactFingerprintSavePreservesPrivateKeyFileReference(t
 
 	var raw struct {
 		Presets []struct {
-			Meta map[string]configuration.String
-		}
+			Meta map[string]configuration.String `yaml:"Meta"`
+		} `yaml:"Presets"`
 	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("os.ReadFile returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("json.Unmarshal returned error: %v", err)
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("yaml.Unmarshal returned error: %v", err)
 	}
 	if raw.Presets[0].Meta["Private Key"] != configuration.String("file://"+keyPath) {
 		t.Fatalf(
@@ -1093,7 +1093,7 @@ func TestPresetConfigPutCompactFingerprintSavePreservesPrivateKeyFileReference(t
 
 func TestPresetConfigPutFullUpdatePreservesRotatedPrivateKeyFileReference(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "shellport.conf.json")
+	configPath := filepath.Join(tempDir, "shellport.conf.yaml")
 	keyPath := filepath.Join(tempDir, "id_ed25519")
 	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile key returned error: %v", err)
@@ -1131,15 +1131,15 @@ func TestPresetConfigPutFullUpdatePreservesRotatedPrivateKeyFileReference(t *tes
 
 	var raw struct {
 		Presets []struct {
-			Meta map[string]configuration.String
-		}
+			Meta map[string]configuration.String `yaml:"Meta"`
+		} `yaml:"Presets"`
 	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("os.ReadFile returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("json.Unmarshal returned error: %v", err)
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("yaml.Unmarshal returned error: %v", err)
 	}
 	if raw.Presets[0].Meta["Private Key"] != configuration.String("file://"+keyPath) {
 		t.Fatalf(
@@ -1154,7 +1154,7 @@ func TestPresetConfigPutFullUpdatePreservesRotatedPrivateKeyFileReference(t *tes
 
 func TestPresetConfigPutRestoresHiddenPrivateKeyFileReferenceToRuntime(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "shellport.conf.json")
+	configPath := filepath.Join(tempDir, "shellport.conf.yaml")
 	keyPath := filepath.Join(tempDir, "id_ed25519")
 	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile key returned error: %v", err)
@@ -1229,7 +1229,7 @@ func TestPresetConfigPutRestoresHiddenPrivateKeyFileReferenceToRuntime(t *testin
 
 func TestPresetConfigPutRestoresHiddenFingerprintToRuntime(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "shellport.conf.json")
+	configPath := filepath.Join(tempDir, "shellport.conf.yaml")
 	keyPath := filepath.Join(tempDir, "id_ed25519")
 	if err := os.WriteFile(keyPath, []byte("PRIVATE KEY DATA"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile key returned error: %v", err)
@@ -1300,7 +1300,7 @@ func TestPresetConfigPutRestoresHiddenFingerprintToRuntime(t *testing.T) {
 }
 
 func TestPresetConfigPutAcceptsCompactFingerprintSaveForLargePresetList(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	rawPresets := make([]map[string]any, maxPresetConfigPresets+1)
 	for i := range rawPresets {
 		rawPresets[i] = map[string]any{
@@ -1341,7 +1341,7 @@ func TestPresetConfigPutAcceptsCompactFingerprintSaveForLargePresetList(t *testi
 }
 
 func TestPresetConfigPutRejectsFingerprintSaveChangingHost(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -1373,7 +1373,7 @@ func TestPresetConfigPutRejectsFingerprintSaveChangingHost(t *testing.T) {
 }
 
 func TestPresetConfigPutRejectsFingerprintSaveChangingMultipleFingerprints(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -1416,7 +1416,7 @@ func TestPresetConfigPutRejectsFingerprintSaveChangingMultipleFingerprints(t *te
 }
 
 func TestPresetConfigPutRejectsStaleFingerprintSaveDeletingAnotherFingerprint(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -1484,7 +1484,7 @@ func TestSamePresetMetaExceptFingerprintRequiresMatchingKeyPresence(t *testing.T
 }
 
 func TestPresetConfigPutSerializesConcurrentFingerprintSaves(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -1551,7 +1551,7 @@ func TestPresetConfigPutSerializesConcurrentFingerprintSaves(t *testing.T) {
 }
 
 func TestPresetConfigPutRejectsOversizedRequest(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newAdminTestPresetConfig(t, configPath)
 	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"` +
@@ -1574,7 +1574,7 @@ func TestPresetConfigPutRejectsOversizedRequest(t *testing.T) {
 }
 
 func TestPresetConfigPutRejectsOversizedPresetID(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newAdminTestPresetConfig(t, configPath)
 	body := []byte(`{"presets":[{"id":"` +
@@ -1597,7 +1597,7 @@ func TestPresetConfigPutRejectsOversizedPresetID(t *testing.T) {
 }
 
 func TestPresetConfigPutRejectsInvalidFingerprintFormat(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -1629,7 +1629,7 @@ func TestPresetConfigPutRejectsInvalidFingerprintFormat(t *testing.T) {
 }
 
 func TestPresetConfigPutRejectsOversizedFingerprint(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -1667,7 +1667,7 @@ func TestPresetConfigPutCanDeleteHiddenPassword(t *testing.T) {
 			[]byte("0123456789abcdef0123456789abcdef"),
 		),
 	)
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, []map[string]any{
 		{
 			"ID":    "preset-atlantis",
@@ -1744,7 +1744,7 @@ func TestParsePresetIDSetKeepsLegacyCSVSupport(t *testing.T) {
 
 func TestPresetConfigPutPreservesPlaintextPasswordWhenEncryptedAlsoPresentWithoutKey(t *testing.T) {
 	t.Setenv(configuration.PresetSecretKeyEnv, "")
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	controller := newAdminTestPresetConfig(t, configPath)
 	body := []byte(`{"presets":[{"id":"preset-atlantis","title":"Atlantis","type":"SSH","host":"atlantis.home","meta":{"User":"pi","Authentication":"Password","Password":"mypassword","Encrypted Password":"v1:aes-256-gcm:nonce:ciphertext"}}]}`)
@@ -1802,7 +1802,7 @@ func TestSocketAccessConfigurationLeavesServerTitleUnescaped(t *testing.T) {
 }
 
 func TestSocketVerificationAdvertisesPresetConfigWritableWhenConfigIsWritable(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 
 	verification := newSocketVerification(
@@ -1820,7 +1820,7 @@ func TestSocketVerificationAdvertisesPresetConfigWritableWhenConfigIsWritable(t 
 }
 
 func TestSocketVerificationTreatsBlankUserPasswordAsAnonymousUser(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	writePresetAPIConfig(t, configPath, nil)
 	verification := newSocketVerification(
 		socket{commonCfg: configuration.Common{

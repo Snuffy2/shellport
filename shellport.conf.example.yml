@@ -1,0 +1,177 @@
+# Allowed HTTP Host header. Leave empty to accept requests for any host
+# name, or set a public name such as shellport.example.com.
+HostName: ""
+
+# Password for normal web UI access. Leave blank for public access.
+UserPassword: ""
+
+# Optional admin password for protected preset create, edit, and delete
+# actions.
+AdminPassword: ""
+
+# When enabled, ShellPort only allows outbound connections to presets
+# and disables preset management.
+OnlyAllowPresetRemotes: false
+
+# Maximum time ShellPort waits while opening an outbound connection, in
+# seconds.
+DialTimeout: 5
+
+# Optional SOCKS5 proxy used for outbound connections.
+Socks5: ""
+
+# Username for the SOCKS5 proxy, when required.
+Socks5User: ""
+
+# Password for the SOCKS5 proxy, when required.
+Socks5Password: ""
+
+# Server-side hooks run before or during connection lifecycle events.
+# ShellPort passes unsanitized values into the hook environment, so only use
+# trusted commands and validate inputs inside the hook scripts.
+Hooks:
+  # Commands run before ShellPort starts a remote connection. Any non-zero
+  # exit status aborts the connection attempt.
+  before_connecting: []
+    # Hook commands use YAML array form. Each array item is one argv entry. Put
+    # any parsing of SHELLPORT_HOOK_REMOTE_TYPE and
+    # SHELLPORT_HOOK_REMOTE_ADDRESS inside the executable/script.
+    # - ["/usr/local/bin/shellport-before-connecting-hook"]
+
+# Maximum time each hook may run before ShellPort terminates it, in
+# seconds.
+HookTimeout: 30
+
+# One or more HTTP or HTTPS listeners.
+Servers:
+  - # Local interface to bind. This example listens on all interfaces so a
+    # container can be reached from outside the host.
+    ListenInterface: 0.0.0.0
+
+    # Local port to bind.
+    ListenPort: 8182
+
+    # Time allowed for the initial request and handshake, in seconds.
+    InitialTimeout: 10
+
+    # Idle timeout after the connection is established, in seconds.
+    ReadTimeout: 120
+
+    # Timeout used when writing data to the client, in seconds.
+    WriteTimeout: 120
+
+    # Interval used for internal heartbeat traffic, in seconds.
+    HeartbeatTimeout: 15
+
+    # Small intentional read delay, in milliseconds.
+    ReadDelay: 10
+
+    # Small intentional write delay, in milliseconds.
+    WriteDelay: 10
+
+    # Set both TLS fields to enable HTTPS.
+    TLSCertificateFile: ""
+
+    # Set both TLS fields to enable HTTPS.
+    TLSCertificateKeyFile: ""
+
+    # Optional custom title shown on the home page.
+    ServerTitle: ""
+
+    # Optional short message shown on the home page. Markdown-style links
+    # are supported.
+    ServerMessage: ""
+
+# Preconfigured remotes shown in the UI.
+Presets:
+  - # Stable preset ID. ShellPort writes missing IDs back to the file the
+    # first time it loads a file-backed config.
+    ID: preset-sdf
+
+    # Visible name in the UI.
+    Title: SDF.org Unix Shell
+
+    # Remote type: SSH, Telnet, Mosh, or ET.
+    Type: SSH
+
+    # Remote host and optional port.
+    Host: sdf.org:22
+
+    # Optional UI tab color in RGB hex form.
+    TabColor: "112233"
+
+    # Type-specific metadata.
+    Meta:
+      # SSH/Mosh/ET username.
+      User: pre-defined-username
+
+      # Authentication mode. SSH and Mosh support Password, Private Key,
+      # or None. ET currently uses Private Key only.
+      Authentication: Password
+
+      # Terminal encoding. Telnet can use the browser-supported charset
+      # list; Mosh and ET are locked to utf-8.
+      Encoding: utf-8
+
+      # Plaintext preset password. If SHELLPORT_PRESET_SECRET_KEY is set,
+      # ShellPort migrates this to "Encrypted Password" on startup.
+      Password: pre-defined-password
+  - ID: preset-localhost-ssh
+    Title: My own super secure server
+    Type: SSH
+    Host: localhost
+    Meta:
+      User: root
+      Encoding: utf-8
+
+      # Private keys can be embedded directly, or stored as file:// or
+      # environment:// references. Embedded keys will be converted to file://
+      # when ShellPort runs.
+      Private Key: |
+        -----BEGIN RSA !!!Will be sent to client in plain-text!!! -END RSA PRI...
+
+      Authentication: Private Key
+
+      # SSH host fingerprint. Save this from the connection-time prompt or
+      # provide it here if you already know it.
+      Fingerprint: SHA256:bgO....
+  - ID: preset-localhost-telnet
+    Title: My own super expensive router
+    Type: Telnet
+    Host: localhost
+    Meta:
+      # Telnet uses the full browser-supported encoding list.
+      Encoding: ibm866
+  - ID: preset-example-mosh
+    Title: Example Mosh
+    Type: Mosh
+    Host: ssh.example.com:22
+    Meta:
+      User: guest
+      Authentication: Password
+
+      # Mosh currently only accepts utf-8.
+      Encoding: utf-8
+
+      # Override the remote mosh-server command when needed. Leave empty
+      # to use the default "mosh-server".
+      Mosh Server: mosh-server
+  - ID: preset-example-et
+    Title: Example ET
+    Type: ET
+    Host: ssh.example.com:22
+    Meta:
+      User: guest
+      Authentication: Private Key
+
+      # ET currently only accepts utf-8.
+      Encoding: utf-8
+
+      # Remote etserver TCP port. Defaults to 2022.
+      ET Server Port: "2022"
+
+      # Local ET command. ShellPort currently allows the built-in "et"
+      # value only.
+      ET Command: et
+
+      Private Key: -----BEGIN RSA !!!Will be sent to client in plain-text!!! -END RSA PRIVATE KEY-----

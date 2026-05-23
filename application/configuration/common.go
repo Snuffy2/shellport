@@ -17,7 +17,7 @@ import (
 // instances within a single Configuration. It is derived from a Configuration
 // via Configuration.Common() and passed to each server at startup.
 type Common struct {
-	// SourceFile is the JSON configuration file path when loaded from disk.
+	// SourceFile is the YAML configuration file path when loaded from disk.
 	SourceFile string
 	// HostName restricts accepted HTTP Host headers when set.
 	HostName string

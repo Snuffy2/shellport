@@ -52,7 +52,7 @@ func TestDebugLoggingDisabledWhenEnvironmentEmpty(t *testing.T) {
 }
 
 func TestConfigLoadersCreateConfiguredMissingFile(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "custom-shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "custom-shellport.conf.yml")
 	t.Setenv("SHELLPORT_CONFIG", configPath)
 
 	_, cfg, err := configuration.Redundant(configLoaders()...)(log.NewDitch())

@@ -18,6 +18,9 @@ id = "end-of-file-fixer"
 id = "check-yaml"
 
 [[repos.hooks]]
+id = "check-json"
+
+[[repos.hooks]]
 id = "check-toml"
 
 [[repos.hooks]]
@@ -25,13 +28,6 @@ id = "check-merge-conflict"
 
 [[repos.hooks]]
 id = "check-added-large-files"
-
-[[repos]]
-repo = "https://gitlab.com/bmares/check-json5"
-rev = "v1.0.1"
-
-[[repos.hooks]]
-id = "check-json5"
 
 [[repos]]
 repo = "https://github.com/rhysd/actionlint"

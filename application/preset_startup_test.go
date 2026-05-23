@@ -6,7 +6,6 @@ package application
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,10 +13,23 @@ import (
 	"github.com/Snuffy2/shellport/application/commands"
 	"github.com/Snuffy2/shellport/application/configuration"
 	"github.com/Snuffy2/shellport/application/log"
+	"gopkg.in/yaml.v3"
 )
 
+func writeStartupConfig(t *testing.T, path string, data map[string]any, mode os.FileMode) {
+	t.Helper()
+
+	content, err := yaml.Marshal(data)
+	if err != nil {
+		t.Fatalf("yaml.Marshal returned error: %v", err)
+	}
+	if err := os.WriteFile(path, content, mode); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+}
+
 func TestNormalizeStartupPresetIDsPersistsFileBackedIDs(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	configData := map[string]any{
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
@@ -26,13 +38,7 @@ func TestNormalizeStartupPresetIDsPersistsFileBackedIDs(t *testing.T) {
 			{"Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -59,23 +65,16 @@ func TestNormalizeStartupPresetIDsPersistsFileBackedIDs(t *testing.T) {
 }
 
 func TestNormalizeStartupPresetsAcceptsCommentedFileBackedConfig(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
-	content := []byte(`{
-  // Startup normalization should use the same commented JSON handling as load.
-  "Servers": [
-    {
-      "ListenInterface": "127.0.0.1",
-      "ListenPort": 8182,
-    },
-  ],
-  "Presets": [
-    {
-      "Title": "Atlantis",
-      "Type": "SSH",
-      "Host": "atlantis.home",
-    },
-  ],
-}`)
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`# Startup normalization should use the same commented YAML handling as load.
+Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+Presets:
+  - Title: Atlantis
+    Type: SSH
+    Host: atlantis.home
+`)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
@@ -94,7 +93,7 @@ func TestNormalizeStartupPresetsAcceptsCommentedFileBackedConfig(t *testing.T) {
 }
 
 func TestNormalizeStartupPresetsPersistsMetaCleanupAndDefaults(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	configData := map[string]any{
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
@@ -115,13 +114,7 @@ func TestNormalizeStartupPresetsPersistsMetaCleanupAndDefaults(t *testing.T) {
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -165,7 +158,7 @@ func TestNormalizeStartupPresetsPersistsMetaCleanupAndDefaults(t *testing.T) {
 }
 
 func TestNormalizeStartupPresetsKeepsBlankAdminPasswordWhenUserPasswordIsSet(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	configData := map[string]any{
 		"UserPassword": "test-user-password",
 		"Servers": []map[string]any{
@@ -175,13 +168,7 @@ func TestNormalizeStartupPresetsKeepsBlankAdminPasswordWhenUserPasswordIsSet(t *
 			{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -205,7 +192,7 @@ func TestNormalizeStartupPresetsKeepsBlankAdminPasswordWhenUserPasswordIsSet(t *
 }
 
 func TestNormalizeStartupPresetsKeepsExplicitAdminPassword(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	configData := map[string]any{
 		"UserPassword":  "test-user-password",
 		"AdminPassword": "existing-admin-password",
@@ -216,13 +203,7 @@ func TestNormalizeStartupPresetsKeepsExplicitAdminPassword(t *testing.T) {
 			{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -241,7 +222,7 @@ func TestNormalizeStartupPresetsKeepsExplicitAdminPassword(t *testing.T) {
 }
 
 func TestNormalizeStartupPresetsKeepsEnvAdminPasswordOutOfFile(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	configData := map[string]any{
 		"UserPassword": "test-user-password",
 		"Servers": []map[string]any{
@@ -251,13 +232,7 @@ func TestNormalizeStartupPresetsKeepsEnvAdminPasswordOutOfFile(t *testing.T) {
 			{"ID": "preset-atlantis", "Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -291,7 +266,7 @@ func TestNormalizeStartupPresetIDsMigratesPlaintextPresetPassword(t *testing.T) 
 			[]byte("0123456789abcdef0123456789abcdef"),
 		),
 	)
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	configData := map[string]any{
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
@@ -308,13 +283,7 @@ func TestNormalizeStartupPresetIDsMigratesPlaintextPresetPassword(t *testing.T) 
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -380,7 +349,7 @@ func TestNormalizeStartupPresetIDsAllowsEnvPlaintextPresetPassword(t *testing.T)
 }
 
 func TestNormalizeStartupPresetsIgnoresUnsupportedEncryptedPassword(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "shellport.conf.json")
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
 	configData := map[string]any{
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
@@ -397,13 +366,7 @@ func TestNormalizeStartupPresetsIgnoresUnsupportedEncryptedPassword(t *testing.T
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -426,7 +389,7 @@ func TestNormalizeStartupPresetIDsAllowsReadOnlyFileBackedIDs(t *testing.T) {
 	if err := os.Mkdir(configDir, 0o700); err != nil {
 		t.Fatalf("os.Mkdir returned error: %v", err)
 	}
-	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configPath := filepath.Join(configDir, "shellport.conf.yaml")
 	configData := map[string]any{
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
@@ -435,13 +398,7 @@ func TestNormalizeStartupPresetIDsAllowsReadOnlyFileBackedIDs(t *testing.T) {
 			{"Title": "Atlantis", "Type": "SSH", "Host": "atlantis.home"},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 	if err := os.Chmod(configDir, 0o500); err != nil {
 		t.Fatalf("os.Chmod returned error: %v", err)
 	}
@@ -473,7 +430,7 @@ func TestNormalizeStartupPresetsAllowsReadOnlyInlinePrivateKey(t *testing.T) {
 	if err := os.Mkdir(configDir, 0o700); err != nil {
 		t.Fatalf("os.Mkdir returned error: %v", err)
 	}
-	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configPath := filepath.Join(configDir, "shellport.conf.yaml")
 	configData := map[string]any{
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
@@ -491,13 +448,7 @@ func TestNormalizeStartupPresetsAllowsReadOnlyInlinePrivateKey(t *testing.T) {
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o400); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o400)
 	if err := os.Chmod(configDir, 0o500); err != nil {
 		t.Fatalf("os.Chmod returned error: %v", err)
 	}
@@ -522,7 +473,7 @@ func TestNormalizeStartupPresetsAllowsReadOnlyInlinePrivateKey(t *testing.T) {
 
 func TestNormalizeStartupPresetsMigratesPlaintextPrivateKeysToFiles(t *testing.T) {
 	configDir := t.TempDir()
-	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configPath := filepath.Join(configDir, "shellport.conf.yaml")
 	configData := map[string]any{
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
@@ -550,13 +501,7 @@ func TestNormalizeStartupPresetsMigratesPlaintextPrivateKeysToFiles(t *testing.T
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -605,15 +550,15 @@ func TestNormalizeStartupPresetsMigratesPlaintextPrivateKeysToFiles(t *testing.T
 
 	var raw struct {
 		Presets []struct {
-			Meta map[string]configuration.String
-		}
+			Meta map[string]configuration.String `yaml:"Meta"`
+		} `yaml:"Presets"`
 	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("os.ReadFile config returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("json.Unmarshal returned error: %v", err)
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("yaml.Unmarshal returned error: %v", err)
 	}
 	if raw.Presets[0].Meta["Private Key"] != configuration.String("file://"+filepath.Join(keyDir, "atlantis-main.key")) {
 		t.Fatalf("raw inline private key = %q", raw.Presets[0].Meta["Private Key"])
@@ -626,7 +571,7 @@ func TestNormalizeStartupPresetsMigratesPlaintextPrivateKeysToFiles(t *testing.T
 func TestNormalizeStartupPresetsPreservesEnvironmentPrivateKeys(t *testing.T) {
 	t.Setenv("SHELLPORT_TEST_PRIVATE_KEY", "ENV PRIVATE KEY DATA")
 	configDir := t.TempDir()
-	configPath := filepath.Join(configDir, "shellport.conf.json")
+	configPath := filepath.Join(configDir, "shellport.conf.yaml")
 	configData := map[string]any{
 		"Servers": []map[string]any{
 			{"ListenInterface": "127.0.0.1", "ListenPort": 8182},
@@ -644,13 +589,7 @@ func TestNormalizeStartupPresetsPreservesEnvironmentPrivateKeys(t *testing.T) {
 			},
 		},
 	}
-	content, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		t.Fatalf("json.MarshalIndent returned error: %v", err)
-	}
-	if err := os.WriteFile(configPath, content, 0o600); err != nil {
-		t.Fatalf("os.WriteFile returned error: %v", err)
-	}
+	writeStartupConfig(t, configPath, configData, 0o600)
 
 	_, cfg, err := configuration.CustomFile(configPath)(log.Ditch{})
 	if err != nil {
@@ -669,15 +608,15 @@ func TestNormalizeStartupPresetsPreservesEnvironmentPrivateKeys(t *testing.T) {
 
 	var raw struct {
 		Presets []struct {
-			Meta map[string]configuration.String
-		}
+			Meta map[string]configuration.String `yaml:"Meta"`
+		} `yaml:"Presets"`
 	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("os.ReadFile config returned error: %v", err)
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("json.Unmarshal returned error: %v", err)
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("yaml.Unmarshal returned error: %v", err)
 	}
 	if raw.Presets[0].Meta["Private Key"] != "environment://SHELLPORT_TEST_PRIVATE_KEY" {
 		t.Fatalf("raw private key = %q", raw.Presets[0].Meta["Private Key"])
