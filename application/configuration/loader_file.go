@@ -170,7 +170,16 @@ func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
 			return
 		}
 		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value != "<<" {
+				continue
+			}
+			typed = yamlMergedMappingScalarText(node.Content[i+1], typed)
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
 			key := node.Content[i].Value
+			if key == "<<" {
+				continue
+			}
 			child := node.Content[i+1]
 			if key == "Meta" {
 				typed[key] = yamlMetaScalarText(child, typed[key])
@@ -194,6 +203,46 @@ func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
 			preserveYAMLMetaScalarText(typed[i], child)
 		}
 	}
+}
+
+func yamlMergedMappingScalarText(node *yaml.Node, fallback map[string]any) map[string]any {
+	if node == nil {
+		return fallback
+	}
+	switch node.Kind {
+	case yaml.AliasNode:
+		return yamlMappingScalarText(node.Alias, fallback)
+	case yaml.MappingNode:
+		return yamlMappingScalarText(node, fallback)
+	case yaml.SequenceNode:
+		for i := len(node.Content) - 1; i >= 0; i-- {
+			fallback = yamlMergedMappingScalarText(node.Content[i], fallback)
+		}
+		return fallback
+	default:
+		return fallback
+	}
+}
+
+func yamlMappingScalarText(node *yaml.Node, fallback map[string]any) map[string]any {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return fallback
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key := node.Content[i].Value
+		if key == "<<" {
+			continue
+		}
+		child := node.Content[i+1]
+		if key == "Meta" {
+			fallback[key] = yamlMetaScalarText(child, fallback[key])
+			continue
+		}
+		if _, ok := yamlStringFieldNames[key]; ok {
+			fallback[key] = yamlStringFieldValue(child, fallback[key])
+		}
+	}
+	return fallback
 }
 
 func yamlMetaScalarText(node *yaml.Node, fallback any) any {
@@ -292,10 +341,7 @@ func yamlMetaMergedScalarText(node *yaml.Node, fallback map[string]any) map[stri
 
 func yamlScalarValue(node *yaml.Node, fallback any) any {
 	if node.Tag == "!!null" {
-		if fallback == nil {
-			return ""
-		}
-		return fallback
+		return ""
 	}
 	return node.Value
 }

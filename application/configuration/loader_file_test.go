@@ -278,13 +278,14 @@ MetaDefaults: &metaDefaults
   User: 010
 FallbackMetaDefaults: &fallbackMetaDefaults
   User: 020
+  Password: inherited
 Presets:
   - Title: Atlantis
     Type: SSH
     Host: atlantis.home
     Meta:
       <<: [*metaDefaults, *fallbackMetaDefaults]
-      Password: secret
+      Password: null
 `)
 	if err := os.WriteFile(configPath, content, 0o600); err != nil {
 		t.Fatalf("os.WriteFile returned error: %v", err)
@@ -297,8 +298,44 @@ Presets:
 	if cfg.Presets[0].Meta["User"] != "010" {
 		t.Fatalf("User = %q, want 010", cfg.Presets[0].Meta["User"])
 	}
+	if cfg.Presets[0].Meta["Password"] != "" {
+		t.Fatalf("Password = %q, want empty", cfg.Presets[0].Meta["Password"])
+	}
 	if _, ok := cfg.Presets[0].Meta["<<"]; ok {
 		t.Fatal("merge key was preserved as preset metadata")
+	}
+}
+
+func TestLoadFilePreservesMergedYAMLStringScalars(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "shellport.conf.yaml")
+	content := []byte(`Servers:
+  - ListenInterface: 127.0.0.1
+    ListenPort: 8182
+PresetDefaults: &presetDefaults
+  ID: 0001
+  Title: 0010
+  Type: SSH
+  Host: atlantis.home
+  TabColor: 0099
+Presets:
+  - <<: *presetDefaults
+`)
+	if err := os.WriteFile(configPath, content, 0o600); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
+	}
+
+	_, cfg, err := loadFile(configPath)
+	if err != nil {
+		t.Fatalf("loadFile returned error: %v", err)
+	}
+	if cfg.Presets[0].ID != "0001" {
+		t.Fatalf("ID = %q, want 0001", cfg.Presets[0].ID)
+	}
+	if cfg.Presets[0].Title != "0010" {
+		t.Fatalf("Title = %q, want 0010", cfg.Presets[0].Title)
+	}
+	if cfg.Presets[0].TabColor != "0099" {
+		t.Fatalf("TabColor = %q, want 0099", cfg.Presets[0].TabColor)
 	}
 }
 
