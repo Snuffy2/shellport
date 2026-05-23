@@ -144,6 +144,56 @@ describe("Streams", () => {
     assert.strictEqual(clearedError, expectedError);
   });
 
+  it("completes already-closing streams during clear", async () => {
+    const events = [];
+    let clearedError = null;
+    const st = new streams.Streams(
+      {
+        close() {},
+      },
+      {
+        send() {
+          return Promise.resolve();
+        },
+        close() {
+          return Promise.resolve();
+        },
+      },
+      {
+        echoInterval: 1000,
+        echoUpdater() {},
+        cleared(e) {
+          clearedError = e;
+        },
+      },
+    );
+    const streamID = 8;
+
+    st.streams[streamID].run(
+      1,
+      () => ({
+        run() {
+          return Promise.resolve();
+        },
+        initialize() {},
+        close() {
+          events.push("close");
+          return Promise.resolve();
+        },
+        completed() {
+          events.push("completed");
+        },
+      }),
+      st.sender,
+    );
+    await st.streams[streamID].close();
+
+    await st.clear(null);
+
+    assert.deepStrictEqual(events, ["close", "completed"]);
+    assert.strictEqual(clearedError, null);
+  });
+
   it("reports sender close failures during clean clear", async () => {
     const expectedError = new Error("sender close failed");
     let clearedError = null;

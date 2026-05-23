@@ -156,12 +156,14 @@ export class Streams {
       }
 
       let closeErr = null;
-      try {
-        await this.streams[i].close();
-      } catch (streamCloseErr) {
-        closeErr = streamCloseErr;
-        if (clearErr === null) {
-          clearErr = streamCloseErr;
+      if (!this.streams[i].closing()) {
+        try {
+          await this.streams[i].close();
+        } catch (streamCloseErr) {
+          closeErr = streamCloseErr;
+          if (clearErr === null) {
+            clearErr = streamCloseErr;
+          }
         }
       }
 
