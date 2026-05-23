@@ -619,26 +619,26 @@ func rawPresetMaps(value any) ([]map[string]any, error) {
 
 func rawPresetMapsFromSyntax(
 	syntax *yaml.Node,
-	fallback any,
+	decoded any,
 ) ([]map[string]any, error) {
-	fallbackRawPresets, err := rawPresetMaps(fallback)
+	decodedRawPresets, err := rawPresetMaps(decoded)
 	if err != nil {
 		return nil, err
 	}
 	presetsNode := yamlMappingValueNode(yamlMappingRoot(syntax), "Presets")
 	if presetsNode == nil || presetsNode.Kind != yaml.SequenceNode {
-		return fallbackRawPresets, nil
+		return decodedRawPresets, nil
 	}
 	rawPresets := make([]map[string]any, 0, len(presetsNode.Content))
 	for i, presetNode := range presetsNode.Content {
 		if presetNode.Kind != yaml.MappingNode {
-			return fallbackRawPresets, nil
+			return decodedRawPresets, nil
 		}
-		var fallbackRawPreset map[string]any
-		if i < len(fallbackRawPresets) {
-			fallbackRawPreset = fallbackRawPresets[i]
+		var decodedRawPreset map[string]any
+		if i < len(decodedRawPresets) {
+			decodedRawPreset = decodedRawPresets[i]
 		}
-		rawPresets = append(rawPresets, rawPresetMapFromYAMLNode(presetNode, fallbackRawPreset))
+		rawPresets = append(rawPresets, rawPresetMapFromYAMLNode(presetNode, decodedRawPreset))
 	}
 	return rawPresets, nil
 }
@@ -655,9 +655,9 @@ func yamlMappingValueNode(root *yaml.Node, key string) *yaml.Node {
 	return nil
 }
 
-func rawPresetMapFromYAMLNode(node *yaml.Node, fallback map[string]any) map[string]any {
-	rawPreset := make(map[string]any, safePresetInputCapacity(len(fallback), len(node.Content)/2))
-	for key, value := range fallback {
+func rawPresetMapFromYAMLNode(node *yaml.Node, decoded map[string]any) map[string]any {
+	rawPreset := make(map[string]any, safePresetInputCapacity(len(decoded), len(node.Content)/2))
+	for key, value := range decoded {
 		rawPreset[key] = value
 	}
 	for i := 0; i+1 < len(node.Content); i += 2 {

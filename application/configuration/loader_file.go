@@ -214,28 +214,28 @@ func preserveYAMLMetaScalarText(value any, node *yaml.Node) {
 	}
 }
 
-func yamlMergedMappingScalarText(node *yaml.Node, fallback map[string]any) map[string]any {
+func yamlMergedMappingScalarText(node *yaml.Node, base map[string]any) map[string]any {
 	if node == nil {
-		return fallback
+		return base
 	}
 	switch node.Kind {
 	case yaml.AliasNode:
-		return yamlMappingScalarText(node.Alias, fallback)
+		return yamlMappingScalarText(node.Alias, base)
 	case yaml.MappingNode:
-		return yamlMappingScalarText(node, fallback)
+		return yamlMappingScalarText(node, base)
 	case yaml.SequenceNode:
 		for i := len(node.Content) - 1; i >= 0; i-- {
-			fallback = yamlMergedMappingScalarText(node.Content[i], fallback)
+			base = yamlMergedMappingScalarText(node.Content[i], base)
 		}
-		return fallback
+		return base
 	default:
-		return fallback
+		return base
 	}
 }
 
-func yamlMappingScalarText(node *yaml.Node, fallback map[string]any) map[string]any {
+func yamlMappingScalarText(node *yaml.Node, base map[string]any) map[string]any {
 	if node == nil || node.Kind != yaml.MappingNode {
-		return fallback
+		return base
 	}
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i].Value
@@ -244,25 +244,25 @@ func yamlMappingScalarText(node *yaml.Node, fallback map[string]any) map[string]
 		}
 		child := node.Content[i+1]
 		if isYAMLMetaFieldName(key) {
-			fallback[key] = yamlMetaScalarText(child, fallback[key])
+			base[key] = yamlMetaScalarText(child, base[key])
 			continue
 		}
 		if isYAMLStringFieldName(key) {
-			fallback[key] = yamlStringFieldValue(child, fallback[key])
+			base[key] = yamlStringFieldValue(child, base[key])
 		}
 	}
-	return fallback
+	return base
 }
 
-func yamlMetaScalarText(node *yaml.Node, fallback any) any {
+func yamlMetaScalarText(node *yaml.Node, base any) any {
 	if node == nil {
-		return fallback
+		return base
 	}
 	switch node.Kind {
 	case yaml.MappingNode:
-		typed, ok := fallback.(map[string]any)
+		typed, ok := base.(map[string]any)
 		if !ok {
-			return fallback
+			return base
 		}
 		for i := 0; i+1 < len(node.Content); i += 2 {
 			if node.Content[i].Value != "<<" {
@@ -284,11 +284,11 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 		}
 		return typed
 	case yaml.AliasNode:
-		return yamlMetaScalarText(node.Alias, fallback)
+		return yamlMetaScalarText(node.Alias, base)
 	case yaml.SequenceNode:
-		typed, ok := fallback.([]any)
+		typed, ok := base.([]any)
 		if !ok {
-			return fallback
+			return base
 		}
 		for i, child := range node.Content {
 			if i >= len(typed) {
@@ -302,53 +302,53 @@ func yamlMetaScalarText(node *yaml.Node, fallback any) any {
 		}
 		return typed
 	case yaml.ScalarNode:
-		return yamlScalarValue(node, fallback)
+		return yamlScalarValue(node, base)
 	default:
-		return fallback
+		return base
 	}
 }
 
-func yamlStringFieldValue(node *yaml.Node, fallback any) any {
+func yamlStringFieldValue(node *yaml.Node, base any) any {
 	if node == nil {
-		return fallback
+		return base
 	}
 	if node.Kind == yaml.AliasNode {
-		return yamlStringFieldValue(node.Alias, fallback)
+		return yamlStringFieldValue(node.Alias, base)
 	}
 	if node.Kind == yaml.ScalarNode {
-		return yamlScalarValue(node, fallback)
+		return yamlScalarValue(node, base)
 	}
-	return fallback
+	return base
 }
 
-func yamlMetaMergedScalarText(node *yaml.Node, fallback map[string]any) map[string]any {
+func yamlMetaMergedScalarText(node *yaml.Node, base map[string]any) map[string]any {
 	if node == nil {
-		return fallback
+		return base
 	}
 	switch node.Kind {
 	case yaml.AliasNode:
-		merged, ok := yamlMetaScalarText(node.Alias, fallback).(map[string]any)
+		merged, ok := yamlMetaScalarText(node.Alias, base).(map[string]any)
 		if !ok {
-			return fallback
+			return base
 		}
 		return merged
 	case yaml.MappingNode:
-		merged, ok := yamlMetaScalarText(node, fallback).(map[string]any)
+		merged, ok := yamlMetaScalarText(node, base).(map[string]any)
 		if !ok {
-			return fallback
+			return base
 		}
 		return merged
 	case yaml.SequenceNode:
 		for i := len(node.Content) - 1; i >= 0; i-- {
-			fallback = yamlMetaMergedScalarText(node.Content[i], fallback)
+			base = yamlMetaMergedScalarText(node.Content[i], base)
 		}
-		return fallback
+		return base
 	default:
-		return fallback
+		return base
 	}
 }
 
-func yamlScalarValue(node *yaml.Node, fallback any) any {
+func yamlScalarValue(node *yaml.Node, base any) any {
 	if node.Tag == "!!null" {
 		return ""
 	}
@@ -414,7 +414,7 @@ func AutoCreateDefaultFile(filePath string) Loader {
 				return loadFile(filePath)
 			}
 			return fileTypeName, Configuration{}, fmt.Errorf(
-				"configuration file was not specified and no fallback files "+
+				"configuration file was not specified and no default files "+
 					"were available; also failed to create %q: %w",
 				filePath,
 				err,
@@ -428,23 +428,23 @@ func defaultFileSearchList() []string {
 	return []string{DefaultConfigFilePath}
 }
 
-func defaultFileFromSearchList(fallbackFileSearchList []string) Loader {
+func defaultFileFromSearchList(defaultFiles []string) Loader {
 	return func(log log.Logger) (string, Configuration, error) {
-		for f := range fallbackFileSearchList {
-			if fInfo, fErr := os.Stat(fallbackFileSearchList[f]); fErr != nil {
+		for f := range defaultFiles {
+			if fInfo, fErr := os.Stat(defaultFiles[f]); fErr != nil {
 				continue
 			} else if fInfo.IsDir() {
 				continue
 			} else {
 				log.Info("Configuration file \"%s\" has been selected",
-					fallbackFileSearchList[f])
-				return loadFile(fallbackFileSearchList[f])
+					defaultFiles[f])
+				return loadFile(defaultFiles[f])
 			}
 		}
 		return fileTypeName, Configuration{}, fmt.Errorf(
-			"configuration file was not specified; also tried fallback files "+
+			"configuration file was not specified; also tried default files "+
 				"\"%s\", but none of them was available",
-			strings.Join(fallbackFileSearchList, "\", \""))
+			strings.Join(defaultFiles, "\", \""))
 	}
 }
 
