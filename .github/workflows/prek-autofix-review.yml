@@ -1,22 +1,27 @@
-name: Linters
+name: prek-autofix
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
 
+concurrency:
+  group: prek-autofix-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
-  linters:
-    name: Run Linters
+  review:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -38,5 +43,5 @@ jobs:
       - name: Generate static assets
         run: npm run generate
 
-      - name: Run prek
-        uses: j178/prek-action@v2
+      - id: review
+        uses: Snuffy2/prek-autofix/review@v1
