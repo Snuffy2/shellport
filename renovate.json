@@ -3,6 +3,7 @@
   "extends": ["config:recommended"],
   "dependencyDashboard": true,
   "enabledManagers": [
+    "custom.regex",
     "docker-compose",
     "dockerfile",
     "github-actions",
@@ -11,11 +12,29 @@
   ],
   "labels": ["dependencies"],
   "prConcurrentLimit": 10,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update the bundled JetBrainsMono Nerd Font release.",
+      "managerFilePatterns": [
+        "/^ui/fonts/JetBrainsMonoNerdFont/manifest\\.json$/"
+      ],
+      "matchStrings": ["\"releaseTag\":\\s*\"(?<currentValue>v[^\"]+)\""],
+      "depNameTemplate": "ryanoasis/nerd-fonts",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    }
+  ],
   "packageRules": [
     {
       "description": "Mark workflow dependency updates for the repository labeler.",
       "matchManagers": ["github-actions"],
       "addLabels": ["github-workflows"]
+    },
+    {
+      "description": "Keep Go module metadata tidy after dependency updates.",
+      "matchManagers": ["gomod"],
+      "postUpdateOptions": ["gomodTidy"]
     }
   ]
 }
