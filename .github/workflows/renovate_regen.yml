@@ -7,9 +7,6 @@ on:
     paths:
       - ui/fonts/JetBrainsMonoNerdFont/manifest.json
 
-permissions:
-  contents: write
-
 concurrency:
   group: renovate-font-assets-${{ github.ref }}
   cancel-in-progress: true
@@ -17,7 +14,11 @@ concurrency:
 jobs:
   update-font-assets:
     name: Update bundled font assets
+    if: github.actor == 'renovate[bot]'
     runs-on: ubuntu-latest
+    # Required to commit regenerated font assets back to the Renovate branch.
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
