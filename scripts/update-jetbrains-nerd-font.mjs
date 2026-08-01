@@ -22,6 +22,7 @@ const fontTargetDir = path.join(
   "fonts",
   "JetBrainsMonoNerdFont",
 );
+const fontManifestPath = path.join(fontTargetDir, "manifest.json");
 const fontFiles = [
   "JetBrainsMonoNerdFontMono-Regular.ttf",
   "JetBrainsMonoNerdFontMono-Bold.ttf",
@@ -65,6 +66,21 @@ async function resolveLatestReleaseTag() {
   }
 
   return release.tag_name;
+}
+
+/**
+ * Reads the release tag selected in the bundled font manifest.
+ *
+ * @param {string} manifestPath Manifest file path.
+ * @returns {string} Configured release tag.
+ */
+function readConfiguredReleaseTag(manifestPath = fontManifestPath) {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  if (typeof manifest.releaseTag !== "string" || !manifest.releaseTag) {
+    throw new Error("font manifest did not include releaseTag");
+  }
+
+  return manifest.releaseTag;
 }
 
 /**
@@ -233,22 +249,25 @@ function updateFontDirectory(extractDir, releaseTag, archiveSHA256) {
 }
 
 /**
- * Downloads, verifies, and installs the latest JetBrainsMono Nerd Font assets.
+ * Downloads, verifies, and installs JetBrainsMono Nerd Font assets.
  *
+ * @param {string | undefined} releaseTag Requested release tag, or undefined
+ *   to use the latest release.
  * @returns {Promise<void>}
  */
-async function main() {
+async function main(releaseTag) {
   const tempDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "shellport-jetbrains-nerd-font-"),
   );
 
   try {
-    const releaseTag = await resolveLatestReleaseTag();
-    const expectedArchiveSHA256 = await fetchExpectedArchiveSHA256(releaseTag);
+    const selectedReleaseTag = releaseTag ?? (await resolveLatestReleaseTag());
+    const expectedArchiveSHA256 =
+      await fetchExpectedArchiveSHA256(selectedReleaseTag);
     const archivePath = path.join(tempDir, fontArchiveName);
 
     await downloadFile(
-      buildReleaseAssetURL(releaseTag, fontArchiveName),
+      buildReleaseAssetURL(selectedReleaseTag, fontArchiveName),
       archivePath,
     );
     const archiveSHA256 = fileSHA256(archivePath);
@@ -258,14 +277,26 @@ async function main() {
       );
     }
     extractFontFiles(archivePath, tempDir);
-    updateFontDirectory(tempDir, releaseTag, archiveSHA256);
+    updateFontDirectory(tempDir, selectedReleaseTag, archiveSHA256);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  await main();
+  const args = process.argv.slice(2);
+  if (args.length > 1 || (args.length === 1 && args[0] !== "--from-manifest")) {
+    throw new Error("usage: update-jetbrains-nerd-font.mjs [--from-manifest]");
+  }
+  await main(
+    args[0] === "--from-manifest" ? readConfiguredReleaseTag() : undefined,
+  );
 }
 
-export { fontFiles, main, updateFontDirectory, validateExtractedFontFile };
+export {
+  fontFiles,
+  main,
+  readConfiguredReleaseTag,
+  updateFontDirectory,
+  validateExtractedFontFile,
+};
