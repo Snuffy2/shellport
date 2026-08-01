@@ -1,23 +1,24 @@
-name: Renovate Regenerate Locks
+name: Renovate Update Font Assets
 
 on:
   push:
     branches:
       - renovate/*
-  workflow_dispatch:
-
-permissions:
-  contents: write
+    paths:
+      - ui/fonts/JetBrainsMonoNerdFont/manifest.json
 
 concurrency:
-  group: renovate-regenerate-${{ github.ref }}
+  group: renovate-font-assets-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  regenerate:
-    if: startsWith(github.ref_name, 'renovate/')
-    name: Regenerate dependency lockfiles
+  update-font-assets:
+    name: Update bundled font assets
+    if: github.actor == 'renovate[bot]'
     runs-on: ubuntu-latest
+    # Required to commit regenerated font assets back to the Renovate branch.
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -25,31 +26,16 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
-
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Update go.sum
-        run: go mod tidy
-
-      - name: Update package-lock.json
-        run: npm install --package-lock-only --ignore-scripts
+          node-version: 24
 
       - name: Update bundled JetBrainsMono Nerd Font
-        run: npm run update:fonts
+        run: npm run update:fonts -- --from-manifest
 
       - name: Commit and Push
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_message: "chore: regenerate dependency lockfiles"
-          file_pattern: go.mod go.sum package-lock.json ui/fonts/JetBrainsMonoNerdFont
+          commit_message: "chore: update bundled JetBrainsMono Nerd Font"
+          file_pattern: ui/fonts/JetBrainsMonoNerdFont

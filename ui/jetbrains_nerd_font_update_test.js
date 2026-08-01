@@ -14,7 +14,10 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { validateExtractedFontFile } from "../scripts/update-jetbrains-nerd-font.mjs";
+import {
+  readConfiguredReleaseTag,
+  validateExtractedFontFile,
+} from "../scripts/update-jetbrains-nerd-font.mjs";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -38,7 +41,7 @@ describe("JetBrainsMono Nerd Font updater", function () {
     expect(packageConfig.scripts["update:fonts"]).toBe(
       "node scripts/update-jetbrains-nerd-font.mjs",
     );
-    expect(workflowSource).toContain("npm run update:fonts");
+    expect(workflowSource).toContain("npm run update:fonts -- --from-manifest");
     expect(workflowSource).toContain("ui/fonts/JetBrainsMonoNerdFont");
     expect(updaterSource).toContain(
       "https://api.github.com/repos/${nerdFontsRepo}/releases/latest",
@@ -55,6 +58,21 @@ describe("JetBrainsMono Nerd Font updater", function () {
     expect(
       readProjectFile("ui/fonts/JetBrainsMonoNerdFont/README.md"),
     ).not.toContain("[SIL-RFN]:");
+  });
+
+  test("uses the release selected in a font manifest", function () {
+    const tempDir = mkdtempSync(
+      path.join(os.tmpdir(), "shellport-font-updater-test-"),
+    );
+
+    try {
+      const manifestPath = path.join(tempDir, "manifest.json");
+      writeFileSync(manifestPath, '{"releaseTag":"v3.4.0"}\n');
+
+      expect(readConfiguredReleaseTag(manifestPath)).toBe("v3.4.0");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   test("rejects linked files extracted from the font archive", function () {
