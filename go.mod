@@ -11,8 +11,8 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/natefinch/atomic v1.0.1
 	github.com/unixshells/mosh-go v0.5.2
-	golang.org/x/crypto v0.54.0
-	golang.org/x/net v0.57.0
+	golang.org/x/crypto v0.55.0
+	golang.org/x/net v0.58.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
