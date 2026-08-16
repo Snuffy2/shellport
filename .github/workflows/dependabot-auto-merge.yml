@@ -1,40 +1,57 @@
-name: Dependabot npm auto-merge
+name: Dependabot auto-merge
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: dependabot-npm-${{ github.event.pull_request.number }}
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  verify-npm-dependencies:
+  verify-dependency-update:
     if: >-
       github.event.repository.fork == false &&
       github.actor == 'dependabot[bot]' &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/') &&
+      (startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/') ||
+      startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')) &&
       github.event.pull_request.base.ref == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
     steps:
-      - name: Verify that only npm dependency files changed
+      - name: Verify dependency update files
+        id: dependency
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          case "${HEAD_REF}" in
+            dependabot/npm_and_yarn/*) ecosystem="npm" ;;
+            dependabot/github_actions/*) ecosystem="github-actions" ;;
+            *)
+              echo "Refusing auto-merge; unsupported Dependabot branch: ${HEAD_REF}"
+              exit 1
+              ;;
+          esac
           changed_files="$(gh api --paginate \
             "repos/${REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
             --jq '.[].filename')"
+          if [[ -z "${changed_files}" ]]; then
+            echo "Refusing auto-merge; the pull request has no changed files."
+            exit 1
+          fi
           while IFS= read -r changed_file; do
-            case "${changed_file}" in
-              package.json | package-lock.json) ;;
+            case "${ecosystem}:${changed_file}" in
+              npm:package.json | npm:package-lock.json) ;;
+              github-actions:.github/workflows/*.yml | github-actions:.github/workflows/*.yaml) ;;
+              github-actions:action.yml | github-actions:action.yaml) ;;
               *)
                 echo "Refusing auto-merge; changed files were:"
                 echo "${changed_files}"
@@ -42,6 +59,7 @@ jobs:
                 ;;
             esac
           done <<< "${changed_files}"
+          echo "ecosystem=${ecosystem}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -51,6 +69,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
+        if: steps.dependency.outputs.ecosystem == 'npm'
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -58,6 +77,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Set up Node
+        if: steps.dependency.outputs.ecosystem == 'npm'
         uses: actions/setup-node@v7
         with:
           node-version: lts/*
@@ -65,13 +85,27 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install npm dependencies
+        if: steps.dependency.outputs.ecosystem == 'npm'
         run: npm ci
 
       - name: Run tests
+        if: steps.dependency.outputs.ecosystem == 'npm'
         run: npm test
 
+      - name: Install prek
+        if: steps.dependency.outputs.ecosystem == 'github-actions'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: prek
+
+      - name: Validate GitHub Actions files
+        if: steps.dependency.outputs.ecosystem == 'github-actions'
+        run: |
+          prek run check-yaml --all-files
+          prek run actionlint --all-files
+
   enable-auto-merge:
-    needs: verify-npm-dependencies
+    needs: verify-dependency-update
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -87,13 +121,14 @@ jobs:
   disable-auto-merge:
     if: >-
       always() &&
-      needs.verify-npm-dependencies.result != 'success' &&
+      needs.verify-dependency-update.result != 'success' &&
       github.event.repository.fork == false &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/') &&
+      (startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/') ||
+      startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')) &&
       github.event.pull_request.base.ref == github.event.repository.default_branch
-    needs: verify-npm-dependencies
+    needs: verify-dependency-update
     runs-on: ubuntu-latest
     permissions:
       contents: write
