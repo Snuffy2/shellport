@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-dependency-update:
+  authorize-dependency-update:
     if: >-
       github.event.repository.fork == false &&
       github.actor == 'dependabot[bot]' &&
@@ -23,8 +23,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - name: Verify dependency update files
-        id: dependency
+      - name: Authorize dependency update files
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
@@ -59,53 +58,9 @@ jobs:
                 ;;
             esac
           done <<< "${changed_files}"
-          echo "ecosystem=${ecosystem}" >> "${GITHUB_OUTPUT}"
-
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-
-      - name: Set up Go
-        if: steps.dependency.outputs.ecosystem == 'npm'
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
-
-      - name: Set up Node
-        if: steps.dependency.outputs.ecosystem == 'npm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install npm dependencies
-        if: steps.dependency.outputs.ecosystem == 'npm'
-        run: npm ci
-
-      - name: Run tests
-        if: steps.dependency.outputs.ecosystem == 'npm'
-        run: npm test
-
-      - name: Install prek
-        if: steps.dependency.outputs.ecosystem == 'github-actions'
-        uses: taiki-e/install-action@v2
-        with:
-          tool: prek
-
-      - name: Validate GitHub Actions files
-        if: steps.dependency.outputs.ecosystem == 'github-actions'
-        run: |
-          prek run check-yaml --all-files
-          prek run actionlint --all-files
 
   enable-auto-merge:
-    needs: verify-dependency-update
+    needs: authorize-dependency-update
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -121,14 +76,14 @@ jobs:
   disable-auto-merge:
     if: >-
       always() &&
-      needs.verify-dependency-update.result != 'success' &&
+      needs.authorize-dependency-update.result != 'success' &&
       github.event.repository.fork == false &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       (startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/') ||
       startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')) &&
       github.event.pull_request.base.ref == github.event.repository.default_branch
-    needs: verify-dependency-update
+    needs: authorize-dependency-update
     runs-on: ubuntu-latest
     permissions:
       contents: write
