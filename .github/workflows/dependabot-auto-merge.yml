@@ -82,8 +82,8 @@ jobs:
 
   disable-auto-merge:
     if: >-
-      always() && (needs.verify-dependabot-metadata.result == 'failure' ||
-      needs.verify-changed-files.result == 'failure') &&
+      always() && (needs.verify-dependabot-metadata.result != 'success' ||
+      needs.verify-changed-files.result != 'success') &&
       github.event.repository.fork == false &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
