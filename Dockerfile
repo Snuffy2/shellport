@@ -20,7 +20,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 # Build the application binary
-FROM golang:1.26-trixie AS builder
+FROM golang:1.27-trixie AS builder
 WORKDIR /src
 ARG SHELLPORT_VERSION=
 ARG SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport
