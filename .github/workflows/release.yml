@@ -16,14 +16,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('{0}-main-edge', github.workflow) || github.run_id }}
+  # Release and manual publishers share mutable tags such as `latest`, while
+  # edge-only main pushes are independent.
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('{0}-main-edge', github.workflow) || format('{0}-release-publishers', github.workflow) }}
   cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: snuffy2/shellport
-  PACKAGE_OWNER: Snuffy2
-  PACKAGE_NAME: shellport
   OCI_ARTIFACT_NAME: shellport-oci-${{ github.run_id }}
   OCI_ARTIFACT_PATH: shellport.oci.tar
   OCI_ARTIFACT_MAX_BYTES: "2147483648"
@@ -54,12 +54,6 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           RELEASE_TARGET: ${{ github.event.release.target_commitish }}
         run: node .github/scripts/release-provenance.mjs >> "$GITHUB_OUTPUT"
-      - name: Refuse existing immutable image version
-        if: steps.source.outputs.immutable_version == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          IMAGE_TAG: ${{ steps.source.outputs.image_tag }}
-        run: node .github/scripts/release-registry-guard.mjs
       - uses: actions/upload-artifact@v7
         with:
           name: release-registry-control-${{ github.run_id }}
@@ -67,7 +61,6 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
-
   build:
     needs: provenance
     runs-on: ubuntu-latest
@@ -141,13 +134,45 @@ jobs:
           mkdir "$OCI_LAYOUT"
           tar --extract --file "$OCI_ARCHIVE" --directory "$OCI_LAYOUT"
           test -f "$OCI_LAYOUT/index.json" && test -f "$OCI_LAYOUT/oci-layout"
+          index_digest="$(jq -er '.manifests | if length == 1 then .[0].digest else empty end' "$OCI_LAYOUT/index.json")"
+          [[ "$index_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          index_blob="${index_digest#sha256:}"
+          test -f "$OCI_LAYOUT/blobs/sha256/$index_blob"
+          [[ "sha256:$(sha256sum "$OCI_LAYOUT/blobs/sha256/$index_blob" | cut -d ' ' -f 1)" == "$index_digest" ]]
           printf 'oci_layout=%s\n' "$OCI_LAYOUT" >> "$GITHUB_OUTPUT"
-      - name: Recheck immutable image version immediately before upload
+          printf 'index_digest=%s\n' "$index_digest" >> "$GITHUB_OUTPUT"
+      - name: Compare immutable image version with verified OCI archive
+        id: immutable
         if: needs.provenance.outputs.immutable_version == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
           IMAGE_TAG: ${{ needs.provenance.outputs.image_tag }}
-        run: node "$RUNNER_TEMP/release-control/release-registry-guard.mjs"
+          EXPECTED_DIGEST: ${{ steps.artifact.outputs.index_digest }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          response_dir="$RUNNER_TEMP/immutable-version"
+          mkdir "$response_dir"
+          status="$(curl --silent --show-error --output "$response_dir/manifest" --dump-header "$response_dir/headers" --write-out '%{http_code}' --user "$REGISTRY_USERNAME:$REGISTRY_TOKEN" --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' "https://$REGISTRY/v2/$IMAGE_NAME/manifests/$IMAGE_TAG")"
+          published_digest=""
+          case "$status" in
+            200)
+              published_digest="$(grep -i '^docker-content-digest:' "$response_dir/headers" | tail -n 1 | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d '\r')"
+              [[ "$published_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              [[ "sha256:$(sha256sum "$response_dir/manifest" | cut -d ' ' -f 1)" == "$published_digest" ]]
+              ;;
+            404) ;;
+            *)
+              printf 'immutable registry lookup returned HTTP %s\n' "$status" >&2
+              exit 1
+              ;;
+          esac
+          EXPECTED_DIGEST="$EXPECTED_DIGEST" PUBLISHED_DIGEST="$published_digest" node "$RUNNER_TEMP/release-control/release-registry-guard.mjs" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@v6
         with:
@@ -161,12 +186,17 @@ jobs:
         env:
           OCI_ARCHIVE: ${{ runner.temp }}/release-image/${{ env.OCI_ARTIFACT_PATH }}
           TAGS: ${{ steps.meta.outputs.tags }}
+          IMMUTABLE_STATE: ${{ steps.immutable.outputs.immutable_state }}
+          IMMUTABLE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.provenance.outputs.image_tag }}
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           while IFS= read -r tag; do
             test -n "$tag"
+            if [[ "$IMMUTABLE_STATE" == "matching" && "$tag" == "$IMMUTABLE_TAG" ]]; then
+              continue
+            fi
             docker run --rm -v "$OCI_ARCHIVE:/work/image.oci:ro" quay.io/skopeo/stable@sha256:8d25aabcf965e267b6a6ad02ff8da5512f77de1490063625093ff564797e88bc copy --all --dest-creds "$REGISTRY_USERNAME:$REGISTRY_TOKEN" oci-archive:/work/image.oci docker://"$tag"
           done <<< "$TAGS"
       - name: Verify published platforms

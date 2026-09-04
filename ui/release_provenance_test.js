@@ -1,19 +1,26 @@
 // Copyright (C) 2026 Snuffy2
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { readFileSync } from "node:fs";
+
 import { describe, expect, test } from "vitest";
 
 import {
   resolveReleaseSource,
   resolveWorkflowSource,
 } from "../.github/scripts/release-provenance.mjs";
-import { assertImageTagAvailable } from "../.github/scripts/release-registry-guard.mjs";
+import {
+  resolveImmutableTag,
+  tagsToCopy,
+} from "../.github/scripts/release-registry-guard.mjs";
 
 const eventSHA = "a".repeat(40);
-const packageEndpoint =
-  "users/Snuffy2/packages?package_type=container&per_page=100";
-const versionsEndpoint =
-  "users/Snuffy2/packages/container/shellport/versions?per_page=100";
+const indexDigest = `sha256:${"b".repeat(64)}`;
+const otherDigest = `sha256:${"c".repeat(64)}`;
+const releaseWorkflow = readFileSync(
+  new URL("../.github/workflows/release.yml", import.meta.url),
+  "utf8",
+);
 
 function releaseEvent(overrides = {}) {
   return {
@@ -31,14 +38,6 @@ function repository(overrides = {}) {
     tagCommit: () => eventSHA,
     isAncestor: () => true,
     ...overrides,
-  };
-}
-
-function apiWith(responses) {
-  return (endpoint) => {
-    if (!(endpoint in responses))
-      throw new Error(`unexpected API call: ${endpoint}`);
-    return responses[endpoint];
   };
 }
 
@@ -89,61 +88,50 @@ describe("release provenance", function () {
 });
 
 describe("registry immutability guard", function () {
-  test("permits a verified namespace with no package", function () {
-    assertImageTagAvailable({
-      owner: "Snuffy2",
-      packageName: "shellport",
-      imageTag: "1.2.3",
-      api: apiWith({ user: { login: "Snuffy2" }, [packageEndpoint]: [[]] }),
-    });
-  });
-  test.each([
-    [
-      "permission failure",
-      () => {
-        throw new Error("HTTP 403");
-      },
-      "HTTP 403",
-    ],
-    [
-      "network failure",
-      () => {
-        throw new Error("network unavailable");
-      },
-      "network unavailable",
-    ],
-  ])("does not convert %s into a missing package", (_name, api, message) => {
-    expect(() =>
-      assertImageTagAvailable({
-        owner: "Snuffy2",
-        packageName: "shellport",
-        imageTag: "1.2.3",
-        api,
+  test("retries a failed latest write from the same verified version archive", function () {
+    const immutableTag = "ghcr.io/snuffy2/shellport:1.2.3";
+    expect(
+      resolveImmutableTag({
+        expectedDigest: indexDigest,
+        publishedDigest: indexDigest,
       }),
-    ).toThrow(message);
-  });
-  test("rejects an existing immutable tag", function () {
-    expect(() =>
-      assertImageTagAvailable({
-        owner: "Snuffy2",
-        packageName: "shellport",
-        imageTag: "1.2.3",
-        api: apiWith({
-          user: { login: "Snuffy2" },
-          [packageEndpoint]: [
-            [
-              {
-                name: "shellport",
-                package_type: "container",
-                owner: { login: "Snuffy2" },
-              },
-            ],
-          ],
-          [versionsEndpoint]: [
-            [{ metadata: { container: { tags: ["1.2.3"] } } }],
-          ],
-        }),
+    ).toBe("matching");
+    expect(
+      tagsToCopy({
+        tags: [immutableTag, "ghcr.io/snuffy2/shellport:latest"],
+        immutableTag,
+        immutableState: "matching",
       }),
-    ).toThrow("already exists");
+    ).toEqual(["ghcr.io/snuffy2/shellport:latest"]);
+  });
+  test("publishes a previously absent immutable version", function () {
+    expect(
+      resolveImmutableTag({ expectedDigest: indexDigest, publishedDigest: "" }),
+    ).toBe("absent");
+  });
+  test("rejects a full workflow rerun that rebuilds a different archive", function () {
+    expect(() =>
+      resolveImmutableTag({
+        expectedDigest: indexDigest,
+        publishedDigest: otherDigest,
+      }),
+    ).toThrow("not verified archive");
+  });
+});
+
+describe("release publisher serialization", function () {
+  test("shares one non-cancelling group for release and manual publishers", function () {
+    const group = releaseWorkflow.match(/^  group: (?<value>.+)$/mu)?.groups?.value;
+    const cancellation = releaseWorkflow.match(
+      /^  cancel-in-progress: (?<value>.+)$/mu,
+    )?.groups?.value;
+
+    expect(group).toContain("release-publishers");
+    expect(group).not.toContain("github.run_id");
+    expect(group).toContain("main-edge");
+    expect(cancellation).toContain("github.event_name == 'push'");
+    expect(releaseWorkflow).toContain('"$IMMUTABLE_STATE" == "matching"');
+    expect(releaseWorkflow).toContain('"$tag" == "$IMMUTABLE_TAG"');
+    expect(releaseWorkflow).toContain("copy --all");
   });
 });
