@@ -121,9 +121,10 @@ describe("registry immutability guard", function () {
 
 describe("release publisher serialization", function () {
   test("shares one non-cancelling group for release and manual publishers", function () {
-    const group = releaseWorkflow.match(/^  group: (?<value>.+)$/mu)?.groups?.value;
+    const group = releaseWorkflow.match(/^ {2}group: (?<value>.+)$/mu)?.groups
+      ?.value;
     const cancellation = releaseWorkflow.match(
-      /^  cancel-in-progress: (?<value>.+)$/mu,
+      /^ {2}cancel-in-progress: (?<value>.+)$/mu,
     )?.groups?.value;
 
     expect(group).toContain("release-publishers");
