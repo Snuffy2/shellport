@@ -46,15 +46,31 @@ export function assertPlatformIndex(index) {
   if (!Array.isArray(index?.manifests)) {
     fail("verified OCI archive is missing a manifest index");
   }
-  const platforms = index.manifests
-    .map((manifest) => manifest?.platform)
-    .filter(
-      (platform) =>
-        platform &&
-        platform.os !== "unknown" &&
-        platform.architecture !== "unknown",
-    )
-    .map((platform) => `${platform.os}/${platform.architecture}`)
+  const imageDescriptors = [];
+  const attestationSubjects = new Set();
+  for (const descriptor of index.manifests) {
+    if (!descriptor?.platform || !digestPattern.test(descriptor.digest)) {
+      fail("verified OCI archive contains an invalid manifest descriptor");
+    }
+    const { architecture, os } = descriptor.platform;
+    if (os === "unknown" || architecture === "unknown") {
+      const annotations = descriptor.annotations;
+      const subject = annotations?.["vnd.docker.reference.digest"];
+      if (
+        os !== "unknown" ||
+        architecture !== "unknown" ||
+        annotations?.["vnd.docker.reference.type"] !== "attestation-manifest" ||
+        !digestPattern.test(subject)
+      ) {
+        fail("verified OCI archive contains an invalid attestation descriptor");
+      }
+      attestationSubjects.add(subject);
+      continue;
+    }
+    imageDescriptors.push(descriptor);
+  }
+  const platforms = imageDescriptors
+    .map(({ platform }) => `${platform.os}/${platform.architecture}`)
     .sort();
   if (
     platforms.length !== 2 ||
@@ -64,6 +80,14 @@ export function assertPlatformIndex(index) {
     fail(
       `verified OCI archive platforms are ${platforms.join(", ") || "empty"}, not linux/amd64 and linux/arm64`,
     );
+  }
+  const imageDigests = new Set(imageDescriptors.map(({ digest }) => digest));
+  if (
+    imageDigests.size !== 2 ||
+    [...attestationSubjects].some((digest) => !imageDigests.has(digest)) ||
+    [...imageDigests].some((digest) => !attestationSubjects.has(digest))
+  ) {
+    fail("verified OCI archive attestations do not match its image manifests");
   }
 }
 

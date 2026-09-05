@@ -219,26 +219,54 @@ describe("registry immutability guard", function () {
 });
 
 describe("OCI archive policy", function () {
-  const descriptor = (os, architecture) => ({ platform: { architecture, os } });
+  const descriptor = (os, architecture, digestCharacter) => ({
+    digest: `sha256:${digestCharacter.repeat(64)}`,
+    platform: { architecture, os },
+  });
+  const attestation = (digestCharacter, subjectCharacter) => ({
+    annotations: {
+      "vnd.docker.reference.digest": `sha256:${subjectCharacter.repeat(64)}`,
+      "vnd.docker.reference.type": "attestation-manifest",
+    },
+    digest: `sha256:${digestCharacter.repeat(64)}`,
+    platform: { architecture: "unknown", os: "unknown" },
+  });
 
   test("requires one amd64 and one arm64 Linux image", function () {
     expect(() =>
       assertPlatformIndex({
         manifests: [
-          descriptor("linux", "amd64"),
-          descriptor("linux", "arm64"),
-          descriptor("unknown", "unknown"),
+          descriptor("linux", "amd64", "a"),
+          descriptor("linux", "arm64", "b"),
+          attestation("c", "a"),
+          attestation("d", "b"),
         ],
       }),
     ).not.toThrow();
   });
   test.each([
-    [descriptor("linux", "amd64"), descriptor("linux", "amd64")],
-    [descriptor("linux", "amd64")],
-    [descriptor("linux", "amd64"), descriptor("linux", "s390x")],
+    [descriptor("linux", "amd64", "a"), descriptor("linux", "amd64", "b")],
+    [descriptor("linux", "amd64", "a")],
+    [descriptor("linux", "amd64", "a"), descriptor("linux", "s390x", "b")],
   ])("rejects the invalid platform set %#", (...manifests) => {
     expect(() => assertPlatformIndex({ manifests })).toThrow(
       "not linux/amd64 and linux/arm64",
+    );
+  });
+  test.each([
+    [
+      descriptor("linux", "amd64", "a"),
+      descriptor("linux", "arm64", "b"),
+      { digest: `sha256:${"c".repeat(64)}` },
+    ],
+    [
+      descriptor("linux", "amd64", "a"),
+      descriptor("linux", "arm64", "b"),
+      attestation("c", "e"),
+    ],
+  ])("rejects an unrelated extra descriptor %#", (...manifests) => {
+    expect(() => assertPlatformIndex({ manifests })).toThrow(
+      /invalid manifest descriptor|attestations do not match/u,
     );
   });
 });
@@ -277,6 +305,10 @@ describe("release publisher serialization", function () {
     );
     expect(releaseWorkflow).toContain(
       '"$current_latest_release_tag" != "$RELEASE_TAG"',
+    );
+    expect(releaseWorkflow).toContain("revalidate_source");
+    expect(releaseWorkflow).toContain(
+      '"$current_latest_release_tag" == "$RELEASE_TAG"',
     );
     expect(releaseWorkflow).toContain("Verify every published tag");
     expect(releaseWorkflow).toContain("tar --extract --to-stdout");

@@ -256,19 +256,31 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload verified OCI archive without rebuilding
         env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag_name }}
           OCI_ARCHIVE: ${{ runner.temp }}/release-image/${{ env.OCI_ARTIFACT_PATH }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TARGET: ${{ github.event.release.target_commitish }}
           TAGS: ${{ steps.plan.outputs.tags_to_copy }}
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          revalidate_source() {
+            node "$RUNNER_TEMP/release-control/release-provenance.mjs" > "$RUNNER_TEMP/current-source"
+            diff --unified "$RUNNER_TEMP/expected-source" "$RUNNER_TEMP/current-source"
+          }
+          revalidate_source
           if [[ -z "$TAGS" ]]; then
             exit 0
           fi
           while IFS= read -r tag; do
             test -n "$tag"
+            revalidate_source
             if [[ "$tag" == "$REGISTRY/$IMAGE_NAME:latest" ]]; then
               current_latest_release_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
               if [[ "$current_latest_release_tag" != "$RELEASE_TAG" ]]; then
@@ -307,7 +319,9 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_REF: ${{ github.ref }}
           EVENT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_TAG: ${{ inputs.tag_name }}
+          PUBLISH_LATEST: ${{ steps.latest.outputs.publish_latest }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           RELEASE_TARGET: ${{ github.event.release.target_commitish }}
           EXPECTED_SOURCE_SHA: ${{ needs.provenance.outputs.source_sha }}
@@ -327,3 +341,7 @@ jobs:
             "release_ref_type=$EXPECTED_RELEASE_REF_TYPE" > "$expected"
           node "$RUNNER_TEMP/release-control/release-provenance.mjs" > "$actual"
           diff --unified "$expected" "$actual"
+          if [[ "$PUBLISH_LATEST" == "true" ]]; then
+            current_latest_release_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+            [[ "$current_latest_release_tag" == "$RELEASE_TAG" ]]
+          fi
