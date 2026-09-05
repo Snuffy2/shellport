@@ -39,16 +39,21 @@ jobs:
       source_sha: ${{ steps.source.outputs.source_sha }}
       image_tag: ${{ steps.source.outputs.image_tag }}
       immutable_version: ${{ steps.source.outputs.immutable_version }}
+      release_ref_oid: ${{ steps.source.outputs.release_ref_oid }}
+      release_ref_type: ${{ steps.source.outputs.release_ref_type }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.sha }}
+          # Policy code comes from the current trusted default branch. The
+          # separately resolved event SHA remains the only image build source.
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 1
           persist-credentials: false
       - id: source
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
           EVENT_SHA: ${{ github.sha }}
           INPUT_TAG: ${{ inputs.tag_name }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
@@ -57,7 +62,10 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: release-registry-control-${{ github.run_id }}
-          path: .github/scripts/release-registry-guard.mjs
+          path: |
+            .github/scripts/release-provenance.mjs
+            .github/scripts/release-registry-guard.mjs
+          include-hidden-files: true
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -81,6 +89,10 @@ jobs:
           outputs: type=oci,dest=${{ runner.temp }}/${{ env.OCI_ARTIFACT_PATH }}
           provenance: mode=max
           sbom: true
+          labels: |
+            org.opencontainers.image.source=https://github.com/Snuffy2/shellport
+            org.opencontainers.image.revision=${{ needs.provenance.outputs.source_sha }}
+            org.opencontainers.image.version=${{ needs.provenance.outputs.image_tag }}
           build-args: |
             SHELLPORT_VERSION=${{ needs.provenance.outputs.image_tag }}
             SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport/archive/${{ needs.provenance.outputs.source_sha }}.tar.gz
@@ -110,6 +122,11 @@ jobs:
       contents: read
       packages: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
           name: ${{ env.OCI_ARTIFACT_NAME }}
@@ -124,36 +141,65 @@ jobs:
           OCI_ARCHIVE: ${{ runner.temp }}/release-image/${{ env.OCI_ARTIFACT_PATH }}
           EXPECTED_BYTES: ${{ needs.build.outputs.artifact_bytes }}
           EXPECTED_SHA256: ${{ needs.build.outputs.artifact_sha256 }}
-          OCI_LAYOUT: ${{ runner.temp }}/release-image/oci-layout
+          OCI_INDEX: ${{ runner.temp }}/oci-index.json
+          OCI_LAYOUT_METADATA: ${{ runner.temp }}/oci-layout.json
+          PLATFORM_INDEX: ${{ runner.temp }}/platform-index.json
         run: |
           set -euo pipefail
           actual_bytes="$(wc -c < "$OCI_ARCHIVE" | tr -d '[:space:]')"
           actual_sha256="$(sha256sum "$OCI_ARCHIVE" | cut -d ' ' -f 1)"
           [[ "$actual_bytes" == "$EXPECTED_BYTES" && "$actual_bytes" =~ ^[0-9]+$ ]] && (( actual_bytes > 0 && actual_bytes <= OCI_ARTIFACT_MAX_BYTES ))
           [[ "$actual_sha256" == "$EXPECTED_SHA256" && "$actual_sha256" =~ ^[0-9a-f]{64}$ ]]
-          mkdir "$OCI_LAYOUT"
-          tar --extract --file "$OCI_ARCHIVE" --directory "$OCI_LAYOUT"
-          test -f "$OCI_LAYOUT/index.json" && test -f "$OCI_LAYOUT/oci-layout"
-          index_digest="$(jq -er '.manifests | if length == 1 then .[0].digest else empty end' "$OCI_LAYOUT/index.json")"
+          tar --extract --to-stdout --file "$OCI_ARCHIVE" index.json > "$OCI_INDEX"
+          tar --extract --to-stdout --file "$OCI_ARCHIVE" oci-layout > "$OCI_LAYOUT_METADATA"
+          jq -e '.imageLayoutVersion == "1.0.0"' "$OCI_LAYOUT_METADATA"
+          index_digest="$(jq -er '.manifests | if length == 1 then .[0].digest else empty end' "$OCI_INDEX")"
           [[ "$index_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           index_blob="${index_digest#sha256:}"
-          test -f "$OCI_LAYOUT/blobs/sha256/$index_blob"
-          [[ "sha256:$(sha256sum "$OCI_LAYOUT/blobs/sha256/$index_blob" | cut -d ' ' -f 1)" == "$index_digest" ]]
-          printf 'oci_layout=%s\n' "$OCI_LAYOUT" >> "$GITHUB_OUTPUT"
+          tar --extract --to-stdout --file "$OCI_ARCHIVE" "blobs/sha256/$index_blob" > "$PLATFORM_INDEX"
+          [[ "sha256:$(sha256sum "$PLATFORM_INDEX" | cut -d ' ' -f 1)" == "$index_digest" ]]
+          MODE=validate-platforms MANIFEST_INDEX="$(cat "$PLATFORM_INDEX")" node "$RUNNER_TEMP/release-control/release-registry-guard.mjs"
           printf 'index_digest=%s\n' "$index_digest" >> "$GITHUB_OUTPUT"
-      - name: Compare immutable image version with verified OCI archive
-        id: immutable
+      - name: Authorize current stable release alias
+        id: latest
+        if: github.event_name == 'release' && !github.event.release.prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          latest_release_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          if [[ "$latest_release_tag" == "$RELEASE_TAG" ]]; then
+            printf 'publish_latest=true\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'publish_latest=false\n' >> "$GITHUB_OUTPUT"
+            printf 'Skipping latest: current stable release is %s, not %s.\n' "$latest_release_tag" "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=edge,branch=main,enable=${{ github.event_name == 'push' }}
+            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=latest,enable=${{ steps.latest.outputs.publish_latest == 'true' }}
+            type=raw,value=${{ inputs.tag_name }},enable=${{ github.event_name == 'workflow_dispatch' }}
+      - name: Look up immutable image version
+        id: lookup
         if: needs.provenance.outputs.immutable_version == 'true'
         env:
           IMAGE_TAG: ${{ needs.provenance.outputs.image_tag }}
-          EXPECTED_DIGEST: ${{ steps.artifact.outputs.index_digest }}
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           response_dir="$RUNNER_TEMP/immutable-version"
           mkdir "$response_dir"
-          status="$(curl --silent --show-error --output "$response_dir/manifest" --dump-header "$response_dir/headers" --write-out '%{http_code}' --user "$REGISTRY_USERNAME:$REGISTRY_TOKEN" --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' "https://$REGISTRY/v2/$IMAGE_NAME/manifests/$IMAGE_TAG")"
+          token_status="$(curl --silent --show-error --output "$response_dir/token" --write-out '%{http_code}' --user "$REGISTRY_USERNAME:$REGISTRY_TOKEN" --get --data-urlencode "service=$REGISTRY" --data-urlencode "scope=repository:$IMAGE_NAME:pull" "https://$REGISTRY/token")"
+          [[ "$token_status" == "200" ]]
+          bearer="$(jq -er '.token // .access_token' "$response_dir/token")"
+          test -n "$bearer"
+          status="$(curl --silent --show-error --output "$response_dir/manifest" --dump-header "$response_dir/headers" --write-out '%{http_code}' --header "Authorization: Bearer $bearer" --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' "https://$REGISTRY/v2/$IMAGE_NAME/manifests/$IMAGE_TAG")"
           published_digest=""
           case "$status" in
             200)
@@ -167,42 +213,135 @@ jobs:
               exit 1
               ;;
           esac
-          EXPECTED_DIGEST="$EXPECTED_DIGEST" PUBLISHED_DIGEST="$published_digest" node "$RUNNER_TEMP/release-control/release-registry-guard.mjs" >> "$GITHUB_OUTPUT"
+          printf 'published_digest=%s\n' "$published_digest" >> "$GITHUB_OUTPUT"
+      - name: Plan registry writes
+        id: plan
+        env:
+          EXPECTED_DIGEST: ${{ steps.artifact.outputs.index_digest }}
+          IMMUTABLE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.provenance.outputs.image_tag }}
+          IMMUTABLE_VERSION: ${{ needs.provenance.outputs.immutable_version }}
+          PUBLISHED_DIGEST: ${{ steps.lookup.outputs.published_digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: node "$RUNNER_TEMP/release-control/release-registry-guard.mjs" >> "$GITHUB_OUTPUT"
+      - name: Revalidate publication source
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          INPUT_TAG: ${{ inputs.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TARGET: ${{ github.event.release.target_commitish }}
+          EXPECTED_SOURCE_SHA: ${{ needs.provenance.outputs.source_sha }}
+          EXPECTED_IMAGE_TAG: ${{ needs.provenance.outputs.image_tag }}
+          EXPECTED_IMMUTABLE_VERSION: ${{ needs.provenance.outputs.immutable_version }}
+          EXPECTED_RELEASE_REF_OID: ${{ needs.provenance.outputs.release_ref_oid }}
+          EXPECTED_RELEASE_REF_TYPE: ${{ needs.provenance.outputs.release_ref_type }}
+        run: |
+          set -euo pipefail
+          expected="$RUNNER_TEMP/expected-source"
+          actual="$RUNNER_TEMP/actual-source"
+          printf '%s\n' \
+            "source_sha=$EXPECTED_SOURCE_SHA" \
+            "image_tag=$EXPECTED_IMAGE_TAG" \
+            "immutable_version=$EXPECTED_IMMUTABLE_VERSION" \
+            "release_ref_oid=$EXPECTED_RELEASE_REF_OID" \
+            "release_ref_type=$EXPECTED_RELEASE_REF_TYPE" > "$expected"
+          node "$RUNNER_TEMP/release-control/release-provenance.mjs" > "$actual"
+          diff --unified "$expected" "$actual"
       - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=edge,branch=main,enable=${{ github.event_name == 'push' }}
-            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' && !github.event.release.prerelease }}
-            type=raw,value=${{ inputs.tag_name }},enable=${{ github.event_name == 'workflow_dispatch' }}
       - name: Upload verified OCI archive without rebuilding
         env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag_name }}
           OCI_ARCHIVE: ${{ runner.temp }}/release-image/${{ env.OCI_ARTIFACT_PATH }}
-          TAGS: ${{ steps.meta.outputs.tags }}
-          IMMUTABLE_STATE: ${{ steps.immutable.outputs.immutable_state }}
-          IMMUTABLE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.provenance.outputs.image_tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TARGET: ${{ github.event.release.target_commitish }}
+          TAGS: ${{ steps.plan.outputs.tags_to_copy }}
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          revalidate_source() {
+            node "$RUNNER_TEMP/release-control/release-provenance.mjs" > "$RUNNER_TEMP/current-source"
+            diff --unified "$RUNNER_TEMP/expected-source" "$RUNNER_TEMP/current-source"
+          }
+          revalidate_source
+          if [[ -z "$TAGS" ]]; then
+            exit 0
+          fi
           while IFS= read -r tag; do
             test -n "$tag"
-            if [[ "$IMMUTABLE_STATE" == "matching" && "$tag" == "$IMMUTABLE_TAG" ]]; then
-              continue
+            revalidate_source
+            if [[ "$tag" == "$REGISTRY/$IMAGE_NAME:latest" ]]; then
+              current_latest_release_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+              if [[ "$current_latest_release_tag" != "$RELEASE_TAG" ]]; then
+                printf 'Refusing latest: current stable release is %s, not %s.\n' "$current_latest_release_tag" "$RELEASE_TAG" >&2
+                exit 1
+              fi
             fi
-            docker run --rm -v "$OCI_ARCHIVE:/work/image.oci:ro" quay.io/skopeo/stable@sha256:8d25aabcf965e267b6a6ad02ff8da5512f77de1490063625093ff564797e88bc copy --all --dest-creds "$REGISTRY_USERNAME:$REGISTRY_TOKEN" oci-archive:/work/image.oci docker://"$tag"
+            docker run --rm -v "$OCI_ARCHIVE:/work/image.oci:ro" quay.io/skopeo/stable@sha256:8d25aabcf965e267b6a6ad02ff8da5512f77de1490063625093ff564797e88bc copy --all --preserve-digests --dest-creds "$REGISTRY_USERNAME:$REGISTRY_TOKEN" oci-archive:/work/image.oci docker://"$tag"
           done <<< "$TAGS"
-      - name: Verify published platforms
+      - name: Verify every published tag
         env:
-          IMAGE_TAG: ${{ needs.provenance.outputs.image_tag }}
+          EXPECTED_DIGEST: ${{ steps.artifact.outputs.index_digest }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euo pipefail
-          manifest="$(docker buildx imagetools inspect --raw "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG")"
-          jq -e '[.manifests[]?.platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | length == 2' <<< "$manifest"
+          response_dir="$RUNNER_TEMP/published-tags"
+          mkdir "$response_dir"
+          token_status="$(curl --silent --show-error --output "$response_dir/token" --write-out '%{http_code}' --user "$REGISTRY_USERNAME:$REGISTRY_TOKEN" --get --data-urlencode "service=$REGISTRY" --data-urlencode "scope=repository:$IMAGE_NAME:pull" "https://$REGISTRY/token")"
+          [[ "$token_status" == "200" ]]
+          bearer="$(jq -er '.token // .access_token' "$response_dir/token")"
+          test -n "$bearer"
+          while IFS= read -r tag; do
+            test -n "$tag"
+            image_tag="${tag##*:}"
+            status="$(curl --silent --show-error --output "$response_dir/manifest" --dump-header "$response_dir/headers" --write-out '%{http_code}' --header "Authorization: Bearer $bearer" --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' "https://$REGISTRY/v2/$IMAGE_NAME/manifests/$image_tag")"
+            [[ "$status" == "200" ]]
+            published_digest="$(grep -i '^docker-content-digest:' "$response_dir/headers" | tail -n 1 | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d '\r')"
+            [[ "$published_digest" == "$EXPECTED_DIGEST" ]]
+            [[ "sha256:$(sha256sum "$response_dir/manifest" | cut -d ' ' -f 1)" == "$published_digest" ]]
+          done <<< "$TAGS"
+      - name: Confirm publication source remains current
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag_name }}
+          PUBLISH_LATEST: ${{ steps.latest.outputs.publish_latest }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TARGET: ${{ github.event.release.target_commitish }}
+          EXPECTED_SOURCE_SHA: ${{ needs.provenance.outputs.source_sha }}
+          EXPECTED_IMAGE_TAG: ${{ needs.provenance.outputs.image_tag }}
+          EXPECTED_IMMUTABLE_VERSION: ${{ needs.provenance.outputs.immutable_version }}
+          EXPECTED_RELEASE_REF_OID: ${{ needs.provenance.outputs.release_ref_oid }}
+          EXPECTED_RELEASE_REF_TYPE: ${{ needs.provenance.outputs.release_ref_type }}
+        run: |
+          set -euo pipefail
+          expected="$RUNNER_TEMP/expected-source"
+          actual="$RUNNER_TEMP/final-source"
+          printf '%s\n' \
+            "source_sha=$EXPECTED_SOURCE_SHA" \
+            "image_tag=$EXPECTED_IMAGE_TAG" \
+            "immutable_version=$EXPECTED_IMMUTABLE_VERSION" \
+            "release_ref_oid=$EXPECTED_RELEASE_REF_OID" \
+            "release_ref_type=$EXPECTED_RELEASE_REF_TYPE" > "$expected"
+          node "$RUNNER_TEMP/release-control/release-provenance.mjs" > "$actual"
+          diff --unified "$expected" "$actual"
+          if [[ "$PUBLISH_LATEST" == "true" ]]; then
+            current_latest_release_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+            [[ "$current_latest_release_tag" == "$RELEASE_TAG" ]]
+          fi
