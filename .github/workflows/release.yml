@@ -2,11 +2,9 @@ name: Publish Docker Image
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   release:
-    types:
-      - published
+    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
@@ -16,41 +14,166 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('{0}-main-edge', github.workflow) || github.run_id }}
+  # Release and manual publishers share mutable tags such as `latest`, while
+  # edge-only main pushes are independent.
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('{0}-main-edge', github.workflow) || format('{0}-release-publishers', github.workflow) }}
   cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: snuffy2/shellport
+  OCI_ARTIFACT_NAME: shellport-oci-${{ github.run_id }}
+  OCI_ARTIFACT_PATH: shellport.oci.tar
+  OCI_ARTIFACT_MAX_BYTES: "2147483648"
 
 jobs:
+  provenance:
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
+      image_tag: ${{ steps.source.outputs.image_tag }}
+      immutable_version: ${{ steps.source.outputs.immutable_version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - id: source
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          INPUT_TAG: ${{ inputs.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TARGET: ${{ github.event.release.target_commitish }}
+        run: node .github/scripts/release-provenance.mjs >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-registry-control-${{ github.run_id }}
+          path: .github/scripts/release-registry-guard.mjs
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+  build:
+    needs: provenance
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_sha256: ${{ steps.artifact.outputs.sha256 }}
+      artifact_bytes: ${{ steps.artifact.outputs.bytes }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.provenance.outputs.source_sha }}
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          outputs: type=oci,dest=${{ runner.temp }}/${{ env.OCI_ARTIFACT_PATH }}
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            SHELLPORT_VERSION=${{ needs.provenance.outputs.image_tag }}
+            SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport/archive/${{ needs.provenance.outputs.source_sha }}.tar.gz
+      - id: artifact
+        env:
+          OCI_ARCHIVE: ${{ runner.temp }}/${{ env.OCI_ARTIFACT_PATH }}
+        run: |
+          set -euo pipefail
+          test -s "$OCI_ARCHIVE"
+          bytes="$(wc -c < "$OCI_ARCHIVE" | tr -d '[:space:]')"
+          [[ "$bytes" =~ ^[0-9]+$ ]] && (( bytes > 0 && bytes <= OCI_ARTIFACT_MAX_BYTES ))
+          printf 'bytes=%s\nsha256=%s\n' "$bytes" "$(sha256sum "$OCI_ARCHIVE" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          printf 'OCI artifact: %s (%s bytes)\n' "$OCI_ARTIFACT_PATH" "$bytes" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.OCI_ARTIFACT_NAME }}
+          path: ${{ runner.temp }}/${{ env.OCI_ARTIFACT_PATH }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   publish:
     if: github.event.repository.fork == false
-    name: Build and publish Docker image
+    needs: [provenance, build]
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.OCI_ARTIFACT_NAME }}
+          path: ${{ runner.temp }}/release-image
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-registry-control-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-control
+      - name: Verify OCI artifact continuity
+        id: artifact
+        env:
+          OCI_ARCHIVE: ${{ runner.temp }}/release-image/${{ env.OCI_ARTIFACT_PATH }}
+          EXPECTED_BYTES: ${{ needs.build.outputs.artifact_bytes }}
+          EXPECTED_SHA256: ${{ needs.build.outputs.artifact_sha256 }}
+          OCI_LAYOUT: ${{ runner.temp }}/release-image/oci-layout
+        run: |
+          set -euo pipefail
+          actual_bytes="$(wc -c < "$OCI_ARCHIVE" | tr -d '[:space:]')"
+          actual_sha256="$(sha256sum "$OCI_ARCHIVE" | cut -d ' ' -f 1)"
+          [[ "$actual_bytes" == "$EXPECTED_BYTES" && "$actual_bytes" =~ ^[0-9]+$ ]] && (( actual_bytes > 0 && actual_bytes <= OCI_ARTIFACT_MAX_BYTES ))
+          [[ "$actual_sha256" == "$EXPECTED_SHA256" && "$actual_sha256" =~ ^[0-9a-f]{64}$ ]]
+          mkdir "$OCI_LAYOUT"
+          tar --extract --file "$OCI_ARCHIVE" --directory "$OCI_LAYOUT"
+          test -f "$OCI_LAYOUT/index.json" && test -f "$OCI_LAYOUT/oci-layout"
+          index_digest="$(jq -er '.manifests | if length == 1 then .[0].digest else empty end' "$OCI_LAYOUT/index.json")"
+          [[ "$index_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          index_blob="${index_digest#sha256:}"
+          test -f "$OCI_LAYOUT/blobs/sha256/$index_blob"
+          [[ "sha256:$(sha256sum "$OCI_LAYOUT/blobs/sha256/$index_blob" | cut -d ' ' -f 1)" == "$index_digest" ]]
+          printf 'oci_layout=%s\n' "$OCI_LAYOUT" >> "$GITHUB_OUTPUT"
+          printf 'index_digest=%s\n' "$index_digest" >> "$GITHUB_OUTPUT"
+      - name: Compare immutable image version with verified OCI archive
+        id: immutable
+        if: needs.provenance.outputs.immutable_version == 'true'
+        env:
+          IMAGE_TAG: ${{ needs.provenance.outputs.image_tag }}
+          EXPECTED_DIGEST: ${{ steps.artifact.outputs.index_digest }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          response_dir="$RUNNER_TEMP/immutable-version"
+          mkdir "$response_dir"
+          status="$(curl --silent --show-error --output "$response_dir/manifest" --dump-header "$response_dir/headers" --write-out '%{http_code}' --user "$REGISTRY_USERNAME:$REGISTRY_TOKEN" --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' "https://$REGISTRY/v2/$IMAGE_NAME/manifests/$IMAGE_TAG")"
+          published_digest=""
+          case "$status" in
+            200)
+              published_digest="$(grep -i '^docker-content-digest:' "$response_dir/headers" | tail -n 1 | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d '\r')"
+              [[ "$published_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              [[ "sha256:$(sha256sum "$response_dir/manifest" | cut -d ' ' -f 1)" == "$published_digest" ]]
+              ;;
+            404) ;;
+            *)
+              printf 'immutable registry lookup returned HTTP %s\n' "$status" >&2
+              exit 1
+              ;;
+          esac
+          EXPECTED_DIGEST="$EXPECTED_DIGEST" PUBLISHED_DIGEST="$published_digest" node "$RUNNER_TEMP/release-control/release-registry-guard.mjs" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate Docker metadata
-        id: meta
+      - id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -59,19 +182,27 @@ jobs:
             type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
             type=raw,value=latest,enable=${{ github.event_name == 'release' && !github.event.release.prerelease }}
             type=raw,value=${{ inputs.tag_name }},enable=${{ github.event_name == 'workflow_dispatch' }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/Snuffy2/shellport/archive/${{ github.sha }}.tar.gz
-
-      - name: Build and publish Docker image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            SHELLPORT_VERSION=${{ github.event_name == 'release' && github.event.release.tag_name || github.event_name == 'workflow_dispatch' && inputs.tag_name || 'edge' }}
-            SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport/archive/${{ github.sha }}.tar.gz
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Upload verified OCI archive without rebuilding
+        env:
+          OCI_ARCHIVE: ${{ runner.temp }}/release-image/${{ env.OCI_ARTIFACT_PATH }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          IMMUTABLE_STATE: ${{ steps.immutable.outputs.immutable_state }}
+          IMMUTABLE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.provenance.outputs.image_tag }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            test -n "$tag"
+            if [[ "$IMMUTABLE_STATE" == "matching" && "$tag" == "$IMMUTABLE_TAG" ]]; then
+              continue
+            fi
+            docker run --rm -v "$OCI_ARCHIVE:/work/image.oci:ro" quay.io/skopeo/stable@sha256:8d25aabcf965e267b6a6ad02ff8da5512f77de1490063625093ff564797e88bc copy --all --dest-creds "$REGISTRY_USERNAME:$REGISTRY_TOKEN" oci-archive:/work/image.oci docker://"$tag"
+          done <<< "$TAGS"
+      - name: Verify published platforms
+        env:
+          IMAGE_TAG: ${{ needs.provenance.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          manifest="$(docker buildx imagetools inspect --raw "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG")"
+          jq -e '[.manifests[]?.platform | select(.os == "linux" and (.architecture == "amd64" or .architecture == "arm64"))] | length == 2' <<< "$manifest"
