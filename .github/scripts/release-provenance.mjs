@@ -44,6 +44,12 @@ export function resolveWorkflowSource(event) {
     fail(`event SHA ${event.eventSHA} is not a full lowercase commit SHA`);
   }
   const imageTag = event.inputTag || "edge";
+  if (
+    event.eventName === "workflow_dispatch" &&
+    (imageTag === "edge" || !event.inputTag?.trim())
+  ) {
+    fail("manual workflow dispatch may not publish edge");
+  }
   return {
     imageTag,
     sourceSHA: event.eventSHA,
@@ -111,6 +117,8 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
       ),
     );
   } else {
-    writeOutput(resolveWorkflowSource(event));
+    writeOutput(
+      resolveWorkflowSource({ ...event, eventName: process.env.EVENT_NAME }),
+    );
   }
 }

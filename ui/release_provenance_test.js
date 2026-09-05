@@ -77,12 +77,41 @@ describe("release provenance", function () {
   ])("rejects %s", (_name, event, git, message) => {
     expect(() => resolveReleaseSource(event, git)).toThrow(message);
   });
-  test("guards manual semantic versions but preserves the edge path", function () {
+  test("keeps the implicit edge tag for main pushes", function () {
     expect(
-      resolveWorkflowSource({ eventSHA, inputTag: "1.2.3" }),
+      resolveWorkflowSource({ eventName: "push", eventSHA, inputTag: "" }),
+    ).toEqual({
+      imageTag: "edge",
+      immutableVersion: false,
+      sourceSHA: eventSHA,
+    });
+  });
+  test.each(["edge", "", " \t "])(
+    "rejects manual edge publication from %j",
+    (inputTag) => {
+      expect(() =>
+        resolveWorkflowSource({
+          eventName: "workflow_dispatch",
+          eventSHA,
+          inputTag,
+        }),
+      ).toThrow("may not publish edge");
+    },
+  );
+  test("accepts manual non-edge tags and preserves semver immutability", function () {
+    expect(
+      resolveWorkflowSource({
+        eventName: "workflow_dispatch",
+        eventSHA,
+        inputTag: "1.2.3",
+      }),
     ).toMatchObject({ immutableVersion: true, imageTag: "1.2.3" });
     expect(
-      resolveWorkflowSource({ eventSHA, inputTag: "nightly" }),
+      resolveWorkflowSource({
+        eventName: "workflow_dispatch",
+        eventSHA,
+        inputTag: "nightly",
+      }),
     ).toMatchObject({ immutableVersion: false, imageTag: "nightly" });
   });
 });
