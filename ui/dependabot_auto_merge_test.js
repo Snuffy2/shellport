@@ -9,12 +9,16 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import { authorizeDependabotUpdate } from "../.github/scripts/dependabot-auto-merge.mjs";
 
-const [dependabotSha, currentBaseSha, headSha] = ["1", "2", "3"].map(
-  (character) => character.repeat(40),
-);
+const [dependabotSha, firstBaseSha, firstUpdateSha, currentBaseSha, headSha] = [
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+].map((character) => character.repeat(40));
 const temporaryDirectories = [];
 
-function eventFor(headRef, action = "opened") {
+function eventFor(headRef, action = "reopened") {
   return {
     action,
     repository: {
@@ -34,10 +38,10 @@ function eventFor(headRef, action = "opened") {
   };
 }
 
-function dependabotCommit(sha = headSha) {
+function dependabotCommit(sha = headSha, verified = true) {
   return {
     author: { login: "dependabot[bot]" },
-    commit: { verification: { verified: true } },
+    commit: { verification: { verified } },
     parents: [],
     sha,
   };
@@ -53,6 +57,34 @@ function updateCommit(sha, previous, base) {
   };
 }
 
+function ancestryProof(parentSha, status = "ahead") {
+  return {
+    ahead_by: status === "identical" ? 0 : 1,
+    base_commit: parentSha,
+    base_sha: currentBaseSha,
+    behind_by: 0,
+    head_commit: currentBaseSha,
+    merge_base_commit: parentSha,
+    parent_sha: parentSha,
+    status,
+  };
+}
+
+function updateChain() {
+  return [
+    dependabotCommit(dependabotSha),
+    updateCommit(firstUpdateSha, dependabotSha, firstBaseSha),
+    updateCommit(headSha, firstUpdateSha, currentBaseSha),
+  ];
+}
+
+function updateChainProofs() {
+  return [
+    ancestryProof(firstBaseSha),
+    ancestryProof(currentBaseSha, "identical"),
+  ];
+}
+
 function trustedBase(...paths) {
   const directory = mkdtempSync(join(tmpdir(), "dependabot-authorizer-"));
   temporaryDirectories.push(directory);
@@ -64,131 +96,137 @@ function trustedBase(...paths) {
   return directory;
 }
 
+function authorize({
+  actor = "dependabot[bot]",
+  ancestryProofs = [],
+  changedFiles = ["package-lock.json"],
+  commits = [dependabotCommit()],
+  event = eventFor("dependabot/npm_and_yarn/example-1.0.0"),
+  trustedBaseDirectory = trustedBase("package.json", "package-lock.json"),
+} = {}) {
+  return authorizeDependabotUpdate({
+    actor,
+    ancestryProofs,
+    changedFiles,
+    commits,
+    event,
+    trustedBaseDirectory,
+  });
+}
+
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0))
     rmSync(directory, { force: true, recursive: true });
 });
 
 describe("Dependabot auto-merge authorization", () => {
-  test("accepts a verified npm manifest and lockfile update from an npm base", () => {
+  test("authorizes reopened direct updates from verified exact history", () => {
+    expect(authorize()).toBe("npm");
     expect(
-      authorizeDependabotUpdate({
-        actor: "dependabot[bot]",
-        changedFiles: ["package.json", "package-lock.json"],
-        commits: [dependabotCommit()],
-        event: eventFor("dependabot/npm_and_yarn/example-1.0.0"),
-        trustedBaseDirectory: trustedBase("package.json", "package-lock.json"),
+      authorize({ changedFiles: ["package.json", "package-lock.json"] }),
+    ).toBe("npm");
+  });
+
+  test("authorizes reopened GitHub Update branch chains", () => {
+    expect(
+      authorize({
+        ancestryProofs: updateChainProofs(),
+        commits: updateChain(),
       }),
     ).toBe("npm");
   });
 
-  test("accepts a verified npm lockfile-only update from an npm base", () => {
-    expect(
-      authorizeDependabotUpdate({
-        actor: "dependabot[bot]",
-        changedFiles: ["package-lock.json"],
-        commits: [dependabotCommit()],
-        event: eventFor("dependabot/npm_and_yarn/example-1.0.0"),
-        trustedBaseDirectory: trustedBase("package.json", "package-lock.json"),
-      }),
-    ).toBe("npm");
-  });
-
-  test("rejects npm updates that omit the lockfile or include generated output", () => {
-    const event = eventFor("dependabot/npm_and_yarn/example-1.0.0");
-    for (const changedFiles of [
-      ["package.json", "package-lock.json", "dist/index.js"],
-      ["package.json"],
-    ]) {
-      expect(() =>
-        authorizeDependabotUpdate({
-          actor: "dependabot[bot]",
-          changedFiles,
-          commits: [dependabotCommit()],
-          event,
-          trustedBaseDirectory: trustedBase(
-            "package.json",
-            "package-lock.json",
-          ),
-        }),
-      ).toThrow();
-    }
-  });
-
-  test("rejects an update whose ecosystem is absent from the trusted base", () => {
+  test("rejects an Update branch merge not committed by GitHub web flow", () => {
+    const chain = updateChain();
+    chain[1].committer.login = "maintainer";
     expect(() =>
-      authorizeDependabotUpdate({
-        actor: "dependabot[bot]",
-        changedFiles: ["uv.lock"],
-        commits: [dependabotCommit()],
-        event: eventFor("dependabot/uv/example-1.0.0"),
-        trustedBaseDirectory: trustedBase("package.json", "package-lock.json"),
-      }),
+      authorize({ ancestryProofs: updateChainProofs(), commits: chain }),
     ).toThrow();
   });
 
-  test("accepts existing trusted workflow and action manifests", () => {
-    const event = eventFor("dependabot/github_actions/actions/checkout-7");
-    const trustedBaseDirectory = trustedBase(
-      ".github/workflows/ci.yml",
-      "actions/release/action.yaml",
-    );
-    for (const changedFiles of [
-      [".github/workflows/ci.yml"],
-      ["actions/release/action.yaml"],
+  test("does not use the triggering actor or action as authorization inputs", () => {
+    for (const [actor, action] of [
+      ["dependabot[bot]", "opened"],
+      ["maintainer", "synchronize"],
+      ["any-user", "reopened"],
     ])
       expect(
-        authorizeDependabotUpdate({
-          actor: "dependabot[bot]",
-          changedFiles,
-          commits: [dependabotCommit()],
-          event,
-          trustedBaseDirectory,
+        authorize({
+          actor,
+          event: eventFor("dependabot/npm_and_yarn/example-1.0.0", action),
         }),
-      ).toBe("github-actions");
+      ).toBe("npm");
   });
 
-  test("rejects absent and path-escaping Actions files", () => {
-    const event = eventFor("dependabot/github_actions/example/action");
-    for (const changedFiles of [["action.yml"], ["../action.yml"]])
-      expect(() =>
-        authorizeDependabotUpdate({
-          actor: "dependabot[bot]",
-          changedFiles,
-          commits: [dependabotCommit()],
-          event,
-          trustedBaseDirectory: trustedBase(".github/workflows/ci.yml"),
-        }),
-      ).toThrow();
-  });
-
-  test("accepts a verified web-flow Update branch chain", () => {
-    const firstUpdateSha = "4".repeat(40);
+  test("accepts an older base ancestor for an intermediate GitHub merge", () => {
     expect(
-      authorizeDependabotUpdate({
-        actor: "maintainer",
-        changedFiles: ["package-lock.json"],
-        commits: [
-          dependabotCommit(dependabotSha),
-          updateCommit(firstUpdateSha, dependabotSha, "5".repeat(40)),
-          updateCommit(headSha, firstUpdateSha, currentBaseSha),
-        ],
-        event: eventFor("dependabot/npm_and_yarn/example-1.0.0", "synchronize"),
-        trustedBaseDirectory: trustedBase("package.json", "package-lock.json"),
+      authorize({
+        ancestryProofs: updateChainProofs(),
+        commits: updateChain(),
       }),
     ).toBe("npm");
   });
 
-  test("rejects a non-web-flow Update branch chain", () => {
-    const commit = updateCommit(headSha, dependabotSha, currentBaseSha);
-    commit.committer.login = "maintainer";
+  test("rejects absent, arbitrary, diverged, and mismatched ancestry evidence", () => {
+    const invalidProofSets = [
+      [],
+      [{}, ancestryProof(currentBaseSha, "identical")],
+      [ancestryProof(firstBaseSha), ancestryProof("9".repeat(40))],
+      [
+        ancestryProof(firstBaseSha, "diverged"),
+        ancestryProof(currentBaseSha, "identical"),
+      ],
+      [
+        { ...ancestryProof(firstBaseSha), head_commit: "8".repeat(40) },
+        ancestryProof(currentBaseSha, "identical"),
+      ],
+    ];
+    for (const ancestryProofs of invalidProofSets)
+      expect(() =>
+        authorize({ ancestryProofs, commits: updateChain() }),
+      ).toThrow();
+  });
+
+  test("requires the latest merge parent and latest commit to match event state", () => {
+    const staleParentChain = updateChain();
+    staleParentChain[2] = updateCommit(headSha, firstUpdateSha, firstBaseSha);
+    for (const commits of [staleParentChain, [dependabotCommit(dependabotSha)]])
+      expect(() =>
+        authorize({ ancestryProofs: updateChainProofs(), commits }),
+      ).toThrow();
+  });
+
+  test("rejects unverified history, invalid provenance, and scope changes", () => {
+    const untrustedEvent = eventFor("dependabot/npm_and_yarn/example-1.0.0");
+    untrustedEvent.pull_request.head.repo.full_name = "fork/repository";
+    for (const input of [
+      { commits: [dependabotCommit(headSha, false)] },
+      { event: untrustedEvent },
+      { changedFiles: ["README.md"] },
+    ])
+      expect(() => authorize(input)).toThrow();
+  });
+
+  test("keeps each ecosystem scope rooted in trusted base contents", () => {
+    expect(
+      authorize({
+        changedFiles: ["uv.lock"],
+        event: eventFor("dependabot/uv/example-1.0.0"),
+        trustedBaseDirectory: trustedBase("uv.lock"),
+      }),
+    ).toBe("uv");
+    expect(
+      authorize({
+        changedFiles: [".github/workflows/ci.yml"],
+        event: eventFor("dependabot/github_actions/actions/checkout-7"),
+        trustedBaseDirectory: trustedBase(".github/workflows/ci.yml"),
+      }),
+    ).toBe("github-actions");
     expect(() =>
-      authorizeDependabotUpdate({
-        actor: "maintainer",
-        changedFiles: ["package-lock.json"],
-        commits: [dependabotCommit(dependabotSha), commit],
-        event: eventFor("dependabot/npm_and_yarn/example-1.0.0", "synchronize"),
-        trustedBaseDirectory: trustedBase("package.json", "package-lock.json"),
+      authorize({
+        changedFiles: ["action.yml"],
+        event: eventFor("dependabot/github_actions/example/action"),
+        trustedBaseDirectory: trustedBase(".github/workflows/ci.yml"),
       }),
     ).toThrow();
   });
