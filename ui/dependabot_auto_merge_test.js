@@ -38,10 +38,15 @@ function eventFor(headRef, action = "reopened") {
   };
 }
 
-function dependabotCommit(sha = headSha, verified = true) {
+function dependabotCommit(
+  sha = headSha,
+  verified = true,
+  committer = "web-flow",
+) {
   return {
     author: { login: "dependabot[bot]" },
     commit: { verification: { verified } },
+    committer: { login: committer },
     parents: [],
     sha,
   };
@@ -134,6 +139,23 @@ describe("Dependabot auto-merge authorization", () => {
         commits: updateChain(),
       }),
     ).toBe("npm");
+  });
+
+  test("rejects direct updates and chain roots without GitHub web-flow identity", () => {
+    for (const committer of [undefined, "maintainer"])
+      expect(() => {
+        const direct = dependabotCommit(headSha, true, committer);
+        if (committer === undefined) delete direct.committer;
+        authorize({ commits: [direct] });
+      }).toThrow();
+
+    for (const committer of [undefined, "maintainer"])
+      expect(() => {
+        const chain = updateChain();
+        if (committer === undefined) delete chain[0].committer;
+        else chain[0].committer.login = committer;
+        authorize({ ancestryProofs: updateChainProofs(), commits: chain });
+      }).toThrow();
   });
 
   test("rejects an Update branch merge not committed by GitHub web flow", () => {
