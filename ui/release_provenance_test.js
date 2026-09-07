@@ -269,6 +269,34 @@ describe("OCI archive policy", function () {
       /invalid manifest descriptor|attestations do not match/u,
     );
   });
+  test("requires a manifest index", function () {
+    expect(() => assertPlatformIndex({})).toThrow("missing a manifest index");
+  });
+  test.each([
+    {
+      annotations: { "vnd.docker.reference.type": "attestation-manifest" },
+      digest: `sha256:${"c".repeat(64)}`,
+      platform: { architecture: "unknown", os: "unknown" },
+    },
+    {
+      annotations: {
+        "vnd.docker.reference.digest": `sha256:${"a".repeat(64)}`,
+        "vnd.docker.reference.type": "sbom",
+      },
+      digest: `sha256:${"c".repeat(64)}`,
+      platform: { architecture: "unknown", os: "unknown" },
+    },
+  ])("rejects an invalid attestation descriptor %#", (extra) => {
+    expect(() =>
+      assertPlatformIndex({
+        manifests: [
+          descriptor("linux", "amd64", "a"),
+          descriptor("linux", "arm64", "b"),
+          extra,
+        ],
+      }),
+    ).toThrow("invalid attestation descriptor");
+  });
 });
 
 describe("release publisher serialization", function () {
@@ -290,6 +318,7 @@ describe("release publisher serialization", function () {
     expect(releaseWorkflow).toContain(
       "ref: ${{ github.event.repository.default_branch }}",
     );
+    expect(releaseWorkflow.match(/fetch-depth: 0/gu)).toHaveLength(2);
     expect(releaseWorkflow).toContain("include-hidden-files: true");
     expect(releaseWorkflow).toContain("https://$REGISTRY/token");
     expect(releaseWorkflow).toContain("Authorization: Bearer $bearer");
@@ -300,6 +329,7 @@ describe("release publisher serialization", function () {
     expect(releaseWorkflow).toContain(
       "steps.latest.outputs.publish_latest == 'true'",
     );
+    expect(releaseWorkflow).toContain("flavor: |\n            latest=false");
     expect(releaseWorkflow).toContain(
       'gh api "repos/$GITHUB_REPOSITORY/releases/latest"',
     );
