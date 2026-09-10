@@ -15,7 +15,7 @@
     "Safari >= 14"
   ],
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.5",
+    "@eslint/eslintrc": "^3.3.7",
     "@eslint/js": "^10.0.1",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/compiler-sfc": "^3.5.42",
