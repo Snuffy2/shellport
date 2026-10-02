@@ -109,7 +109,6 @@ jobs:
             SHELLPORT_VERSION=${{ steps.meta.outputs.version }}
             SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport/archive/${{ github.sha }}.tar.gz
       - name: Publish latest stable release alias
-        id: latest
         if: github.event_name == 'release' && !github.event.release.prerelease
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -124,8 +123,6 @@ jobs:
               exit 1
             fi
             docker buildx imagetools create --tag "$REGISTRY/$IMAGE_NAME:latest" "$REGISTRY/$IMAGE_NAME@$IMAGE_DIGEST"
-            printf 'publish_latest=true\n' >> "$GITHUB_OUTPUT"
           else
-            printf 'publish_latest=false\n' >> "$GITHUB_OUTPUT"
             printf 'Skipping latest: current stable release is %s, not %s.\n' "$latest_release_tag" "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
           fi
