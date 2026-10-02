@@ -142,13 +142,22 @@ project command protocol.
 application in Debian-based stages, then copies the final binary into an Alpine
 runtime image.
 
-GitHub release publishing is configured in `.github/workflows/release.yml` for
-GHCR image `ghcr.io/snuffy2/shellport`.
+Release Please is configured in `.github/workflows/release-please.yml` and requires
+the `RELEASE_PLEASE_TOKEN` secret. It manages release PRs, version
+bump updates, and GitHub releases. Docker publishing is configured in
+`.github/workflows/release.yml` for GHCR image `ghcr.io/snuffy2/shellport`: main
+pushes publish `edge`, and published releases publish version tags and `latest`
+for stable releases.
 
 Do not push branches, publish images, or open pull requests unless the user
 explicitly asks.
 
 ## Git And File Safety
+
+- All PRs created must have Conventional Commit titles: `type: description` or
+  `type(scope): description`, with `!` before `:` for breaking changes. Use one
+  of `build`, `chore`, `ci`, `deps`, `docs`, `feat`, `fix`, `perf`, `refactor`,
+  `revert`, `style`, or `test`, as enforced by the PR title lint workflow.
 
 - Do not revert user changes unless explicitly instructed.
 - Before editing a file that already has uncommitted changes, inspect it and
