@@ -45,7 +45,8 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Refuse an existing release image version
+      - name: Resolve existing release image version
+        id: existing
         if: github.event_name == 'release'
         env:
           IMAGE_TAG: ${{ steps.meta.outputs.version }}
@@ -68,14 +69,25 @@ jobs:
 
           registry_bearer="$(jq -er '.token // .access_token' "$response_dir/token")"
           test -n "$registry_bearer"
-          manifest_status="$(curl --silent --show-error --output "$response_dir/manifest" --write-out '%{http_code}' --header "Authorization: Bearer $registry_bearer" --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' "https://$REGISTRY/v2/$IMAGE_NAME/manifests/$IMAGE_TAG")"
+          manifest_status="$(curl --silent --show-error --dump-header "$response_dir/headers" --output "$response_dir/manifest" --write-out '%{http_code}' --header "Authorization: Bearer $registry_bearer" --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' "https://$REGISTRY/v2/$IMAGE_NAME/manifests/$IMAGE_TAG")"
           case "$manifest_status" in
             404)
+              printf 'exists=false\n' >> "$GITHUB_OUTPUT"
               printf 'Release image version %s is absent; publication may proceed.\n' "$IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
               ;;
             200)
-              printf 'Refusing to overwrite existing release image version %s.\n' "$IMAGE_TAG" >&2
-              exit 1
+              registry_digest="$(tr -d '\r' < "$response_dir/headers" | awk 'tolower($1) == "docker-content-digest:" { digest = $2 } END { print digest }')"
+              if [[ ! "$registry_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                printf 'GHCR returned an invalid content digest for release image version %s\n' "$IMAGE_TAG" >&2
+                exit 1
+              fi
+              manifest_digest="sha256:$(sha256sum "$response_dir/manifest" | awk '{ print $1 }')"
+              if [[ "$registry_digest" != "$manifest_digest" ]]; then
+                printf 'GHCR content digest does not match release image version %s manifest\n' "$IMAGE_TAG" >&2
+                exit 1
+              fi
+              printf 'exists=true\ndigest=%s\n' "$registry_digest" >> "$GITHUB_OUTPUT"
+              printf 'Release image version %s already exists with verified digest %s; reusing it.\n' "$IMAGE_TAG" "$registry_digest" >> "$GITHUB_STEP_SUMMARY"
               ;;
             *)
               printf 'GHCR manifest lookup returned HTTP %s for release image version %s\n' "$manifest_status" "$IMAGE_TAG" >&2
@@ -83,6 +95,7 @@ jobs:
               ;;
           esac
       - id: build
+        if: github.event_name == 'push' || steps.existing.outputs.exists == 'false'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -101,7 +114,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_DIGEST: ${{ steps.existing.outputs.digest || steps.build.outputs.digest }}
         run: |
           set -euo pipefail
           latest_release_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
