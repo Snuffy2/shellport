@@ -146,8 +146,8 @@ Release Please is configured in `.github/workflows/release-please.yml` and requi
 the `RELEASE_PLEASE_TOKEN` secret. It manages release PRs, version
 bump updates, and GitHub releases. Docker publishing is configured in
 `.github/workflows/release.yml` for GHCR image `ghcr.io/snuffy2/shellport`: main
-pushes publish `edge`, and published releases publish version tags and `latest`
-for stable releases.
+pushes publish `edge`, published releases publish version tags, and only GitHub’s
+current latest stable release updates `latest`.
 
 Do not push branches, publish images, or open pull requests unless the user
 explicitly asks.
