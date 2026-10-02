@@ -40,13 +40,50 @@ jobs:
           tags: |
             type=edge,branch=main,enable=${{ github.event_name == 'push' }}
             type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' && !github.event.release.prerelease }}
       - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v7
+      - name: Refuse an existing release image version
+        if: github.event_name == 'release'
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.version }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$IMAGE_TAG" || "$IMAGE_TAG" == "latest" ]]; then
+            printf 'release did not produce a semantic image version\n' >&2
+            exit 1
+          fi
+
+          response_dir="$RUNNER_TEMP/ghcr-version-check"
+          mkdir -p "$response_dir"
+          token_status="$(curl --silent --show-error --output "$response_dir/token" --write-out '%{http_code}' --user "$REGISTRY_USERNAME:$REGISTRY_TOKEN" --get --data-urlencode "service=$REGISTRY" --data-urlencode "scope=repository:$IMAGE_NAME:pull" "https://$REGISTRY/token")"
+          if [[ "$token_status" != "200" ]]; then
+            printf 'GHCR token request returned HTTP %s\n' "$token_status" >&2
+            exit 1
+          fi
+
+          registry_bearer="$(jq -er '.token // .access_token' "$response_dir/token")"
+          test -n "$registry_bearer"
+          manifest_status="$(curl --silent --show-error --output "$response_dir/manifest" --write-out '%{http_code}' --header "Authorization: Bearer $registry_bearer" --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' "https://$REGISTRY/v2/$IMAGE_NAME/manifests/$IMAGE_TAG")"
+          case "$manifest_status" in
+            404)
+              printf 'Release image version %s is absent; publication may proceed.\n' "$IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            200)
+              printf 'Refusing to overwrite existing release image version %s.\n' "$IMAGE_TAG" >&2
+              exit 1
+              ;;
+            *)
+              printf 'GHCR manifest lookup returned HTTP %s for release image version %s\n' "$manifest_status" "$IMAGE_TAG" >&2
+              exit 1
+              ;;
+          esac
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -58,3 +95,24 @@ jobs:
           build-args: |
             SHELLPORT_VERSION=${{ steps.meta.outputs.version }}
             SHELLPORT_SOURCE_URL=https://github.com/Snuffy2/shellport/archive/${{ github.sha }}.tar.gz
+      - name: Publish latest stable release alias
+        id: latest
+        if: github.event_name == 'release' && !github.event.release.prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          latest_release_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          if [[ "$latest_release_tag" == "$RELEASE_TAG" ]]; then
+            if [[ ! "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              printf 'build did not produce a valid image digest\n' >&2
+              exit 1
+            fi
+            docker buildx imagetools create --tag "$REGISTRY/$IMAGE_NAME:latest" "$REGISTRY/$IMAGE_NAME@$IMAGE_DIGEST"
+            printf 'publish_latest=true\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'publish_latest=false\n' >> "$GITHUB_OUTPUT"
+            printf 'Skipping latest: current stable release is %s, not %s.\n' "$latest_release_tag" "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          fi

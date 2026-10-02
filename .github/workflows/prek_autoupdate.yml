@@ -30,4 +30,5 @@ jobs:
           token: ${{ secrets.PREK_AUTOUPDATE_TOKEN }}
           auto-merge: true
           commit-message: "deps: update prek hooks"
+          pr-title: "deps: update prek hooks"
           update-day: "1"
