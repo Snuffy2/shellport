@@ -45,7 +45,7 @@
     "vite": "^8.3.8",
     "vitest": "^5.1.0",
     "vue": "^3.5.45",
-    "vue-eslint-parser": "^10.4.0"
+    "vue-eslint-parser": "^10.4.2"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
